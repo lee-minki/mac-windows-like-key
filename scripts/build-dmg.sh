@@ -24,14 +24,12 @@ xcodebuild -project "${APP_NAME}.xcodeproj" \
     -archivePath "${BUILD_DIR}/${APP_NAME}.xcarchive" \
     archive
 
-# 앱 추출
-echo "📱 Exporting App..."
-xcodebuild -exportArchive \
-    -archivePath "${BUILD_DIR}/${APP_NAME}.xcarchive" \
-    -exportOptionsPlist "ExportOptions.plist" \
-    -exportPath "${BUILD_DIR}/Export"
+# 앱 추출 (Export 생략하고 Archive에서 직접 사용 - 서명 문제 회피)
+echo "📱 Extracting App from Archive..."
+APP_PATH="${BUILD_DIR}/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app"
 
-APP_PATH="${BUILD_DIR}/Export/${APP_NAME}.app"
+# ExportOptions.plist 사용 안 함
+# xcodebuild -exportArchive ...
 
 # DMG 생성
 echo "💿 Creating DMG..."

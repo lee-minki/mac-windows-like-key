@@ -36,6 +36,44 @@ struct DashboardView: View {
     private var generalTab: some View {
         ScrollView {
             VStack(spacing: 16) {
+                // Input Source Card
+                cardView(title: "Input Source", icon: "globe") {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("현재 입력 소스")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            HStack(spacing: 6) {
+                                Image(systemName: appState.stateManager.currentInputSource.systemImageName)
+                                    .foregroundStyle(appState.stateManager.currentInputSource == .korean ? .blue : .green)
+                                Text(appState.stateManager.currentInputSource == .korean ? "한글" : "English")
+                                    .font(.system(.body, design: .monospaced))
+                                    .foregroundStyle(appState.stateManager.currentInputSource == .korean ? .blue : .green)
+                            }
+                        }
+                        
+                        HStack {
+                            Text("트리거 키")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Right Command")
+                                .font(.system(.body, design: .monospaced))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(.gray.opacity(0.2))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        
+                        HStack {
+                            Text("전환 횟수")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(appState.stateManager.switchCount)")
+                                .font(.system(.body, design: .monospaced))
+                        }
+                    }
+                }
+                
                 // Core Status Card
                 cardView(title: "Core Status", icon: "cpu") {
                     VStack(spacing: 12) {
@@ -68,19 +106,6 @@ struct DashboardView: View {
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundStyle(.green)
                         }
-                        
-                        Divider()
-                        
-                        Toggle(isOn: .constant(true)) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Enable \"The Silencer\"")
-                                    .font(.headline)
-                                Text("Pure Caps Lock - 즉각 반응, 지연 없음")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.checkbox)
                     }
                 }
                 
@@ -124,6 +149,23 @@ struct DashboardView: View {
                         }
                     }
                 }
+
+                // General Settings Card
+                cardView(title: "General Settings", icon: "gearshape") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("이벤트 뷰어 항상 위", isOn: .constant(true))
+                            .disabled(true) // 기본 기능으로 고정
+                        
+                        Toggle(isOn: $appState.useVdiMode) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("VDI (가상 데스크톱) 키보드 호환 모드")
+                                Text("우측 Command 키를 우측 Option(Alt) 키로 동작하게 합니다. (Windows 원격 환경 한/영 전환용)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
                 
                 // Permission Status
                 if !appState.hasAccessibilityPermission {
@@ -139,8 +181,45 @@ struct DashboardView: View {
                         }
                     }
                 }
+                
+                // Reset Card
+                cardView(title: "초기화", icon: "arrow.counterclockwise") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("모든 설정을 기본값으로 되돌립니다.\n엔진이 정지되고, 저장된 프로필이 삭제됩니다.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.blue)
+                            Text("Accessibility 권한은 시스템 설정에서 직접 해제해야 합니다.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Button(role: .destructive) {
+                            appState.showResetConfirmation = true
+                        } label: {
+                            Label("설정 초기화", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
             }
             .padding(20)
+        }
+        .confirmationDialog(
+            "정말 초기화하시겠습니까?",
+            isPresented: $appState.showResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("초기화", role: .destructive) {
+                appState.resetAll()
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("엔진이 정지되고 모든 프로필이 기본값으로 복원됩니다. 이 작업은 되돌릴 수 없습니다.")
         }
     }
     

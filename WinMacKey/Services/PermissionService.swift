@@ -47,13 +47,28 @@ class PermissionService: ObservableObject {
         startPermissionPolling()
     }
     
+    /// 키보드 단축키 설정 열기 (입력 소스)
+    func openInputSourceSettings() {
+        // macOS Ventura 이상: 키보드 단축키 설정
+        // 이전 버전 호환성을 위해 일반 키보드 설정으로 이동
+        let fallbackUrl = URL(string: "x-apple.systempreferences:com.apple.preference.keyboard")!
+        
+        // 시도: 키보드 단축키 > 입력 소스 섹션 (OS 버전에 따라 동작 상이할 수 있음)
+        // x-apple.systempreferences:com.apple.keyboardservices?TextInput_Shortcuts (Ventura+)
+        // x-apple.systempreferences:com.apple.preference.keyboard?Shortcuts (Monterey-)
+        
+        let shortcutsUrl = URL(string: "x-apple.systempreferences:com.apple.preference.keyboard?Shortcuts") ?? fallbackUrl
+        
+        NSWorkspace.shared.open(shortcutsUrl)
+    }
+    
     // MARK: - Permission Polling
     
     private var pollingTimer: Timer?
     
     private func startPermissionPolling() {
         pollingTimer?.invalidate()
-        pollingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
             guard let self = self else {
                 timer.invalidate()
                 return

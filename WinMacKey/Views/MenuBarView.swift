@@ -18,13 +18,13 @@ struct MenuBarView: View {
             if !appState.hasAccessibilityPermission {
                 permissionWarningSection
             } else {
-                // 엔진 상태 및 컨트롤
-                engineSection
+                // 입력 소스 상태
+                inputSourceSection
                 
                 Divider()
                 
-                // 현재 컨텍스트
-                contextSection
+                // 엔진 상태 및 컨트롤
+                engineSection
                 
                 Divider()
                 
@@ -48,9 +48,14 @@ struct MenuBarView: View {
                 Text("WinMac Key")
                     .font(.headline)
                 
-                Text(appState.isPro ? "Pro Edition" : "Free Edition")
-                    .font(.caption)
-                    .foregroundStyle(appState.isPro ? .orange : .secondary)
+                HStack(spacing: 4) {
+                    Text(appState.isPro ? "Pro Edition" : "Free Edition")
+                        .foregroundStyle(appState.isPro ? .orange : .secondary)
+                    
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
             }
             
             Spacer()
@@ -62,6 +67,40 @@ struct MenuBarView: View {
                         .font(.system(.title3, design: .monospaced))
                         .foregroundStyle(.green)
                     Text("ms")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(12)
+    }
+    
+    private var inputSourceSection: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("입력 소스")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: 8) {
+                    Image(systemName: appState.stateManager.currentInputSource.systemImageName)
+                        .font(.title2)
+                        .foregroundStyle(appState.stateManager.currentInputSource == .korean ? .blue : .green)
+                    
+                    Text(appState.stateManager.currentInputSource == .korean ? "한글" : "English")
+                        .font(.system(.callout, design: .rounded))
+                        .fontWeight(.medium)
+                }
+            }
+            
+            Spacer()
+            
+            if appState.isEngineRunning {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(appState.stateManager.switchCount)")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Text("전환")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -118,37 +157,12 @@ struct MenuBarView: View {
         .padding(12)
     }
     
-    private var contextSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("현재 컨텍스트")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            HStack {
-                Image(systemName: appState.contextManager.isVirtualizationApp ? "desktopcomputer" : "app.fill")
-                    .foregroundStyle(appState.contextManager.isVirtualizationApp ? .blue : .secondary)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(appState.contextManager.currentAppName.isEmpty ? "알 수 없음" : appState.contextManager.currentAppName)
-                        .font(.callout)
-                        .lineLimit(1)
-                    
-                    if appState.contextManager.isVirtualizationApp {
-                        Text("Windows Mode 활성화")
-                            .font(.caption2)
-                            .foregroundStyle(.blue)
-                    }
-                }
-                
-                Spacer()
-            }
-        }
-        .padding(12)
-    }
-    
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button(action: { openWindow(id: "event-viewer") }) {
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "event-viewer")
+            }) {
                 Label("Event Viewer 열기", systemImage: "list.bullet.rectangle")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -164,7 +178,10 @@ struct MenuBarView: View {
     
     private var appMenuSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button(action: { openSettings() }) {
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            }) {
                 Label("설정...", systemImage: "gear")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -180,7 +197,6 @@ struct MenuBarView: View {
                     
                     Spacer()
                     
-                    // 업데이트 가능 시 배지 표시
                     if appState.updateService.updateAvailable {
                         Circle()
                             .fill(.red)
@@ -193,19 +209,17 @@ struct MenuBarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             
-            if !appState.isPro {
-                Divider()
-                    .padding(.horizontal, 8)
-                
-                Button(action: openDonationLink) {
-                    Label("Pro 버전 후원하기 ♥", systemImage: "heart.fill")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .foregroundStyle(.pink)
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+            // 설정 초기화 버튼
+            Button(action: {
+                appState.showResetConfirmation = true
+            }) {
+                Label("설정 초기화...", systemImage: "arrow.counterclockwise")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(.red)
             }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             
             Divider()
                 .padding(.horizontal, 8)
@@ -221,11 +235,17 @@ struct MenuBarView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
-    }
-    
-    private func openDonationLink() {
-        if let url = URL(string: "https://github.com/sponsors/lee-minki") {
-            NSWorkspace.shared.open(url)
+        .confirmationDialog(
+            "정말 초기화하시겠습니까?",
+            isPresented: $appState.showResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("초기화", role: .destructive) {
+                appState.resetAll()
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("엔진이 정지되고 모든 프로필이 기본값으로 복원됩니다.")
         }
     }
 }

@@ -21,6 +21,8 @@
 		AAA00023 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AAA00024; };
 		BBB00001 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB00002; };
 		BBB00003 /* UpdateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB00004; };
+		CCC00001 /* InputSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00002; };
+		CCC00003 /* StateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00004; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +43,8 @@
 		AAA00027 /* WinMacKey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WinMacKey.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BBB00002 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		BBB00004 /* UpdateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateView.swift; sourceTree = "<group>"; };
+		CCC00002 /* InputSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceManager.swift; sourceTree = "<group>"; };
+		CCC00004 /* StateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +114,8 @@
 				AAA00010 /* PermissionService.swift */,
 				AAA00012 /* ContextManager.swift */,
 				BBB00002 /* UpdateService.swift */,
+				CCC00002 /* InputSourceManager.swift */,
+				CCC00004 /* StateManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -216,6 +222,8 @@
 				AAA00019 /* EventViewerView.swift in Sources */,
 				BBB00001 /* UpdateService.swift in Sources */,
 				BBB00003 /* UpdateView.swift in Sources */,
+				CCC00001 /* InputSourceManager.swift in Sources */,
+				CCC00003 /* StateManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -348,7 +356,7 @@
 				CODE_SIGN_ENTITLEMENTS = WinMacKey/WinMacKey.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -375,7 +383,7 @@
 				CODE_SIGN_ENTITLEMENTS = WinMacKey/WinMacKey.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;

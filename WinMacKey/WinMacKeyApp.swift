@@ -10,7 +10,14 @@ struct WinMacKeyApp: App {
             MenuBarView()
                 .environmentObject(appState)
         } label: {
-            Image(systemName: appState.isEngineRunning ? "keyboard.fill" : "keyboard")
+            // 현재 입력 소스에 따라 아이콘 변경
+            if appState.isEngineRunning {
+                Image(systemName: appState.stateManager.currentInputSource == .korean
+                      ? "character.textbox"
+                      : "a.square")
+            } else {
+                Image(systemName: "keyboard")
+            }
         }
         .menuBarExtraStyle(.window)
         
@@ -46,14 +53,33 @@ class AppState: ObservableObject {
     @Published var hasAccessibilityPermission: Bool = false
     @Published var isPro: Bool = false  // Pro 버전 활성화 여부
     
+    // VDI (VMware Horizon 등) 호환 모드: 우측 Command를 우측 Option(Alt)으로 변환
+    @AppStorage("useVdiMode") var useVdiMode: Bool = false {
+        didSet {
+            // 값이 변경될 때 KeyInterceptor 등에 바로 반영되로록 할 수 있음
+            keyInterceptor.useVdiMode = useVdiMode
+        }
+    }
+    
     let keyInterceptor = KeyInterceptor()
     let permissionService = PermissionService()
     let contextManager = ContextManager()
     let updateService = UpdateService()
+    let stateManager = StateManager()
+    let resetService = ResetService()
+    
+    @Published var showResetConfirmation: Bool = false
     
     private var permissionObserver: NSObjectProtocol?
     
     init() {
+        // Right Cmd tap-only → 한영전환 연결
+        keyInterceptor.onInputSourceToggle = { [weak self] in
+            self?.stateManager.handleTrigger()
+        }
+        // 초기화 시 저장된 속성을 Interceptor에 전달
+        keyInterceptor.useVdiMode = useVdiMode
+        
         checkPermissions()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
@@ -64,13 +90,14 @@ class AppState: ObservableObject {
     }
     
     private func setupPermissionObserver() {
-        // 권한 변경 알림 수신
         permissionObserver = NotificationCenter.default.addObserver(
             forName: .accessibilityPermissionGranted,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.hasAccessibilityPermission = true
+            Task { @MainActor in
+                self?.hasAccessibilityPermission = true
+            }
         }
     }
     
@@ -83,7 +110,18 @@ class AppState: ObservableObject {
         isEngineRunning.toggle()
     }
     
-    /// 앱 실행 시 업데이트 체크 (자동 체크가 활성화된 경우)
+    /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.
+    func resetAll() {
+        resetService.resetAll(keyInterceptor: keyInterceptor) { [weak self] in
+            DispatchQueue.main.async {
+                self?.isEngineRunning = false
+                self?.currentLatencyMs = 0.0
+                self?.stateManager.switchCount = 0
+                self?.stateManager.refreshCurrentSource()
+            }
+        }
+    }
+    
     private func checkForUpdatesOnLaunch() {
         if updateService.autoCheckEnabled {
             Task {
