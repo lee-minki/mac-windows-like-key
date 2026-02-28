@@ -10,9 +10,10 @@ class ResetService {
     // 앱에서 사용하는 UserDefaults 키 목록
     private let userDefaultsKeys = [
         "WinMacKey.Profiles",
-        "WinMacKey.LastUpdateCheck",
-        "WinMacKey.SkippedVersion",
-        "WinMacKey.AutoCheckEnabled"
+        "LastUpdateCheck",
+        "AutoCheckUpdates",
+        "CustomVirtualizationApps",
+        "useVdiMode"
     ]
     
     /// 모든 앱 설정을 초기화합니다.

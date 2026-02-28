@@ -23,6 +23,7 @@
 		BBB00003 /* UpdateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB00004; };
 		CCC00001 /* InputSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00002; };
 		CCC00003 /* StateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00004; };
+		DDD00001 /* ResetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD00002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 		BBB00004 /* UpdateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateView.swift; sourceTree = "<group>"; };
 		CCC00002 /* InputSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceManager.swift; sourceTree = "<group>"; };
 		CCC00004 /* StateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateManager.swift; sourceTree = "<group>"; };
+		DDD00002 /* ResetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -116,6 +118,7 @@
 				BBB00002 /* UpdateService.swift */,
 				CCC00002 /* InputSourceManager.swift */,
 				CCC00004 /* StateManager.swift */,
+				DDD00002 /* ResetService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -224,6 +227,7 @@
 				BBB00003 /* UpdateView.swift in Sources */,
 				CCC00001 /* InputSourceManager.swift in Sources */,
 				CCC00003 /* StateManager.swift in Sources */,
+				DDD00001 /* ResetService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

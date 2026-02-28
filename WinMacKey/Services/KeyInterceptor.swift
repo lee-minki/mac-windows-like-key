@@ -6,25 +6,36 @@ import os.log
 /// CGEventTap 기반 키보드 이벤트 인터셉터
 /// Right Cmd tap-only 감지 + 기존 키 리매핑 + EventTap 자동 재활성화
 class KeyInterceptor: ObservableObject {
+    static weak var shared: KeyInterceptor?
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isRunning = false
     private var reactivationTimer: Timer?
-    
+
     @Published var events: [KeyEvent] = []
     @Published var averageLatencyMs: Double = 0.0
     @Published var totalEventCount: Int = 0
-    
+
     // 키 매핑 테이블 (fn↔Cmd↔Ctrl 등 기존 매핑)
     private var keyMappings: [Int64: Int64] = [:]
-    
+
     // Right Cmd tap-only 감지 상태
     private var rightCmdPressed = false
     private var rightCmdUsedAsModifier = false
-    
+
+    // VDI 모드: 우측 Command → 우측 Option 변환
+    var useVdiMode: Bool = false
+
+    // 이벤트 로그 최대 개수
+    private let maxEventLogCount = 1000
+
+    // 로거
+    private let logger = Logger(subsystem: "com.winmackey.app", category: "KeyInterceptor")
+
     // 한영전환 콜백
     var onInputSourceToggle: (() -> Void)?
-    
+
     // 이벤트 콜백
     var onKeyEvent: ((KeyEvent) -> Void)?
     

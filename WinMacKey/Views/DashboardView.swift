@@ -4,6 +4,7 @@ import SwiftUI
 /// 앱별 매핑 프로필 설정 및 'The Silencer' 활성화
 struct DashboardView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.openWindow) var openWindow
     @StateObject private var profileManager = ProfileManager()
     @State private var selectedTab = 0
     @State private var showAddProfileSheet = false
@@ -321,7 +322,8 @@ struct DashboardView: View {
             Spacer()
             
             Button("Event Viewer 열기") {
-                // Open Event Viewer window
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "event-viewer")
             }
             .buttonStyle(.borderedProminent)
         }

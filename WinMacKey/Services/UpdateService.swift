@@ -8,7 +8,7 @@ class UpdateService: ObservableObject {
     
     /// GitHub 저장소 정보 (실제 배포 시 변경 필요)
     private let githubOwner = "lee-minki"
-    private let githubRepo = "winmac-key"
+    private let githubRepo = "mac-windows-like-key"
     
     /// 현재 앱 버전 (Bundle에서 가져옴)
     var currentVersion: String {
