@@ -40,6 +40,12 @@ struct WinMacKeyApp: App {
         }
         .defaultSize(width: 400, height: 350)
         .windowResizability(.contentSize)
+        
+        // Help Window
+        Window("도움말", id: "help-window") {
+            HelpView()
+        }
+        .defaultSize(width: 620, height: 520)
     }
 }
 

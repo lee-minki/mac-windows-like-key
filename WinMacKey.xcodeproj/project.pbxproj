@@ -24,6 +24,7 @@
 		CCC00001 /* InputSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00002; };
 		CCC00003 /* StateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00004; };
 		DDD00001 /* ResetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD00002; };
+		EEE00001 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE00002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +48,7 @@
 		CCC00002 /* InputSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceManager.swift; sourceTree = "<group>"; };
 		CCC00004 /* StateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateManager.swift; sourceTree = "<group>"; };
 		DDD00002 /* ResetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetService.swift; sourceTree = "<group>"; };
+		EEE00002 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -131,6 +133,7 @@
 				AAA00018 /* DashboardView.swift */,
 				AAA00020 /* EventViewerView.swift */,
 				BBB00004 /* UpdateView.swift */,
+				EEE00002 /* HelpView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -228,6 +231,7 @@
 				CCC00001 /* InputSourceManager.swift in Sources */,
 				CCC00003 /* StateManager.swift in Sources */,
 				DDD00001 /* ResetService.swift in Sources */,
+				EEE00001 /* HelpView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,7 +375,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.winmackey.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -398,7 +402,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.winmackey.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
