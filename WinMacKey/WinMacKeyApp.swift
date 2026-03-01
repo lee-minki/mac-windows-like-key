@@ -53,6 +53,12 @@ struct WinMacKeyApp: App {
                 .environmentObject(appState)
         }
         .defaultSize(width: 560, height: 480)
+        
+        // Log Viewer Window
+        Window("로그 뷰어", id: "log-window") {
+            LogView()
+        }
+        .defaultSize(width: 700, height: 450)
     }
 }
 
@@ -97,6 +103,10 @@ class AppState: ObservableObject {
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
+        
+        LogService.shared.info("AppState initialized", category: "App")
+        LogService.shared.info("VDI mode: \(useVdiMode)", category: "App")
+        LogService.shared.info("Accessibility: \(hasAccessibilityPermission)", category: "App")
     }
     
     func checkPermissions() {
@@ -118,20 +128,24 @@ class AppState: ObservableObject {
     func toggleEngine() {
         if isEngineRunning {
             keyInterceptor.stop()
+            LogService.shared.info("Engine stopped", category: "Engine")
         } else {
             keyInterceptor.start()
+            LogService.shared.info("Engine started", category: "Engine")
         }
         isEngineRunning.toggle()
     }
     
     /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.
     func resetAll() {
+        LogService.shared.warning("Reset all triggered", category: "App")
         resetService.resetAll(keyInterceptor: keyInterceptor) { [weak self] in
             DispatchQueue.main.async {
                 self?.isEngineRunning = false
                 self?.currentLatencyMs = 0.0
                 self?.stateManager.switchCount = 0
                 self?.stateManager.refreshCurrentSource()
+                LogService.shared.info("Reset completed", category: "App")
             }
         }
     }

@@ -27,6 +27,8 @@
 		EEE00001 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE00002; };
 		FFF00001 /* DoctorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF00002; };
 		FFF00003 /* DoctorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF00004; };
+		GGG00001 /* LogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = GGG00002; };
+		GGG00003 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GGG00004; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +55,8 @@
 		EEE00002 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		FFF00002 /* DoctorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorService.swift; sourceTree = "<group>"; };
 		FFF00004 /* DoctorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorView.swift; sourceTree = "<group>"; };
+		GGG00002 /* LogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogService.swift; sourceTree = "<group>"; };
+		GGG00004 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +130,7 @@
 				CCC00004 /* StateManager.swift */,
 				DDD00002 /* ResetService.swift */,
 				FFF00002 /* DoctorService.swift */,
+				GGG00002 /* LogService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -140,6 +145,7 @@
 				BBB00004 /* UpdateView.swift */,
 				EEE00002 /* HelpView.swift */,
 				FFF00004 /* DoctorView.swift */,
+				GGG00004 /* LogView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -240,6 +246,8 @@
 				EEE00001 /* HelpView.swift in Sources */,
 				FFF00001 /* DoctorService.swift in Sources */,
 				FFF00003 /* DoctorView.swift in Sources */,
+				GGG00001 /* LogService.swift in Sources */,
+				GGG00003 /* LogView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

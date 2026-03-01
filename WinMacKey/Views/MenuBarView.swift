@@ -171,6 +171,19 @@ struct MenuBarView: View {
             .padding(.vertical, 6)
             .background(Color.clear)
             .contentShape(Rectangle())
+            
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "log-window")
+            }) {
+                Label("로그 뷰어", systemImage: "doc.text.magnifyingglass")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.clear)
+            .contentShape(Rectangle())
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
