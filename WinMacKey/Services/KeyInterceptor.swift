@@ -190,6 +190,11 @@ class KeyInterceptor: ObservableObject {
         var mappedKeyCode = keyCode
         var finalEvent = event
         
+        // ====== Right Cmd가 눌린 상태에서 다른 키 입력 시 modifier로 사용된 것으로 표시 ======
+        if interceptor.rightCmdPressed && keyCode != rightCmdKeyCode && (type == .keyDown || type == .keyUp) {
+            interceptor.rightCmdUsedAsModifier = true
+        }
+        
         // ====== Right Cmd 처리 (VDI 모드 분기) ======
         
         if keyCode == rightCmdKeyCode {
@@ -199,15 +204,12 @@ class KeyInterceptor: ObservableObject {
                 mappedKeyCode = rightOptionKeyCode
                 
                 if type == .flagsChanged {
-                    // 키코드 변경
                     event.setIntegerValueField(.keyboardEventKeycode, value: rightOptionKeyCode)
-                    // 플래그 업데이트
                     interceptor.updateModifierFlags(event: event, originalKey: rightCmdKeyCode, newKey: rightOptionKeyCode)
-                    //interceptor.logger.info("VDI Mode: Right Cmd -> Right Option mapped")
                 }
                 
             } else {
-                // 기존 모드: Tap-Only 감지 활성화 (macOS TIS 한영 전환)
+                // 기존 모드: Tap-Only 감지 (macOS TIS 한영 전환)
                 if type == .flagsChanged {
                     let isDown = event.flags.contains(.maskCommand)
                     
@@ -223,10 +225,8 @@ class KeyInterceptor: ObservableObject {
                         interceptor.rightCmdUsedAsModifier = false
                     }
                     
-                    interceptor.logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+                    interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
                     return Unmanaged.passUnretained(event)
-                } else if interceptor.rightCmdPressed && type != .flagsChanged {
-                    interceptor.rightCmdUsedAsModifier = true
                 }
             }
         }
@@ -236,31 +236,57 @@ class KeyInterceptor: ObservableObject {
         if keyCode != rightCmdKeyCode, let newKeyCode = interceptor.keyMappings[keyCode] {
             mappedKeyCode = newKeyCode
             
-            // Modifier 여부 확인
             let isSourceModifier = interceptor.modifierKeyToFlag[keyCode] != nil
             let isDestModifier = interceptor.modifierKeyToFlag[newKeyCode] != nil
             
-            // Modifier Key -> Modifier Key (예: Cmd -> Ctrl, Ctrl -> Fn)
-            if isSourceModifier && isDestModifier && type == .flagsChanged {
-                event.setIntegerValueField(.keyboardEventKeycode, value: newKeyCode)
-                interceptor.updateModifierFlags(event: event, originalKey: keyCode, newKey: newKeyCode)
+            if type == .flagsChanged {
+                // ── flagsChanged 이벤트에서의 매핑 ──
+                
+                if isSourceModifier && isDestModifier {
+                    // Modifier → Modifier (예: fn→Cmd, Cmd→Ctrl, Ctrl→fn)
+                    // 새 이벤트를 생성하여 시스템의 기본 modifier 처리를 우회
+                    if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
+                        let isDown = event.flags.contains(srcFlag)
+                        
+                        // flagsChanged 이벤트를 새로 생성
+                        if let newEvent = CGEvent(keyboardEventSource: CGEventSource(event: event),
+                                                   virtualKey: CGKeyCode(newKeyCode),
+                                                   keyDown: isDown) {
+                            // 이벤트 타입을 flagsChanged로 설정
+                            newEvent.type = .flagsChanged
+                            
+                            // 플래그 구성: 원본 플래그에서 소스 플래그를 제거하고 대상 플래그를 추가
+                            var newFlags = event.flags
+                            newFlags.remove(srcFlag)
+                            if isDown, let dstFlag = interceptor.modifierKeyToFlag[newKeyCode] {
+                                newFlags.insert(dstFlag)
+                            }
+                            newEvent.flags = newFlags
+                            
+                            finalEvent = newEvent
+                        }
+                    }
+                }
+                else if isSourceModifier && !isDestModifier {
+                    // Modifier → General Key (예: 특수 시나리오)
+                    if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
+                        let isDown = event.flags.contains(srcFlag)
+                        if let newEvent = CGEvent(keyboardEventSource: CGEventSource(event: event),
+                                                   virtualKey: CGKeyCode(newKeyCode),
+                                                   keyDown: isDown) {
+                            var newFlags = event.flags
+                            newFlags.remove(srcFlag)
+                            newEvent.flags = newFlags
+                            finalEvent = newEvent
+                        }
+                    }
+                }
+                // General → Modifier in flagsChanged: 거의 발생하지 않으므로 패스
             }
-            // General Key -> General Key
-            else if !isSourceModifier && !isDestModifier {
+            else {
+                // ── keyDown / keyUp 이벤트에서의 매핑 ──
+                // 단순히 keyCode만 교체 (General→General, 또는 Modifier keyCode가 keyDown/keyUp으로 오는 경우)
                 event.setIntegerValueField(.keyboardEventKeycode, value: newKeyCode)
-            }
-            // 기타 시나리오(Modifier -> General 등) 확장을 위한 부분
-            else if isSourceModifier && !isDestModifier && type == .flagsChanged {
-                 if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
-                     let isDown = event.flags.contains(srcFlag)
-                     let source = CGEventSource(event: event)
-                     if let newEvent = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(newKeyCode), keyDown: isDown) {
-                         var newFlags = event.flags
-                         newFlags.remove(srcFlag)
-                         newEvent.flags = newFlags
-                         finalEvent = newEvent
-                     }
-                 }
             }
         }
         
@@ -300,9 +326,25 @@ class KeyInterceptor: ObservableObject {
         let endTime = DispatchTime.now()
         let latencyMicros = UInt64((endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1000)
         
-        var eventType: KeyEventType = .up
-        if event.type == .keyDown { eventType = .down }
-        else if event.type == .flagsChanged { eventType = .down }
+        // 이벤트 타입 판별
+        let eventType: KeyEventType
+        switch event.type {
+        case .keyDown:
+            eventType = .down
+        case .keyUp:
+            eventType = .up
+        case .flagsChanged:
+            // flagsChanged에서는 매핑된 키의 플래그를 확인하여 down/up 판별
+            if let flag = modifierKeyToFlag[mappedKey] {
+                eventType = event.flags.contains(flag) ? .down : .up
+            } else {
+                // 매핑 대상이 일반 키인 경우 (Modifier→General 매핑)
+                // 새 이벤트가 keyDown/keyUp으로 변환되었을 수 있으므로 event.type으로 판단
+                eventType = .down
+            }
+        default:
+            eventType = .up
+        }
         
         let keyEvent = KeyEvent(
             type: eventType,

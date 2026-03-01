@@ -225,11 +225,8 @@ struct EventViewerView: View {
     
     private func toggleCapture() {
         isCapturing.toggle()
-        if isCapturing {
-            appState.keyInterceptor.start()
-        } else {
-            appState.keyInterceptor.stop()
-        }
+        // isCapturing은 UI 로깅 표시만 제어합니다.
+        // 엔진 start/stop은 하지 않습니다 — 메인 엔진에 사이드 이펙트를 주지 않기 위함.
     }
     
     private func copyAsJSON() {

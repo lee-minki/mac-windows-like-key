@@ -63,7 +63,7 @@ struct MenuBarView: View {
             // 지연 시간 표시
             if appState.isEngineRunning {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(String(format: "%.2f", appState.currentLatencyMs))
+                    Text(String(format: "%.2f", appState.keyInterceptor.averageLatencyMs))
                         .font(.system(.title3, design: .monospaced))
                         .foregroundStyle(.green)
                     Text("ms")

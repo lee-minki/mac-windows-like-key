@@ -83,6 +83,7 @@ class AppState: ObservableObject {
         checkPermissions()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
+        contextManager.startMonitoring()
     }
     
     func checkPermissions() {
@@ -131,6 +132,7 @@ class AppState: ObservableObject {
     }
     
     deinit {
+        contextManager.stopMonitoring()
         if let observer = permissionObserver {
             NotificationCenter.default.removeObserver(observer)
         }
