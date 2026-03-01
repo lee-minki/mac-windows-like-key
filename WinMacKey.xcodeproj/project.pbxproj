@@ -25,6 +25,8 @@
 		CCC00003 /* StateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC00004; };
 		DDD00001 /* ResetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD00002; };
 		EEE00001 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE00002; };
+		FFF00001 /* DoctorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF00002; };
+		FFF00003 /* DoctorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF00004; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +51,8 @@
 		CCC00004 /* StateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateManager.swift; sourceTree = "<group>"; };
 		DDD00002 /* ResetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetService.swift; sourceTree = "<group>"; };
 		EEE00002 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
+		FFF00002 /* DoctorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorService.swift; sourceTree = "<group>"; };
+		FFF00004 /* DoctorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +125,7 @@
 				CCC00002 /* InputSourceManager.swift */,
 				CCC00004 /* StateManager.swift */,
 				DDD00002 /* ResetService.swift */,
+				FFF00002 /* DoctorService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -134,6 +139,7 @@
 				AAA00020 /* EventViewerView.swift */,
 				BBB00004 /* UpdateView.swift */,
 				EEE00002 /* HelpView.swift */,
+				FFF00004 /* DoctorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -232,6 +238,8 @@
 				CCC00003 /* StateManager.swift in Sources */,
 				DDD00001 /* ResetService.swift in Sources */,
 				EEE00001 /* HelpView.swift in Sources */,
+				FFF00001 /* DoctorService.swift in Sources */,
+				FFF00003 /* DoctorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

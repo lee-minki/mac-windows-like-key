@@ -46,6 +46,13 @@ struct WinMacKeyApp: App {
             HelpView()
         }
         .defaultSize(width: 620, height: 520)
+        
+        // Doctor Window
+        Window("Doctor", id: "doctor-window") {
+            DoctorView()
+                .environmentObject(appState)
+        }
+        .defaultSize(width: 560, height: 480)
     }
 }
 

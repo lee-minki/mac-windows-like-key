@@ -221,6 +221,18 @@ struct MenuBarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             
+            // Doctor 버튼
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "doctor-window")
+            }) {
+                Label("Doctor (진단/복구)", systemImage: "stethoscope")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            
             // 설정 초기화 버튼
             Button(action: {
                 appState.showResetConfirmation = true
