@@ -82,12 +82,9 @@ class AppState: ObservableObject {
     @Published var hasAccessibilityPermission: Bool = false
     @Published var isPro: Bool = false  // Pro 버전 활성화 여부
     
-    // VDI (VMware Horizon 등) 호환 모드: 우측 Command를 우측 Option(Alt)으로 변환
-    @AppStorage("useVdiMode") var useVdiMode: Bool = false {
-        didSet {
-            keyInterceptor.useVdiMode = useVdiMode
-        }
-    }
+    // VDI 앱 자동 감지 모드 (수동 토글 대신 ContextManager가 자동 처리)
+    // 레거시 호환을 위해 AppStorage 키는 유지하되, 실제로는 ContextManager가 자동 갱신
+    @AppStorage("useVdiMode") var useVdiMode: Bool = false
     
     // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
     @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
@@ -118,25 +115,32 @@ class AppState: ObservableObject {
     private var permissionObserver: NSObjectProtocol?
     
     init() {
-        // Right Cmd tap-only → 한영전환 연결
+        // Right Cmd/Opt 즉시 전환 → 한영전환 연결
         keyInterceptor.onInputSourceToggle = { [weak self] in
             self?.stateManager.handleTrigger()
         }
-        // 초기화 시 저장된 속성을 Interceptor에 전달
-        keyInterceptor.useVdiMode = useVdiMode
+        
+        // 트리거 키 설정
         keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")
             ? Int64(kVK_RightOption)
             : Int64(kVK_RightCommand)
         keyInterceptor.activeProfileID = activeMappingProfileId
         keyInterceptor.setupDefaultMappings()
         
+        // 앱 전환 시: (1) bundleId 캐시 갱신 (2) VDI 앱 자동 감지
+        keyInterceptor.cachedBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        contextManager.onAppChanged = { [weak self] bundleId, _ in
+            self?.keyInterceptor.cachedBundleId = bundleId.isEmpty ? nil : bundleId
+            // VDI 앱 포커스 여부 자동 갱신
+            self?.keyInterceptor.isVdiAppFocused = self?.contextManager.isVirtualizationApp ?? false
+        }
+
         checkPermissions()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
         
         LogService.shared.info("AppState initialized", category: "App")
-        LogService.shared.info("VDI mode: \(useVdiMode)", category: "App")
         LogService.shared.info("Accessibility: \(hasAccessibilityPermission)", category: "App")
     }
     

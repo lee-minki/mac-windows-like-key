@@ -16,7 +16,7 @@ struct HelpView: View {
             
             migrationTab
                 .tabItem { Label("기존 도구 전환", systemImage: "arrow.triangle.swap") }
-                .tag(2)
+                .tag(2)e
             
             faqTab
                 .tabItem { Label("FAQ", systemImage: "questionmark.circle") }

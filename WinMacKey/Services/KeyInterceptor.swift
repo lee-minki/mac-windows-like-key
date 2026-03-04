@@ -20,15 +20,9 @@ class KeyInterceptor: ObservableObject {
     // 키 매핑 테이블 (fn↔Cmd↔Ctrl 등 기존 매핑)
     private(set) var keyMappings: [Int64: Int64] = [:]
 
-    // Right Cmd/Opt tap-only 감지 상태
+    // Right Cmd/Opt toggle 상태 (연속 토글 방지용)
     private var triggerKeyPressed = false
-    private var triggerKeyUsedAsModifier = false
-    private var triggerKeyDownTime: UInt64 = 0  // 누르는 순간의 타임스탬프 (ns)
     private var previousFlags: CGEventFlags = []
-    
-    /// Tap-only 타이밍 임계값 (ns)
-    /// 이 시간 이내에 떄 경우, 다른 키가 눌렸어도 tap으로 간주
-    private let tapThresholdNs: UInt64 = 200_000_000  // 200ms
 
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
@@ -36,8 +30,8 @@ class KeyInterceptor: ObservableObject {
     // 한영 전환 트리거 키 (기본: Right Cmd, 옵션: Right Opt)
     var triggerKeyCode: Int64 = Int64(kVK_RightCommand)
 
-    // VDI 모드: 우측 Command → 우측 Option 변환
-    @Published var useVdiMode: Bool = false
+    // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
+    var isVdiAppFocused: Bool = false
 
     // 이벤트 로그 최대 개수
     private let maxEventLogCount = 1000
@@ -54,6 +48,9 @@ class KeyInterceptor: ObservableObject {
     // 키 감지/검증 콜백 (ModifierLayoutView 마법사용)
     // (originalKeyCode, mappedKeyCode, isDown)
     var onVerifyKeyEvent: ((Int64, Int64, Bool) -> Void)?
+
+    // ContextManager가 앱 전환 시 갱신 — 콜백 내 NSWorkspace 동기 호출 제거용
+    var cachedBundleId: String? = nil
     
     // Modifier Flags Mapping
     private let modifierKeyToFlag: [Int64: CGEventFlags] = [
@@ -87,14 +84,13 @@ class KeyInterceptor: ObservableObject {
         
         keyMappings.removeAll()
         
-        // 선택된 프로파일 찾기
-        var selectedProfile = MappingProfile.defaultProfiles.first { $0.id.uuidString == activeProfileID }
-        
-        // UUID 매칭 실패시 하드코딩된 이름으로 폴백 매칭 시도
-        if selectedProfile == nil {
-            if activeProfileID == "standardMac" { selectedProfile = .standardMac }
-            else if activeProfileID == "windowsBluetooth" { selectedProfile = .windowsBluetooth }
-            else if activeProfileID == "winMacKeyOriginal" { selectedProfile = .winMacKeyOriginal }
+        // 이름 기반 매칭 (기본 프로파일)
+        let selectedProfile: MappingProfile?
+        switch activeProfileID {
+        case "standardMac":      selectedProfile = .standardMac
+        case "windowsBluetooth": selectedProfile = .windowsBluetooth
+        case "winMacKeyOriginal": selectedProfile = .winMacKeyOriginal
+        default:                 selectedProfile = nil
         }
         
         if let profile = selectedProfile {
@@ -267,17 +263,10 @@ class KeyInterceptor: ObservableObject {
         
         // ====== 트리거 키가 눌린 상태에서의 후속 이벤트 처리 ======
         if interceptor.triggerKeyPressed && keyCode != triggerKey {
-
-            // (1) keyDown이면 modifier 사용으로 표시
-            // ⚠️ keyUp은 제외: 빠른 타이핑 중 이전 키의 keyUp이 트리거 구간에 발생해도 tap 무효화하지 않음
-            if type == .keyDown {
-                interceptor.triggerKeyUsedAsModifier = true
-            }
-
-            // (2) 핵심 수정: flags에서 트리거 modifier를 제거
+            // (1) 핵심 수정: flags에서 트리거 modifier를 제거
             // 이유: Right Cmd는 suppress되어 시스템에 전달되지 않지만,
             //       하드웨어 modifier 상태가 후속 이벤트의 event.flags에 그대로 남음.
-            //       제거하지 않으면 앱이 "b keyDown with .maskCommand" → Cmd+b 로 해석 → 씹힘 발생.
+            //       제거하지 않으면 앱이 "b keyDown"을 "Cmd+b" 로 해석 → 씹힘 발생.
             let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
             if event.flags.contains(triggerFlag) {
                 var strippedFlags = event.flags
@@ -307,31 +296,23 @@ class KeyInterceptor: ObservableObject {
             }
             interceptor.previousFlags = event.flags
 
-            if interceptor.useVdiMode && triggerKey == rightCmdKeyCode {
-                // ── VDI 모드: Right Cmd → Right Option 합성 주입 ──
-                Self.injectModifierEvent(virtualKey: CGKeyCode(kVK_RightOption), isDown: isDown)
-                interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: Int64(kVK_RightOption))
+            // 상태 갱신 (반복 토글 방지)
+            if isDown {
+                interceptor.triggerKeyPressed = true
             } else {
-                // ── 일반 모드: Tap-Only 감지 → 한영 전환 ──
+                interceptor.triggerKeyPressed = false
+            }
+
+            if interceptor.isVdiAppFocused {
+                // ── VDI 앱 포커스: 이벤트를 그대로 통과 시킴 ──
+                // Right Option은 VMware에서 Right Alt로 인식 → 네이티브 한/영 전환
+                interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+                return Unmanaged.passUnretained(event)  // ← 통과!
+            } else {
+                // ── 일반 모드: 누르는 순간(isDown) 즉시 한/영 전환 ──
                 if isDown {
-                    if !interceptor.triggerKeyPressed {
-                        interceptor.triggerKeyPressed = true
-                        interceptor.triggerKeyUsedAsModifier = false
-                        interceptor.triggerKeyDownTime = DispatchTime.now().uptimeNanoseconds
-                    }
-                } else {
-                    if interceptor.triggerKeyPressed {
-                        let elapsed = DispatchTime.now().uptimeNanoseconds - interceptor.triggerKeyDownTime
-                        // Tap 판정: 다른 키를 누르지 않았고 + 임계값 이내
-                        // (기존의 "modifier 사용해도 300ms 이내면 tap" 예외 제거 → 씹힘 원인 차단)
-                        let isTap = !interceptor.triggerKeyUsedAsModifier && elapsed < interceptor.tapThresholdNs
-                        if isTap {
-                            interceptor.logger.info("Trigger key tap-only detected (\(elapsed / 1_000_000)ms) → toggling input source")
-                            interceptor.onInputSourceToggle?()
-                        }
-                    }
-                    interceptor.triggerKeyPressed = false
-                    interceptor.triggerKeyUsedAsModifier = false
+                    interceptor.logger.info("⚡️ Instant Toggle trigger detected")
+                    interceptor.onInputSourceToggle?()
                 }
                 interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
             }
@@ -428,27 +409,6 @@ class KeyInterceptor: ObservableObject {
         return Unmanaged.passUnretained(finalEvent)
     }
     
-    private func updateModifierFlags(event: CGEvent, originalKey: Int64, newKey: Int64) {
-        let originalFlag = modifierKeyToFlag[originalKey]
-        let newFlag = modifierKeyToFlag[newKey]
-        
-        guard let srcFlag = originalFlag, let dstFlag = newFlag else { return }
-        
-        var currentFlags = event.flags
-        
-        if currentFlags.contains(srcFlag) {
-            // Key Down
-            currentFlags.remove(srcFlag)
-            currentFlags.insert(dstFlag)
-        } else {
-            // Key Up
-            currentFlags.remove(srcFlag)
-            currentFlags.remove(dstFlag)
-        }
-        
-        event.flags = currentFlags
-    }
-    
     // MARK: - Synthetic Event Injection
 
     /// 합성 modifier 이벤트를 HID 레벨에 주입합니다.
@@ -508,7 +468,7 @@ class KeyInterceptor: ObservableObject {
             rawKey: UInt32(originalKey),
             mappedKey: UInt32(mappedKey),
             latencyMicroseconds: latencyMicros,
-            bundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+            bundleId: self.cachedBundleId,
             keyboardType: keyboardType
         )
         

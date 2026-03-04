@@ -163,21 +163,21 @@ struct DashboardView: View {
                         
                         Toggle("이벤트 뷰어 항상 위", isOn: $eventViewerAlwaysOnTop)
                         
-                        Toggle(isOn: $appState.useVdiMode) {
+                        HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("VDI (가상 데스크톱) 키보드 호환 모드")
-                                if appState.toggleTriggerKey == "rightOpt" {
-                                    Text("트리거 키가 Right Option일 때는 VDI 모드를 사용할 수 없습니다.")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                } else {
-                                    Text("우측 Command 키를 우측 Option(Alt) 키로 동작하게 합니다. (Windows 원격 환경 한/영 전환용)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                Text("VDI (가상 데스크톱) 자동 감지")
+                                Text("VMware, Parallels, RDP 등이 포커스되면 자동으로 Right Alt 키를 통과시킵니다.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
+                            Spacer()
+                            Text(appState.contextManager.isVirtualizationApp ? "활성" : "대기")
+                                .font(.system(.body, design: .monospaced))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(appState.contextManager.isVirtualizationApp ? .green.opacity(0.2) : .gray.opacity(0.2))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
                         }
-                        .disabled(appState.toggleTriggerKey == "rightOpt")
                     }
                 }
                 

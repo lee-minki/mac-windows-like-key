@@ -24,26 +24,24 @@ class StateManager: ObservableObject {
     }
     
     /// 한영전환 트리거 (Right Cmd tap-only에서 호출)
+    /// ⚠️ EventTap 콜백(메인 스레드)에서 직접 호출됨 — 동기 실행으로 다음 키 이벤트 처리 전 전환 완료 보장
     func handleTrigger() {
-        DispatchQueue.main.async { [self] in
-            let current = inputSourceManager.currentSource()
-            let target: InputSource = current == .korean ? .english : .korean
-            
-            logger.info("Toggle: \(current.rawValue) → \(target.rawValue)")
-            
-            // 입력 소스 전환 (동기 + 폴링 확인)
-            inputSourceManager.switchTo(target)
-            
-            // 전환 후 실제 상태 확인
-            let actual = inputSourceManager.currentSource()
-            
-            // UI 업데이트
-            currentInputSource = actual
-            switchCount += 1
-            
-            if actual != target {
-                logger.warning("Switch mismatch: expected \(target.rawValue) but got \(actual.rawValue)")
-            }
+        let current = inputSourceManager.currentSource()
+        let target: InputSource = current == .korean ? .english : .korean
+
+        logger.info("Toggle: \(current.rawValue) → \(target.rawValue)")
+
+        // 입력 소스 전환 — 콜백 내에서 동기 완료 (글자 밀림 방지)
+        inputSourceManager.switchTo(target)
+
+        let actual = inputSourceManager.currentSource()
+
+        // @Published 업데이트: EventTap은 메인 RunLoop에서 실행되므로 직접 접근 안전
+        currentInputSource = actual
+        switchCount += 1
+
+        if actual != target {
+            logger.warning("Switch mismatch: expected \(target.rawValue) but got \(actual.rawValue)")
         }
     }
     
