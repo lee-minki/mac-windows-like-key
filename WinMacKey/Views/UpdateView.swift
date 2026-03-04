@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// 업데이트 확인 뷰
-/// 수동 업데이트 체크 및 다운로드 기능을 제공합니다.
+/// GitHub Releases에서 자동 다운로드 + 설치 + 재시작
 struct UpdateView: View {
     @StateObject private var updateService = UpdateService()
     @Environment(\.dismiss) var dismiss
+    @State private var showInstallConfirm = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -16,8 +17,12 @@ struct UpdateView: View {
             // 현재 버전 정보
             currentVersionInfo
             
+            // 다운로드/설치 진행 중
+            if updateService.isDownloading {
+                downloadProgressView
+            }
             // 업데이트 상태
-            if updateService.isCheckingForUpdates {
+            else if updateService.isCheckingForUpdates {
                 checkingView
             } else if updateService.updateAvailable {
                 updateAvailableView
@@ -43,10 +48,27 @@ struct UpdateView: View {
             }
         }
         .padding(24)
-        .frame(width: 400, height: 350)
+        .frame(width: 400, height: 380)
         .task {
-            // 처음 열 때 자동으로 체크
             await updateService.checkForUpdates()
+        }
+        .confirmationDialog(
+            "업데이트를 설치하시겠습니까?",
+            isPresented: $showInstallConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("설치 및 재시작") {
+                Task {
+                    await updateService.downloadAndInstall()
+                }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("""
+            v\(updateService.latestVersion ?? "?")을 다운로드하고 설치합니다.
+            앱이 자동으로 재시작됩니다.
+            접근성 권한은 유지됩니다.
+            """)
         }
     }
     
@@ -95,9 +117,26 @@ struct UpdateView: View {
         .padding(.vertical, 20)
     }
     
+    private var downloadProgressView: some View {
+        VStack(spacing: 12) {
+            ProgressView(value: updateService.downloadProgress)
+                .progressViewStyle(.linear)
+            
+            Text(updateService.updateStatus)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Text("\(Int(updateService.downloadProgress * 100))%")
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.blue)
+        }
+        .padding()
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+    
     private var updateAvailableView: some View {
         VStack(spacing: 16) {
-            // 새 버전 정보
             HStack {
                 Image(systemName: "gift.fill")
                     .foregroundStyle(.green)
@@ -179,11 +218,14 @@ struct UpdateView: View {
             
             Spacer()
             
-            if updateService.updateAvailable {
+            if updateService.isDownloading {
+                // 다운로드 중에는 버튼 비활성화
+                Button("설치 중...") {}
+                    .buttonStyle(.borderedProminent)
+                    .disabled(true)
+            } else if updateService.updateAvailable {
                 Button("다운로드 및 설치") {
-                    Task {
-                        await updateService.downloadAndInstall()
-                    }
+                    showInstallConfirm = true
                 }
                 .buttonStyle(.borderedProminent)
             } else {
@@ -235,7 +277,6 @@ struct UpdateSettingsRow: View {
             UpdateView()
         }
         .task {
-            // 앱 시작 시 자동 체크 (설정된 경우)
             if updateService.autoCheckEnabled {
                 await updateService.checkForUpdates()
             }
