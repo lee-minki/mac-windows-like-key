@@ -1,7 +1,17 @@
 import SwiftUI
+import AppKit
+import Carbon.HIToolbox
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        // 앱 종료 시 HID 매핑 해제 (동기 — 프로세스 종료 전 완료 보장)
+        HIDRemapper.shared.clearMappingsSync()
+    }
+}
 
 @main
 struct WinMacKeyApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
     
     var body: some Scene {
@@ -75,8 +85,24 @@ class AppState: ObservableObject {
     // VDI (VMware Horizon 등) 호환 모드: 우측 Command를 우측 Option(Alt)으로 변환
     @AppStorage("useVdiMode") var useVdiMode: Bool = false {
         didSet {
-            // 값이 변경될 때 KeyInterceptor 등에 바로 반영되로록 할 수 있음
             keyInterceptor.useVdiMode = useVdiMode
+        }
+    }
+    
+    // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
+    @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
+        didSet {
+            keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")
+                ? Int64(kVK_RightOption)
+                : Int64(kVK_RightCommand)
+        }
+    }
+    
+    // 키보드 매핑 프로파일 ID
+    @AppStorage("activeMappingProfileId") var activeMappingProfileId: String = "standardMac" {
+        didSet {
+            keyInterceptor.activeProfileID = activeMappingProfileId
+            keyInterceptor.setupDefaultMappings()
         }
     }
     
@@ -98,6 +124,11 @@ class AppState: ObservableObject {
         }
         // 초기화 시 저장된 속성을 Interceptor에 전달
         keyInterceptor.useVdiMode = useVdiMode
+        keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")
+            ? Int64(kVK_RightOption)
+            : Int64(kVK_RightCommand)
+        keyInterceptor.activeProfileID = activeMappingProfileId
+        keyInterceptor.setupDefaultMappings()
         
         checkPermissions()
         checkForUpdatesOnLaunch()
@@ -121,6 +152,9 @@ class AppState: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.hasAccessibilityPermission = true
+                if self?.isEngineRunning == false {
+                    self?.toggleEngine()
+                }
             }
         }
     }

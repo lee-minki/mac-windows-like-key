@@ -13,7 +13,12 @@ class ResetService {
         "LastUpdateCheck",
         "AutoCheckUpdates",
         "CustomVirtualizationApps",
-        "useVdiMode"
+        "useVdiMode",
+        "activeMappingProfileId",
+        "visualCustomMappings",
+        "eventViewerAlwaysOnTop",
+        "savedKeyboardProfiles",
+        "toggleTriggerKey"
     ]
     
     /// 모든 앱 설정을 초기화합니다.
@@ -44,6 +49,10 @@ class ResetService {
         profileManager?.loadProfiles()
         logger.info("✅ Profiles reloaded to defaults")
         
+        // 5. HID 매핑 해제 (동기 — 완료 보장)
+        HIDRemapper.shared.clearMappingsSync()
+        logger.info("✅ HID mappings cleared")
+        
         logger.info("🎉 Full reset completed")
         
         completion?()
@@ -54,6 +63,5 @@ class ResetService {
         for key in userDefaultsKeys {
             UserDefaults.standard.removeObject(forKey: key)
         }
-        UserDefaults.standard.synchronize()
     }
 }

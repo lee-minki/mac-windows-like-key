@@ -31,15 +31,13 @@ class LogService: ObservableObject {
         return f
     }()
     
-    var logFileURL: URL {
+    /// 로그 파일 경로 (한 번만 초기화)
+    lazy var logFileURL: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appDir = appSupport.appendingPathComponent("WinMacKey", isDirectory: true)
-        
-        // 디렉토리 생성 (없으면)
         try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        
         return appDir.appendingPathComponent("winmackey.log")
-    }
+    }()
     
     // MARK: - Log Entry Model
     
@@ -67,16 +65,24 @@ class LogService: ObservableObject {
         }
         
         var formatted: String {
-            let df = DateFormatter()
-            df.dateFormat = "HH:mm:ss.SSS"
-            return "[\(df.string(from: timestamp))] [\(level.rawValue)] [\(category)] \(message)"
+            "[\(Self.displayFormatter.string(from: timestamp))] [\(level.rawValue)] [\(category)] \(message)"
         }
-        
+
         var fileFormatted: String {
-            let df = DateFormatter()
-            df.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-            return "[\(df.string(from: timestamp))] [\(level.rawValue)] [\(category)] \(message)"
+            "[\(Self.fileFormatter.string(from: timestamp))] [\(level.rawValue)] [\(category)] \(message)"
         }
+
+        private static let displayFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm:ss.SSS"
+            return f
+        }()
+
+        private static let fileFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+            return f
+        }()
     }
     
     // MARK: - Init

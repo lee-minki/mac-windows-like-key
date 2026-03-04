@@ -18,14 +18,23 @@ class KeyInterceptor: ObservableObject {
     @Published var totalEventCount: Int = 0
 
     // 키 매핑 테이블 (fn↔Cmd↔Ctrl 등 기존 매핑)
-    private var keyMappings: [Int64: Int64] = [:]
+    private(set) var keyMappings: [Int64: Int64] = [:]
 
-    // Right Cmd tap-only 감지 상태
-    private var rightCmdPressed = false
-    private var rightCmdUsedAsModifier = false
+    // Right Cmd/Opt tap-only 감지 상태
+    private var triggerKeyPressed = false
+    private var triggerKeyUsedAsModifier = false
+    private var triggerKeyDownTime: UInt64 = 0  // 누르는 순간의 타임스탬프 (ns)
+    private var previousFlags: CGEventFlags = []
+    
+    /// Tap-only 타이밍 임계값 (ns)
+    /// 이 시간 이내에 떄 경우, 다른 키가 눌렸어도 tap으로 간주
+    private let tapThresholdNs: UInt64 = 300_000_000  // 300ms
+
+    // 한영 전환 트리거 키 (기본: Right Cmd, 옵션: Right Opt)
+    var triggerKeyCode: Int64 = Int64(kVK_RightCommand)
 
     // VDI 모드: 우측 Command → 우측 Option 변환
-    var useVdiMode: Bool = false
+    @Published var useVdiMode: Bool = false
 
     // 이벤트 로그 최대 개수
     private let maxEventLogCount = 1000
@@ -38,6 +47,10 @@ class KeyInterceptor: ObservableObject {
 
     // 이벤트 콜백
     var onKeyEvent: ((KeyEvent) -> Void)?
+    
+    // 키 감지/검증 콜백 (ModifierLayoutView 마법사용)
+    // (originalKeyCode, mappedKeyCode, isDown)
+    var onVerifyKeyEvent: ((Int64, Int64, Bool) -> Void)?
     
     // Modifier Flags Mapping
     private let modifierKeyToFlag: [Int64: CGEventFlags] = [
@@ -58,31 +71,79 @@ class KeyInterceptor: ObservableObject {
         setupDefaultMappings()
     }
     
+    // 활성화된 프로파일 ID (AppStorage와 동기화)
+    // NOTE: didSet에서 setupDefaultMappings를 호출하지 않음.
+    // applyCustomMappings가 HID 매핑을 설정한 후 didSet이 async로 setupDefaultMappings를
+    // 호출하여 HID 매핑을 덮어쓰는 레이스 컨디션을 방지합니다.
+    var activeProfileID: String = "standardMac"
+    
     // MARK: - Setup
     
-    private func setupDefaultMappings() {
-        logger.info("Setting up default mappings...")
-        // 1. fn (63) → Left Command (55)
-        keyMappings[Int64(kVK_Function)] = Int64(kVK_Command)
+    func setupDefaultMappings() {
+        logger.info("Setting up mappings for profile: \(self.activeProfileID)")
         
-        // 2. Left Command (55) → Left Control (59)
-        keyMappings[Int64(kVK_Command)] = Int64(kVK_Control)
+        keyMappings.removeAll()
         
-        // 3. Left Control (59) → fn (63)
-        keyMappings[Int64(kVK_Control)] = Int64(kVK_Function)
+        // 선택된 프로파일 찾기
+        var selectedProfile = MappingProfile.defaultProfiles.first { $0.id.uuidString == activeProfileID }
         
-        // Right Command는 handleEvent에서 VDI 모드에 따라 분기 처리
+        // UUID 매칭 실패시 하드코딩된 이름으로 폴백 매칭 시도
+        if selectedProfile == nil {
+            if activeProfileID == "standardMac" { selectedProfile = .standardMac }
+            else if activeProfileID == "windowsBluetooth" { selectedProfile = .windowsBluetooth }
+            else if activeProfileID == "winMacKeyOriginal" { selectedProfile = .winMacKeyOriginal }
+        }
         
-        // CapsLock (57) → 57 (순수 캡스락)
+        if let profile = selectedProfile {
+            for (src, dst) in profile.mappings {
+                keyMappings[src] = dst
+            }
+        } else {
+            // 저장된 프로필 UUID 또는 visualCustomProfile — UserDefaults에서 매핑 로드
+            if let data = UserDefaults.standard.data(forKey: "visualCustomMappings"),
+               let dict = try? JSONDecoder().decode([String: Int64].self, from: data) {
+                for (key, value) in dict {
+                    if let k = Int64(key) {
+                        keyMappings[k] = value
+                    }
+                }
+                logger.info("Loaded custom mappings from UserDefaults for profile: \(self.activeProfileID)")
+            } else {
+                logger.warning("No saved mappings found for profile: \(self.activeProfileID)")
+            }
+        }
+        
+        // CapsLock (57) → 57 (순수 캡스락) - 프로파일 상관없이 유지
         keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
+        
+        // HID 레벨 리매핑 적용 (Fn/Globe 포함)
+        HIDRemapper.shared.applyMappings(keyMappings)
     }
     
-    func updateMappings(from profile: Profile) {
+    func applyCustomMappings(_ mappings: [Int64: Int64]) {
         keyMappings.removeAll()
-        for mapping in profile.mappings {
-            keyMappings[Int64(mapping.fromKey)] = Int64(mapping.toKey)
+        for (src, dst) in mappings {
+            keyMappings[src] = dst
         }
-        // 기본 매핑 복구 필요 여부 체크 (현재 고정 매핑 우선)
+        keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
+        
+        // HID 레벨 리매핑 적용 (Fn/Globe 포함)
+        HIDRemapper.shared.applyMappings(mappings)
+    }
+    
+    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때
+    func applyCustomMappingsSync(_ mappings: [Int64: Int64]) {
+        keyMappings.removeAll()
+        for (src, dst) in mappings {
+            keyMappings[src] = dst
+        }
+        keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
+        
+        HIDRemapper.shared.applyMappingsSync(mappings)
+    }
+    
+    func updateMappings(from profileId: String) {
+        self.activeProfileID = profileId
         setupDefaultMappings()
     }
     
@@ -144,6 +205,10 @@ class KeyInterceptor: ObservableObject {
         eventTap = nil
         runLoopSource = nil
         isRunning = false
+        
+        // HID 매핑도 해제 (동기 — 완료 보장)
+        HIDRemapper.shared.clearMappingsSync()
+        
         logger.info("Engine stopped.")
     }
     
@@ -190,16 +255,19 @@ class KeyInterceptor: ObservableObject {
         var mappedKeyCode = keyCode
         var finalEvent = event
         
-        // ====== Right Cmd가 눌린 상태에서 다른 키 입력 시 modifier로 사용된 것으로 표시 ======
-        if interceptor.rightCmdPressed && keyCode != rightCmdKeyCode && (type == .keyDown || type == .keyUp) {
-            interceptor.rightCmdUsedAsModifier = true
+        let triggerKey = interceptor.triggerKeyCode
+        
+        // ====== 트리거 키가 눌린 상태에서 다른 키 keyDown 시 modifier로 사용된 것으로 표시 ======
+        // ⚠️ keyUp은 제외: 빠른 타이핑 중 이전 키의 keyUp이 트리거 구간에 발생해도 tap 무효화하지 않음
+        if interceptor.triggerKeyPressed && keyCode != triggerKey && type == .keyDown {
+            interceptor.triggerKeyUsedAsModifier = true
         }
         
-        // ====== Right Cmd 처리 (VDI 모드 분기) ======
+        // ====== 트리거 키 처리 (한영 전환 / VDI 모드) ======
         
-        if keyCode == rightCmdKeyCode {
-            if interceptor.useVdiMode {
-                // VDI 모드: Right Cmd(54) -> Right Option(61) 로 순수 매핑
+        if keyCode == triggerKey {
+            // VDI 모드: Right Cmd → Right Option 순수 매핑 (트리거가 Right Cmd일 때만)
+            if interceptor.useVdiMode && triggerKey == rightCmdKeyCode {
                 let rightOptionKeyCode = Int64(kVK_RightOption)
                 mappedKeyCode = rightOptionKeyCode
                 
@@ -209,22 +277,57 @@ class KeyInterceptor: ObservableObject {
                 }
                 
             } else {
-                // 기존 모드: Tap-Only 감지 (macOS TIS 한영 전환)
+                // Tap-Only 감지 (macOS TIS 한영 전환)
                 if type == .flagsChanged {
-                    let isDown = event.flags.contains(.maskCommand)
-                    
-                    if isDown {
-                        interceptor.rightCmdPressed = true
-                        interceptor.rightCmdUsedAsModifier = false
+                    // 트리거 키에 맞는 modifier flag로 isDown 판별
+                    // Left+Right 동시 홀드 엣지케이스 대응: flags 델타로 판단
+                    let triggerFlag: CGEventFlags
+                    if triggerKey == rightCmdKeyCode {
+                        triggerFlag = .maskCommand
                     } else {
-                        if interceptor.rightCmdPressed && !interceptor.rightCmdUsedAsModifier {
-                            interceptor.logger.info("Right Cmd tap-only detected → toggling input source")
-                            interceptor.onInputSourceToggle?()
-                        }
-                        interceptor.rightCmdPressed = false
-                        interceptor.rightCmdUsedAsModifier = false
+                        triggerFlag = .maskAlternate
                     }
                     
+                    // 이전 flags와 비교하여 변화 방향으로 isDown 판단
+                    let flagsNow = event.flags.contains(triggerFlag)
+                    let flagsBefore = interceptor.previousFlags.contains(triggerFlag)
+                    let isDown: Bool
+                    if flagsNow && !flagsBefore {
+                        isDown = true   // flag가 새로 켜짐 → 누름
+                    } else if !flagsNow && flagsBefore {
+                        isDown = false  // flag가 꺼짐 → 뗌
+                    } else {
+                        // flag 변화 없음 (다른 쪽이 눌린/떼 경우) → keyCode로 판단
+                        isDown = flagsNow
+                    }
+                    interceptor.previousFlags = event.flags
+                    
+                    if isDown {
+                        if !interceptor.triggerKeyPressed {
+                            // keyDown: 상태만 기록, 전환하지 않음
+                            interceptor.triggerKeyPressed = true
+                            interceptor.triggerKeyUsedAsModifier = false
+                            interceptor.triggerKeyDownTime = DispatchTime.now().uptimeNanoseconds
+                        }
+                    } else {
+                        // keyUp: tap-only 판단
+                        if interceptor.triggerKeyPressed {
+                            let elapsed = DispatchTime.now().uptimeNanoseconds - interceptor.triggerKeyDownTime
+                            
+                            // Tap 판정: (1) modifier로 안 쓴 경우, 또는
+                            //          (2) 쓴 경우라도 임계값 이내면 빠른 타이핑 중 오탐으로 간주
+                            let isTap = !interceptor.triggerKeyUsedAsModifier || elapsed < interceptor.tapThresholdNs
+                            
+                            if isTap {
+                                interceptor.logger.info("Trigger key tap-only detected (\(elapsed / 1_000_000)ms) → toggling input source")
+                                interceptor.onInputSourceToggle?()
+                            }
+                        }
+                        interceptor.triggerKeyPressed = false
+                        interceptor.triggerKeyUsedAsModifier = false
+                    }
+                    
+                    // 트리거 키 이벤트도 수집기(EventViewer)에 찍히도록 로깅
                     interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
                     return Unmanaged.passUnretained(event)
                 }
@@ -233,7 +336,7 @@ class KeyInterceptor: ObservableObject {
         
         // ====== 일반 매핑 처리 ======
         
-        if keyCode != rightCmdKeyCode, let newKeyCode = interceptor.keyMappings[keyCode] {
+        if keyCode != triggerKey, let newKeyCode = interceptor.keyMappings[keyCode] {
             mappedKeyCode = newKeyCode
             
             let isSourceModifier = interceptor.modifierKeyToFlag[keyCode] != nil
@@ -260,6 +363,8 @@ class KeyInterceptor: ObservableObject {
                             newFlags.remove(srcFlag)
                             if isDown, let dstFlag = interceptor.modifierKeyToFlag[newKeyCode] {
                                 newFlags.insert(dstFlag)
+                            } else if !isDown, let dstFlag = interceptor.modifierKeyToFlag[newKeyCode] {
+                                newFlags.remove(dstFlag)
                             }
                             newEvent.flags = newFlags
                             
@@ -292,6 +397,25 @@ class KeyInterceptor: ObservableObject {
         
         // 로깅
         interceptor.logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
+        
+        // 검증 콜백 호출 (Step 1 키 감지 / Step 3 실시간 확인용)
+        if let verify = interceptor.onVerifyKeyEvent {
+            let isDown: Bool
+            if type == .flagsChanged {
+                if let flag = interceptor.modifierKeyToFlag[keyCode] {
+                    isDown = event.flags.contains(flag)
+                } else {
+                    isDown = true
+                }
+            } else {
+                isDown = (type == .keyDown)
+            }
+            if isDown {
+                DispatchQueue.main.async {
+                    verify(keyCode, mappedKeyCode, true)
+                }
+            }
+        }
         
         if finalEvent !== event {
             return Unmanaged.passRetained(finalEvent)
@@ -346,12 +470,15 @@ class KeyInterceptor: ObservableObject {
             eventType = .up
         }
         
+        let keyboardType = event.getIntegerValueField(.keyboardEventKeyboardType)
+        
         let keyEvent = KeyEvent(
             type: eventType,
             rawKey: UInt32(originalKey),
             mappedKey: UInt32(mappedKey),
             latencyMicroseconds: latencyMicros,
-            bundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            bundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+            keyboardType: keyboardType
         )
         
         DispatchQueue.main.async { [weak self] in

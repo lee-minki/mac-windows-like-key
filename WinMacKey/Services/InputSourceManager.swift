@@ -104,15 +104,11 @@ class InputSourceManager {
             }
         }
         
-        // 전환 완료 확인 폴링 (최대 50ms)
-        for _ in 0..<5 {
-            if currentSource() == target {
-                return
-            }
-            usleep(10_000) // 10ms
+        // 전환 완료 확인 (동기 확인 1회만, 블로킹 없이)
+        let actual = currentSource()
+        if actual != target {
+            print("[InputSourceManager] WARNING: Input source switch may not have completed: expected \(target), got \(actual)")
         }
-        
-        print("[InputSourceManager] WARNING: Input source switch verification timeout for \(target)")
     }
     
     /// 토글 (현재 상태의 반대로 전환)

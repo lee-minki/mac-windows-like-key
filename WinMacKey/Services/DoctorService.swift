@@ -50,42 +50,40 @@ class DoctorService: ObservableObject {
     }
     
     // MARK: - Run All Checks
-    
+
     @MainActor
     func runAllChecks(appState: AppState) {
+        guard !isRunning else { return }
         isRunning = true
         checks.removeAll()
-        
+
         logger.info("🩺 Doctor: Running all checks...")
-        
-        // 1. Permission checks
-        checkAccessibilityPermission()
-        
-        // 2. Engine health
-        checkEngineHealth(appState: appState)
-        checkEventTapHealth(appState: appState)
-        
-        // 3. Conflict detection
-        checkKarabinerConflict()
-        checkHammerspoonConflict()
-        
-        // 4. Input source checks
-        checkInputSources()
-        checkInputSourceShortcuts()
-        
-        // 5. System checks
-        checkCapsLockSetting()
-        
-        lastRunDate = Date()
-        isRunning = false
-        
-        let errorCount = checks.filter { $0.status == .error }.count
-        let warningCount = checks.filter { $0.status == .warning }.count
-        
-        if errorCount == 0 && warningCount == 0 {
-            logger.info("🩺 Doctor: All checks passed ✅")
-        } else {
-            logger.warning("🩺 Doctor: \(errorCount) errors, \(warningCount) warnings")
+
+        Task {
+            // 동기 체크: 즉시 실행
+            checkAccessibilityPermission()
+            checkEngineHealth(appState: appState)
+            checkEventTapHealth(appState: appState)
+
+            // 비동기 체크: pgrep 프로세스를 백그라운드 스레드에서 실행 (메인 스레드 블로킹 방지)
+            await checkKarabinerConflict()
+            checkHammerspoonConflict()
+
+            checkInputSources()
+            checkInputSourceShortcuts()
+            checkCapsLockSetting()
+
+            lastRunDate = Date()
+            isRunning = false
+
+            let errorCount = checks.filter { $0.status == .error }.count
+            let warningCount = checks.filter { $0.status == .warning }.count
+
+            if errorCount == 0 && warningCount == 0 {
+                logger.info("🩺 Doctor: All checks passed ✅")
+            } else {
+                logger.warning("🩺 Doctor: \(errorCount) errors, \(warningCount) warnings")
+            }
         }
     }
     
@@ -115,17 +113,25 @@ class DoctorService: ObservableObject {
             "LastUpdateCheck",
             "AutoCheckUpdates",
             "CustomVirtualizationApps",
-            "useVdiMode"
+            "useVdiMode",
+            "activeMappingProfileId",
+            "visualCustomMappings",
+            "eventViewerAlwaysOnTop",
+            "savedKeyboardProfiles",
+            "toggleTriggerKey"
         ]
         for key in keys {
             UserDefaults.standard.removeObject(forKey: key)
         }
-        UserDefaults.standard.synchronize()
         logger.info("✅ UserDefaults cleared")
         
         // 5. VDI 모드 해제
         appState.useVdiMode = false
         logger.info("✅ VDI mode disabled")
+        
+        // 6. HID 매핑 해제 (동기 — 완료 보장)
+        HIDRemapper.shared.clearMappingsSync()
+        logger.info("✅ HID mappings cleared")
         
         logger.info("🎉 Emergency Recovery completed — system is clean")
     }
@@ -188,18 +194,19 @@ class DoctorService: ObservableObject {
         }
     }
     
-    private func checkKarabinerConflict() {
+    private func checkKarabinerConflict() async {
         let karabinerRunning = NSWorkspace.shared.runningApplications.contains {
             $0.bundleIdentifier == "org.pqrs.Karabiner-Elements.Preferences" ||
             $0.bundleIdentifier == "org.pqrs.Karabiner-Elements.EventViewer" ||
             $0.localizedName?.contains("Karabiner") == true ||
             $0.localizedName?.contains("karabiner") == true
         }
-        
-        // karabiner_grabber 프로세스 확인
-        let grabberRunning = isProcessRunning("karabiner_grabber") || isProcessRunning("karabiner_observer")
-        
-        if karabinerRunning || grabberRunning {
+
+        // karabiner_grabber 데몬은 NSWorkspace에 안 잡히므로 pgrep으로 확인 (백그라운드 스레드)
+        let grabberRunning = await isProcessRunning("karabiner_grabber")
+        let observerRunning = await isProcessRunning("karabiner_observer")
+
+        if karabinerRunning || grabberRunning || observerRunning {
             checks.append(DoctorCheck(
                 category: .conflict,
                 title: "Karabiner-Elements 충돌",
@@ -344,21 +351,25 @@ class DoctorService: ObservableObject {
     }
     
     // MARK: - Helpers
-    
-    private func isProcessRunning(_ name: String) -> Bool {
-        let task = Process()
-        task.launchPath = "/usr/bin/pgrep"
-        task.arguments = ["-x", name]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
-            return false
+
+    /// pgrep을 백그라운드 스레드에서 실행하여 메인 스레드를 블로킹하지 않음
+    private nonisolated func isProcessRunning(_ name: String) async -> Bool {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let task = Process()
+                task.launchPath = "/usr/bin/pgrep"
+                task.arguments = ["-x", name]
+                task.standardOutput = Pipe()
+                task.standardError = Pipe()
+
+                do {
+                    try task.run()
+                    task.waitUntilExit()
+                    continuation.resume(returning: task.terminationStatus == 0)
+                } catch {
+                    continuation.resume(returning: false)
+                }
+            }
         }
     }
     

@@ -15,6 +15,7 @@ struct KeyEvent: Identifiable, Codable {
     let mappedKey: UInt32   // 매핑된 키코드
     let latencyMicroseconds: UInt64  // 지연 시간 (마이크로초)
     let bundleId: String?   // 현재 앱 Bundle ID
+    let keyboardType: Int64 // 키보드 하드웨어 타입 ID
     
     init(
         id: UUID = UUID(),
@@ -23,7 +24,8 @@ struct KeyEvent: Identifiable, Codable {
         rawKey: UInt32,
         mappedKey: UInt32,
         latencyMicroseconds: UInt64,
-        bundleId: String? = nil
+        bundleId: String? = nil,
+        keyboardType: Int64 = 0
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -32,6 +34,7 @@ struct KeyEvent: Identifiable, Codable {
         self.mappedKey = mappedKey
         self.latencyMicroseconds = latencyMicroseconds
         self.bundleId = bundleId
+        self.keyboardType = keyboardType
     }
     
     /// 지연 시간을 밀리초로 변환
@@ -46,10 +49,14 @@ struct KeyEvent: Identifiable, Codable {
     
     /// 타임스탬프 포맷된 문자열
     var timestampFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss.SSS"
-        return formatter.string(from: timestamp)
+        Self.cachedFormatter.string(from: timestamp)
     }
+    
+    private static let cachedFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
     
     /// 키코드를 16진수 문자열로 변환
     static func keyCodeHex(_ keyCode: UInt32) -> String {

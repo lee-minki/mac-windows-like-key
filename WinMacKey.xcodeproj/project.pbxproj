@@ -29,6 +29,9 @@
 		FFF00003 /* DoctorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF00004; };
 		GGG00001 /* LogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = GGG00002; };
 		GGG00003 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GGG00004; };
+		42AD7ED7DF7B4F2594E16069 /* MappingProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 816E70983B624FFCAAEEDA41 /* MappingProfile.swift */; };
+		8619BB80B1644CDF8DD8B031 /* ModifierLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E664C16D0C4B9AB8C6CEC4 /* ModifierLayoutView.swift */; };
+		HHH00001 /* HIDRemapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = HHH00002 /* HIDRemapper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +60,9 @@
 		FFF00004 /* DoctorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorView.swift; sourceTree = "<group>"; };
 		GGG00002 /* LogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogService.swift; sourceTree = "<group>"; };
 		GGG00004 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		816E70983B624FFCAAEEDA41 /* MappingProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MappingProfile.swift; sourceTree = "<group>"; };
+		38E664C16D0C4B9AB8C6CEC4 /* ModifierLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifierLayoutView.swift; sourceTree = "<group>"; };
+		HHH00002 /* HIDRemapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HIDRemapper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -113,6 +119,7 @@
 		AAA00044 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				816E70983B624FFCAAEEDA41 /* MappingProfile.swift */,
 				AAA00004 /* KeyEvent.swift */,
 				AAA00006 /* Profile.swift */,
 			);
@@ -131,6 +138,7 @@
 				DDD00002 /* ResetService.swift */,
 				FFF00002 /* DoctorService.swift */,
 				GGG00002 /* LogService.swift */,
+				HHH00002 /* HIDRemapper.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -138,6 +146,7 @@
 		AAA00046 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				38E664C16D0C4B9AB8C6CEC4 /* ModifierLayoutView.swift */,
 				AAA00014 /* PermissionGuideView.swift */,
 				AAA00016 /* MenuBarView.swift */,
 				AAA00018 /* DashboardView.swift */,
@@ -228,6 +237,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8619BB80B1644CDF8DD8B031 /* ModifierLayoutView.swift in Sources */,
+				42AD7ED7DF7B4F2594E16069 /* MappingProfile.swift in Sources */,
 				AAA00001 /* WinMacKeyApp.swift in Sources */,
 				AAA00003 /* KeyEvent.swift in Sources */,
 				AAA00005 /* Profile.swift in Sources */,
@@ -248,6 +259,7 @@
 				FFF00003 /* DoctorView.swift in Sources */,
 				GGG00001 /* LogService.swift in Sources */,
 				GGG00003 /* LogView.swift in Sources */,
+				HHH00001 /* HIDRemapper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

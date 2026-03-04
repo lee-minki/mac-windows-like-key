@@ -145,7 +145,9 @@ struct HelpView: View {
                     VStack(spacing: 0) {
                         mappingHeader
                         Divider()
-                        mappingRow("Right Command (⌘)", "한/영 전환", "탭(짧게 누르기)으로 입력 소스 전환", .purple)
+                        mappingRow("Right Command (⌘)", "한/영 전환", "탭(짧게 누르기)으로 입력 소스 전환 (기본)", .purple)
+                        Divider()
+                        mappingRow("Right Option (⌥)", "한/영 전환", "탭으로 입력 소스 전환 (설정에서 변경 가능)", .purple)
                     }
                 }
                 
@@ -156,10 +158,26 @@ struct HelpView: View {
                         mappingRow("Right Command (⌘)", "Right Option (⌥)", "VMware Horizon 등 원격 데스크톱에서 Alt 키로 한/영 전환", .red)
                     }
                     
-                    Text("※ VDI 모드와 기본 한/영 전환은 동시에 사용할 수 없습니다.")
+                    Text("※ VDI 모드는 트리거 키가 Right Command일 때만 사용할 수 있습니다. Right Option 트리거와는 호환되지 않습니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
+                }
+                
+                GroupBox("키보드 레이아웃 커스터마이징") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("외장 키보드나 특수 배치를 사용한다면, 위저드로 직접 키 매핑을 설정할 수 있습니다.")
+                            .font(.caption)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("1. 설정 → General Settings → \"새 프로필 만들기\"")
+                            Text("2. Step 1: 스페이스바 왼쪽 4개 키를 순서대로 눌러 물리 키 감지")
+                            Text("3. Step 2: 각 슬롯에 원하는 기능 키를 입력")
+                            Text("4. Step 3: 매핑 검증 후 프로필 저장")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                 }
                 
                 // Keyboard Layout Diagram
@@ -398,7 +416,7 @@ struct HelpView: View {
                     Spacer()
                     
                     Button("GitHub") {
-                        if let url = URL(string: "https://github.com/lee-minki/winmac-key") {
+                        if let url = URL(string: "https://github.com/lee-minki/mac-windows-like-key") {
                             NSWorkspace.shared.open(url)
                         }
                     }

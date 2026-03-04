@@ -54,22 +54,28 @@ class ContextManager: ObservableObject {
     
     private func updateCurrentApp() {
         guard let app = NSWorkspace.shared.frontmostApplication else { return }
-        
+
         let bundleId = app.bundleIdentifier ?? ""
         let appName = app.localizedName ?? ""
-        
+
         currentBundleId = bundleId
         currentAppName = appName
-        isVirtualizationApp = virtualizationApps.contains(bundleId)
-        
+        isVirtualizationApp = allVirtualizationApps.contains(bundleId)
+
         onAppChanged?(bundleId, appName)
     }
-    
+
     // MARK: - Virtualization Detection
-    
+
+    /// 기본 앱 + UserDefaults 커스텀 앱을 합친 전체 목록
+    private var allVirtualizationApps: Set<String> {
+        let customApps = UserDefaults.standard.stringArray(forKey: "CustomVirtualizationApps") ?? []
+        return virtualizationApps.union(customApps)
+    }
+
     /// 현재 앱이 가상화 앱인지 확인
     func isCurrentAppVirtualization() -> Bool {
-        return virtualizationApps.contains(currentBundleId)
+        return allVirtualizationApps.contains(currentBundleId)
     }
     
     /// 가상화 앱 목록에 새 앱 추가

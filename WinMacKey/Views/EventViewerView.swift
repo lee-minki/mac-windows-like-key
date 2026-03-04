@@ -7,6 +7,7 @@ struct EventViewerView: View {
     @State private var isCapturing = true
     @State private var filterText = ""
     @State private var showOnlyMapped = false
+    @AppStorage("eventViewerAlwaysOnTop") private var alwaysOnTop = false
     
     var filteredEvents: [KeyEvent] {
         var events = appState.keyInterceptor.events
@@ -42,6 +43,12 @@ struct EventViewerView: View {
             statusBar
         }
         .frame(minWidth: 600, minHeight: 400)
+        .onChange(of: alwaysOnTop, initial: true) { _, newValue in
+            setWindowLevel(alwaysOnTop: newValue)
+        }
+        .onAppear {
+            setWindowLevel(alwaysOnTop: alwaysOnTop)
+        }
     }
     
     // MARK: - Toolbar
@@ -54,7 +61,7 @@ struct EventViewerView: View {
             .buttonStyle(.bordered)
             
             Button(action: toggleCapture) {
-                Label(isCapturing ? "Stop" : "Start", systemImage: isCapturing ? "pause.fill" : "play.fill")
+                Label(isCapturing ? "Pause" : "Resume", systemImage: isCapturing ? "pause.fill" : "play.fill")
             }
             .buttonStyle(.borderedProminent)
             .tint(isCapturing ? .blue : .gray)
@@ -66,6 +73,9 @@ struct EventViewerView: View {
             
             Spacer()
             
+            Toggle("Always on Top", isOn: $alwaysOnTop)
+                .toggleStyle(.checkbox)
+                
             Toggle("Mapped Only", isOn: $showOnlyMapped)
                 .toggleStyle(.checkbox)
             
@@ -87,6 +97,7 @@ struct EventViewerView: View {
                 tableHeader("TYPE", width: 50)
                 tableHeader("RAW", width: 60)
                 tableHeader("MAPPED", width: 60)
+                tableHeader("KB_TYPE", width: 70)
                 tableHeader("LATENCY", width: 70)
                 tableHeader("APP", width: nil)
             }
@@ -105,9 +116,9 @@ struct EventViewerView: View {
                     }
                 }
                 .onChange(of: appState.keyInterceptor.events.count) { _, _ in
-                    if isCapturing, let lastEvent = filteredEvents.last {
+                    if isCapturing, let newestEvent = filteredEvents.last {
                         withAnimation(.easeOut(duration: 0.1)) {
-                            proxy.scrollTo(lastEvent.id, anchor: .bottom)
+                            proxy.scrollTo(newestEvent.id, anchor: .top)
                         }
                     }
                 }
@@ -148,6 +159,12 @@ struct EventViewerView: View {
                 .frame(width: 60, alignment: .leading)
                 .padding(.horizontal, 8)
             
+            Text(String(event.keyboardType))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.purple)
+                .frame(width: 70, alignment: .leading)
+                .padding(.horizontal, 8)
+                
             Text(event.latencyFormatted)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(latencyColor(event.latencyMs))
@@ -233,6 +250,18 @@ struct EventViewerView: View {
         if let json = appState.keyInterceptor.exportEventsAsJSON() {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(json, forType: .string)
+        }
+    }
+    
+    private func setWindowLevel(alwaysOnTop: Bool) {
+        // 창이 방금 열렸을 수 있으므로 약간의 딜레이 후 적용
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            for window in NSApplication.shared.windows {
+                if window.title == "Event Viewer" {
+                    window.level = alwaysOnTop ? .floating : .normal
+                    break
+                }
+            }
         }
     }
 }

@@ -8,6 +8,7 @@ struct DashboardView: View {
     @StateObject private var profileManager = ProfileManager()
     @State private var selectedTab = 0
     @State private var showAddProfileSheet = false
+    @AppStorage("eventViewerAlwaysOnTop") private var eventViewerAlwaysOnTop: Bool = false
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -57,12 +58,12 @@ struct DashboardView: View {
                             Text("트리거 키")
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("Right Command")
-                                .font(.system(.body, design: .monospaced))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(.gray.opacity(0.2))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            Picker("", selection: $appState.toggleTriggerKey) {
+                                Text("Right Command").tag("rightCmd")
+                                Text("Right Option").tag("rightOpt")
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 180)
                         }
                         
                         HStack {
@@ -154,17 +155,29 @@ struct DashboardView: View {
                 // General Settings Card
                 cardView(title: "General Settings", icon: "gearshape") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("이벤트 뷰어 항상 위", isOn: .constant(true))
-                            .disabled(true) // 기본 기능으로 고정
+                        // 시각적 키보드 레이아웃 설정
+                        ModifierLayoutView()
+                        
+                        Divider()
+                            .padding(.vertical, 4)
+                        
+                        Toggle("이벤트 뷰어 항상 위", isOn: $eventViewerAlwaysOnTop)
                         
                         Toggle(isOn: $appState.useVdiMode) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("VDI (가상 데스크톱) 키보드 호환 모드")
-                                Text("우측 Command 키를 우측 Option(Alt) 키로 동작하게 합니다. (Windows 원격 환경 한/영 전환용)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                if appState.toggleTriggerKey == "rightOpt" {
+                                    Text("트리거 키가 Right Option일 때는 VDI 모드를 사용할 수 없습니다.")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                } else {
+                                    Text("우측 Command 키를 우측 Option(Alt) 키로 동작하게 합니다. (Windows 원격 환경 한/영 전환용)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
+                        .disabled(appState.toggleTriggerKey == "rightOpt")
                     }
                 }
                 

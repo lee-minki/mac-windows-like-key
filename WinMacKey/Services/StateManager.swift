@@ -13,12 +13,8 @@ class StateManager: ObservableObject {
     /// 전환 횟수 카운터 (디버깅용)
     @Published var switchCount: Int = 0
     
-    // 빠른 연속 전환 대비 직렬 큐
-    // Lua 단일 스레드의 경쟁 조건 문제 완전 해결
-    private let queue = DispatchQueue(
-        label: "com.winmackey.state",
-        qos: .userInteractive
-    )
+    // 빠른 연속 전환 시에도 메인 스레드 큐에서 순차적으로 처리되므로
+    // Lua 싱글 스레드와 같은 안전성 보장 (TIS API 메인 스레드 요구사항 충족)
     
     private let logger = Logger(subsystem: "com.winmackey.app", category: "StateManager")
     
@@ -29,7 +25,7 @@ class StateManager: ObservableObject {
     
     /// 한영전환 트리거 (Right Cmd tap-only에서 호출)
     func handleTrigger() {
-        queue.async { [self] in
+        DispatchQueue.main.async { [self] in
             let current = inputSourceManager.currentSource()
             let target: InputSource = current == .korean ? .english : .korean
             
@@ -41,14 +37,12 @@ class StateManager: ObservableObject {
             // 전환 후 실제 상태 확인
             let actual = inputSourceManager.currentSource()
             
-            // UI 업데이트 (메인 스레드)
-            DispatchQueue.main.async { [self] in
-                currentInputSource = actual
-                switchCount += 1
-                
-                if actual != target {
-                    logger.warning("Switch mismatch: expected \(target.rawValue) but got \(actual.rawValue)")
-                }
+            // UI 업데이트
+            currentInputSource = actual
+            switchCount += 1
+            
+            if actual != target {
+                logger.warning("Switch mismatch: expected \(target.rawValue) but got \(actual.rawValue)")
             }
         }
     }

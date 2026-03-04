@@ -172,10 +172,14 @@ struct LogView: View {
         }
     }
     
+    private static let logDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+    
     private func dateFormat(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss.SSS"
-        return formatter.string(from: date)
+        Self.logDateFormatter.string(from: date)
     }
     
     // MARK: - Status Bar
