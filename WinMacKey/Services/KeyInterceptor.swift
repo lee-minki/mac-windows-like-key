@@ -28,7 +28,10 @@ class KeyInterceptor: ObservableObject {
     
     /// Tap-only 타이밍 임계값 (ns)
     /// 이 시간 이내에 떄 경우, 다른 키가 눌렸어도 tap으로 간주
-    private let tapThresholdNs: UInt64 = 300_000_000  // 300ms
+    private let tapThresholdNs: UInt64 = 200_000_000  // 200ms
+
+    /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
+    private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
 
     // 한영 전환 트리거 키 (기본: Right Cmd, 옵션: Right Opt)
     var triggerKeyCode: Int64 = Int64(kVK_RightCommand)
@@ -246,6 +249,11 @@ class KeyInterceptor: ObservableObject {
             return Unmanaged.passUnretained(event)
         }
         
+        // 합성 이벤트(자신이 주입한 이벤트)는 재처리 없이 통과
+        if event.getIntegerValueField(.eventSourceUserData) == syntheticEventMarker {
+            return Unmanaged.passUnretained(event)
+        }
+
         guard let interceptor = shared else {
             return Unmanaged.passUnretained(event)
         }
@@ -257,81 +265,78 @@ class KeyInterceptor: ObservableObject {
         
         let triggerKey = interceptor.triggerKeyCode
         
-        // ====== 트리거 키가 눌린 상태에서 다른 키 keyDown 시 modifier로 사용된 것으로 표시 ======
-        // ⚠️ keyUp은 제외: 빠른 타이핑 중 이전 키의 keyUp이 트리거 구간에 발생해도 tap 무효화하지 않음
-        if interceptor.triggerKeyPressed && keyCode != triggerKey && type == .keyDown {
-            interceptor.triggerKeyUsedAsModifier = true
+        // ====== 트리거 키가 눌린 상태에서의 후속 이벤트 처리 ======
+        if interceptor.triggerKeyPressed && keyCode != triggerKey {
+
+            // (1) keyDown이면 modifier 사용으로 표시
+            // ⚠️ keyUp은 제외: 빠른 타이핑 중 이전 키의 keyUp이 트리거 구간에 발생해도 tap 무효화하지 않음
+            if type == .keyDown {
+                interceptor.triggerKeyUsedAsModifier = true
+            }
+
+            // (2) 핵심 수정: flags에서 트리거 modifier를 제거
+            // 이유: Right Cmd는 suppress되어 시스템에 전달되지 않지만,
+            //       하드웨어 modifier 상태가 후속 이벤트의 event.flags에 그대로 남음.
+            //       제거하지 않으면 앱이 "b keyDown with .maskCommand" → Cmd+b 로 해석 → 씹힘 발생.
+            let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
+            if event.flags.contains(triggerFlag) {
+                var strippedFlags = event.flags
+                strippedFlags.remove(triggerFlag)
+                event.flags = strippedFlags
+            }
         }
         
         // ====== 트리거 키 처리 (한영 전환 / VDI 모드) ======
-        
-        if keyCode == triggerKey {
-            // VDI 모드: Right Cmd → Right Option 순수 매핑 (트리거가 Right Cmd일 때만)
-            if interceptor.useVdiMode && triggerKey == rightCmdKeyCode {
-                let rightOptionKeyCode = Int64(kVK_RightOption)
-                mappedKeyCode = rightOptionKeyCode
-                
-                if type == .flagsChanged {
-                    event.setIntegerValueField(.keyboardEventKeycode, value: rightOptionKeyCode)
-                    interceptor.updateModifierFlags(event: event, originalKey: rightCmdKeyCode, newKey: rightOptionKeyCode)
-                }
-                
+        // 핵심 원칙: 트리거 키 이벤트를 시스템에 그대로 전달하지 않음 (suppress).
+        // → 우발적인 Cmd+Space(Spotlight) 등 단축키 발동 원천 차단.
+        // VDI 모드는 Right Option 이벤트를 합성(inject)하여 대체.
+
+        if keyCode == triggerKey && type == .flagsChanged {
+
+            // ── isDown 판별: flags 델타 방식 (L+R 동시 홀드 엣지케이스 대응) ──
+            let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
+            let flagsNow    = event.flags.contains(triggerFlag)
+            let flagsBefore = interceptor.previousFlags.contains(triggerFlag)
+            let isDown: Bool
+            if flagsNow && !flagsBefore {
+                isDown = true    // flag 새로 켜짐 → keyDown
+            } else if !flagsNow && flagsBefore {
+                isDown = false   // flag 꺼짐 → keyUp
             } else {
-                // Tap-Only 감지 (macOS TIS 한영 전환)
-                if type == .flagsChanged {
-                    // 트리거 키에 맞는 modifier flag로 isDown 판별
-                    // Left+Right 동시 홀드 엣지케이스 대응: flags 델타로 판단
-                    let triggerFlag: CGEventFlags
-                    if triggerKey == rightCmdKeyCode {
-                        triggerFlag = .maskCommand
-                    } else {
-                        triggerFlag = .maskAlternate
-                    }
-                    
-                    // 이전 flags와 비교하여 변화 방향으로 isDown 판단
-                    let flagsNow = event.flags.contains(triggerFlag)
-                    let flagsBefore = interceptor.previousFlags.contains(triggerFlag)
-                    let isDown: Bool
-                    if flagsNow && !flagsBefore {
-                        isDown = true   // flag가 새로 켜짐 → 누름
-                    } else if !flagsNow && flagsBefore {
-                        isDown = false  // flag가 꺼짐 → 뗌
-                    } else {
-                        // flag 변화 없음 (다른 쪽이 눌린/떼 경우) → keyCode로 판단
-                        isDown = flagsNow
-                    }
-                    interceptor.previousFlags = event.flags
-                    
-                    if isDown {
-                        if !interceptor.triggerKeyPressed {
-                            // keyDown: 상태만 기록, 전환하지 않음
-                            interceptor.triggerKeyPressed = true
-                            interceptor.triggerKeyUsedAsModifier = false
-                            interceptor.triggerKeyDownTime = DispatchTime.now().uptimeNanoseconds
-                        }
-                    } else {
-                        // keyUp: tap-only 판단
-                        if interceptor.triggerKeyPressed {
-                            let elapsed = DispatchTime.now().uptimeNanoseconds - interceptor.triggerKeyDownTime
-                            
-                            // Tap 판정: (1) modifier로 안 쓴 경우, 또는
-                            //          (2) 쓴 경우라도 임계값 이내면 빠른 타이핑 중 오탐으로 간주
-                            let isTap = !interceptor.triggerKeyUsedAsModifier || elapsed < interceptor.tapThresholdNs
-                            
-                            if isTap {
-                                interceptor.logger.info("Trigger key tap-only detected (\(elapsed / 1_000_000)ms) → toggling input source")
-                                interceptor.onInputSourceToggle?()
-                            }
-                        }
-                        interceptor.triggerKeyPressed = false
-                        interceptor.triggerKeyUsedAsModifier = false
-                    }
-                    
-                    // 트리거 키 이벤트도 수집기(EventViewer)에 찍히도록 로깅
-                    interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-                    return Unmanaged.passUnretained(event)
-                }
+                isDown = flagsNow
             }
+            interceptor.previousFlags = event.flags
+
+            if interceptor.useVdiMode && triggerKey == rightCmdKeyCode {
+                // ── VDI 모드: Right Cmd → Right Option 합성 주입 ──
+                Self.injectModifierEvent(virtualKey: CGKeyCode(kVK_RightOption), isDown: isDown)
+                interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: Int64(kVK_RightOption))
+            } else {
+                // ── 일반 모드: Tap-Only 감지 → 한영 전환 ──
+                if isDown {
+                    if !interceptor.triggerKeyPressed {
+                        interceptor.triggerKeyPressed = true
+                        interceptor.triggerKeyUsedAsModifier = false
+                        interceptor.triggerKeyDownTime = DispatchTime.now().uptimeNanoseconds
+                    }
+                } else {
+                    if interceptor.triggerKeyPressed {
+                        let elapsed = DispatchTime.now().uptimeNanoseconds - interceptor.triggerKeyDownTime
+                        // Tap 판정: 다른 키를 누르지 않았고 + 임계값 이내
+                        // (기존의 "modifier 사용해도 300ms 이내면 tap" 예외 제거 → 씹힘 원인 차단)
+                        let isTap = !interceptor.triggerKeyUsedAsModifier && elapsed < interceptor.tapThresholdNs
+                        if isTap {
+                            interceptor.logger.info("Trigger key tap-only detected (\(elapsed / 1_000_000)ms) → toggling input source")
+                            interceptor.onInputSourceToggle?()
+                        }
+                    }
+                    interceptor.triggerKeyPressed = false
+                    interceptor.triggerKeyUsedAsModifier = false
+                }
+                interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+            }
+
+            return nil  // ← suppress: 트리거 키 이벤트를 시스템에 전달하지 않음
         }
         
         // ====== 일반 매핑 처리 ======
@@ -444,6 +449,32 @@ class KeyInterceptor: ObservableObject {
         event.flags = currentFlags
     }
     
+    // MARK: - Synthetic Event Injection
+
+    /// 합성 modifier 이벤트를 HID 레벨에 주입합니다.
+    /// • syntheticEventMarker를 설정하여 자신의 탭에 재진입되더라도 무시되도록 보장.
+    /// • VDI 모드에서 Right Cmd 엵에 Right Option 을 주입할 때 사용.
+    private static func injectModifierEvent(virtualKey: CGKeyCode, isDown: Bool) {
+        let flagMap: [CGKeyCode: CGEventFlags] = [
+            CGKeyCode(kVK_RightCommand): .maskCommand,
+            CGKeyCode(kVK_Command):      .maskCommand,
+            CGKeyCode(kVK_RightOption):  .maskAlternate,
+            CGKeyCode(kVK_Option):       .maskAlternate,
+            CGKeyCode(kVK_Control):      .maskControl,
+            CGKeyCode(kVK_RightControl): .maskControl,
+            CGKeyCode(kVK_Shift):        .maskShift,
+            CGKeyCode(kVK_RightShift):   .maskShift,
+        ]
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let syntheticEvent = CGEvent(keyboardEventSource: source,
+                                           virtualKey: virtualKey,
+                                           keyDown: isDown) else { return }
+        syntheticEvent.type = .flagsChanged
+        syntheticEvent.flags = isDown ? (flagMap[virtualKey] ?? []) : []
+        syntheticEvent.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        syntheticEvent.post(tap: .cghidEventTap)
+    }
+
     // MARK: - Logging
     
     private func logEvent(_ event: CGEvent, startTime: DispatchTime, originalKey: Int64, mappedKey: Int64) {
