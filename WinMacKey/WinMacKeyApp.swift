@@ -22,9 +22,9 @@ struct WinMacKeyApp: App {
         } label: {
             // 현재 입력 소스에 따라 아이콘 변경
             if appState.isEngineRunning {
-                Image(systemName: appState.stateManager.currentInputSource == .korean
-                      ? "character.textbox"
-                      : "a.square")
+                Image(systemName: appState.stateManager.isSource1Active
+                      ? "a.square"
+                      : "character.textbox")
             } else {
                 Image(systemName: "keyboard")
             }
@@ -95,6 +95,14 @@ class AppState: ObservableObject {
         }
     }
     
+    // 언어 페어 설정 (Source 1 ↔ Source 2 토글)
+    @AppStorage("languagePairSource1") var languagePairSource1: String = "" {
+        didSet { stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2) }
+    }
+    @AppStorage("languagePairSource2") var languagePairSource2: String = "" {
+        didSet { stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2) }
+    }
+    
     // 키보드 매핑 프로파일 ID
     @AppStorage("activeMappingProfileId") var activeMappingProfileId: String = "standardMac" {
         didSet {
@@ -119,6 +127,15 @@ class AppState: ObservableObject {
         keyInterceptor.onInputSourceToggle = { [weak self] in
             self?.stateManager.handleTrigger()
         }
+        
+        // 언어 페어 초기화: 저장된 값이 없으면 자동 감지
+        if languagePairSource1.isEmpty || languagePairSource2.isEmpty {
+            if let detected = stateManager.inputSourceManager.autoDetectPair() {
+                languagePairSource1 = detected.source1
+                languagePairSource2 = detected.source2
+            }
+        }
+        stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2)
         
         // 트리거 키 설정
         keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")

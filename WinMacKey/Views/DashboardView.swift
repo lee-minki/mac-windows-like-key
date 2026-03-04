@@ -46,11 +46,11 @@ struct DashboardView: View {
                                 .foregroundStyle(.secondary)
                             Spacer()
                             HStack(spacing: 6) {
-                                Image(systemName: appState.stateManager.currentInputSource.systemImageName)
-                                    .foregroundStyle(appState.stateManager.currentInputSource == .korean ? .blue : .green)
-                                Text(appState.stateManager.currentInputSource == .korean ? "한글" : "English")
+                                Image(systemName: appState.stateManager.isSource1Active ? "a.square" : "character.textbox")
+                                    .foregroundStyle(appState.stateManager.isSource1Active ? .green : .blue)
+                                Text(appState.stateManager.currentSourceShortName)
                                     .font(.system(.body, design: .monospaced))
-                                    .foregroundStyle(appState.stateManager.currentInputSource == .korean ? .blue : .green)
+                                    .foregroundStyle(appState.stateManager.isSource1Active ? .green : .blue)
                             }
                         }
                         

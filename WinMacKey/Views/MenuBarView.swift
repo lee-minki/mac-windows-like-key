@@ -83,11 +83,11 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
                 
                 HStack(spacing: 8) {
-                    Image(systemName: appState.stateManager.currentInputSource.systemImageName)
+                    Image(systemName: appState.stateManager.isSource1Active ? "a.square" : "character.textbox")
                         .font(.title2)
-                        .foregroundStyle(appState.stateManager.currentInputSource == .korean ? .blue : .green)
+                        .foregroundStyle(appState.stateManager.isSource1Active ? .green : .blue)
                     
-                    Text(appState.stateManager.currentInputSource == .korean ? "한글" : "English")
+                    Text(appState.stateManager.currentSourceShortName)
                         .font(.system(.callout, design: .rounded))
                         .fontWeight(.medium)
                 }

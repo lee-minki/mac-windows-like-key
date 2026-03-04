@@ -1,129 +1,186 @@
 import Foundation
 import Carbon.HIToolbox
+import os.log
 
-/// 입력 소스 타입
-enum InputSource: String, Codable {
-    case english = "English"
-    case korean = "Korean"
+/// 시스템에 설치된 입력 소스 정보
+struct InputSourceInfo: Identifiable, Codable, Equatable, Hashable {
+    let id: String        // "com.apple.inputmethod.Korean.2SetKorean"
+    let localizedName: String  // "한국어 (2-Set Korean)"
     
-    var displayName: String {
-        switch self {
-        case .english: return "EN"
-        case .korean: return "한"
-        }
+    static func == (lhs: InputSourceInfo, rhs: InputSourceInfo) -> Bool {
+        lhs.id == rhs.id
     }
     
-    var systemImageName: String {
-        switch self {
-        case .english: return "a.square"
-        case .korean: return "character.textbox"
-        }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
 /// TIS (Text Input Sources) API 래퍼
-/// 캐시 없이 실시간으로 현재 입력 소스를 조회하고 전환합니다.
+/// 범용 언어 페어 토글을 지원합니다 (한/영, 日/英, 中/英 등 모든 조합).
 class InputSourceManager {
     
-    // 알려진 한글 입력 소스 ID 패턴
-    private static let koreanPatterns = [
-        "com.apple.inputmethod.Korean",
-        "Korean"
-    ]
+    private let logger = Logger(subsystem: "com.winmackey.app", category: "InputSourceManager")
     
-    // 선호하는 입력 소스 ID
-    private static let preferredKoreanID = "com.apple.inputmethod.Korean.2SetKorean"
-    private static let preferredEnglishID = "com.apple.keylayout.ABC"
+    /// 사용자가 설정한 언어 페어 (Source 1 ↔ Source 2 토글)
+    /// UserDefaults에서 로드되며, 비어있으면 자동 감지합니다.
+    var source1ID: String = ""
+    var source2ID: String = ""
     
-    /// 현재 입력 소스를 실시간 조회 (캐시 없음)
-    /// Telegram 등이 입력 소스를 건드려도 항상 정확한 상태 반영
-    func currentSource() -> InputSource {
-        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
-            return .english
+    // MARK: - 시스템 입력 소스 조회
+    
+    /// 시스템에 설치된 모든 키보드 입력 소스 목록
+    func getAvailableSources() -> [InputSourceInfo] {
+        guard let sourceList = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            return []
         }
         
-        guard let idPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else {
-            return .english
+        return sourceList.compactMap { source -> InputSourceInfo? in
+            let id = getSourceID(source)
+            let name = getSourceName(source)
+            let category = getSourceCategory(source)
+            
+            // 키보드 입력 소스만 필터 (키보드 레이아웃 + 입력기)
+            guard category == kTISCategoryKeyboardInputSource as String else { return nil }
+            guard !id.isEmpty else { return nil }
+            
+            return InputSourceInfo(id: id, localizedName: name)
         }
-        
-        let sourceID = Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
-        
-        // 한글 입력 소스인지 확인
-        for pattern in Self.koreanPatterns {
-            if sourceID.contains(pattern) {
-                return .korean
-            }
-        }
-        
-        return .english
     }
     
-    /// 특정 입력 소스로 전환 (동기 처리 + 완료 확인 폴링)
-    func switchTo(_ target: InputSource) {
-        guard let sourceList = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
-            print("[InputSourceManager] ERROR: Failed to get input source list")
+    /// 현재 활성화된 입력 소스 ID
+    func currentSourceID() -> String {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+            return ""
+        }
+        return getSourceID(source)
+    }
+    
+    /// 현재 입력 소스가 source1인지 source2인지 판별
+    func currentSourceIndex() -> Int {
+        let current = currentSourceID()
+        if current == source1ID { return 1 }
+        if current == source2ID { return 2 }
+        // 패턴 매칭 폴백
+        if matchesSource(current, target: source1ID) { return 1 }
+        if matchesSource(current, target: source2ID) { return 2 }
+        return 0  // 알 수 없음
+    }
+    
+    /// 현재 입력 소스의 표시 이름
+    func currentSourceName() -> String {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+            return "?"
+        }
+        return getSourceName(source)
+    }
+    
+    /// 현재 입력 소스의 짧은 표시 이름 (메뉴바용)
+    func currentSourceShortName() -> String {
+        let id = currentSourceID()
+        // 알려진 패턴에서 짧은 이름 추출
+        if id.contains("Korean") { return "한" }
+        if id.contains("Japanese") || id.contains("Kotoeri") { return "あ" }
+        if id.contains("Chinese") || id.contains("Pinyin") { return "中" }
+        if id.contains("ABC") || id.contains(".US") { return "EN" }
+        // 범용: 로컬라이즈된 이름의 첫 2글자
+        let name = currentSourceName()
+        return String(name.prefix(2))
+    }
+    
+    // MARK: - 전환
+    
+    /// source1 ↔ source2 토글 (동기 처리)
+    func toggle() {
+        let currentIdx = currentSourceIndex()
+        if currentIdx == 1 {
+            switchToSource(source2ID)
+        } else {
+            // source2이거나 알 수 없는 경우 → source1로
+            switchToSource(source1ID)
+        }
+    }
+    
+    /// 특정 입력 소스 ID로 전환
+    func switchToSource(_ targetID: String) {
+        guard !targetID.isEmpty else {
+            logger.warning("switchToSource called with empty targetID")
             return
         }
         
-        let targetID: String
-        
-        if target == .korean {
-            targetID = Self.preferredKoreanID
-        } else {
-            targetID = Self.preferredEnglishID
+        guard let sourceList = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            logger.error("Failed to get input source list")
+            return
         }
         
-        // 정확한 ID로 먼저 찾기
+        // 정확한 ID 매칭
         if let source = sourceList.first(where: { getSourceID($0) == targetID }) {
             let status = TISSelectInputSource(source)
             if status != noErr {
-                print("[InputSourceManager] ERROR: TISSelectInputSource failed with status \(status)")
+                logger.error("TISSelectInputSource failed: \(status)")
             }
-        } else {
-            // 대체: 패턴 매칭으로 찾기
-            let source: TISInputSource?
-            if target == .korean {
-                source = sourceList.first { src in
-                    let id = getSourceID(src)
-                    return Self.koreanPatterns.contains(where: { id.contains($0) })
-                }
-            } else {
-                source = sourceList.first { src in
-                    let id = getSourceID(src)
-                    return id.contains("ABC") || id.contains("US") || (id.contains("keylayout") && !Self.koreanPatterns.contains(where: { id.contains($0) }))
-                }
-            }
-            
-            if let source = source {
-                let status = TISSelectInputSource(source)
-                if status != noErr {
-                    print("[InputSourceManager] ERROR: TISSelectInputSource fallback failed with status \(status)")
-                }
-            } else {
-                print("[InputSourceManager] ERROR: Could not find input source for \(target)")
-            }
+            return
         }
         
-        // 전환 완료 확인 (동기 확인 1회만, 블로킹 없이)
-        let actual = currentSource()
-        if actual != target {
-            print("[InputSourceManager] WARNING: Input source switch may not have completed: expected \(target), got \(actual)")
+        // 패턴 매칭 폴백
+        if let source = sourceList.first(where: { matchesSource(getSourceID($0), target: targetID) }) {
+            let status = TISSelectInputSource(source)
+            if status != noErr {
+                logger.error("TISSelectInputSource fallback failed: \(status)")
+            }
+            return
         }
+        
+        logger.error("Could not find input source: \(targetID)")
     }
     
-    /// 토글 (현재 상태의 반대로 전환)
-    func toggle() {
-        let current = currentSource()
-        let target: InputSource = current == .korean ? .english : .korean
-        switchTo(target)
+    // MARK: - 자동 감지
+    
+    /// 시스템에 설치된 입력 소스에서 자동으로 언어 페어를 추론
+    func autoDetectPair() -> (source1: String, source2: String)? {
+        let sources = getAvailableSources()
+        
+        // 영어 계열 찾기 (source1 후보)
+        let english = sources.first { $0.id.contains("ABC") || $0.id.contains(".US") }
+        
+        // 비영어 입력기 찾기 (source2 후보) — 우선순위: Korean > Japanese > Chinese > 기타
+        let nonEnglish = sources.first { $0.id.contains("Korean") }
+            ?? sources.first { $0.id.contains("Japanese") || $0.id.contains("Kotoeri") }
+            ?? sources.first { $0.id.contains("Chinese") || $0.id.contains("Pinyin") }
+            ?? sources.first { src in
+                !src.id.contains("ABC") && !src.id.contains(".US") && !src.id.contains("keylayout.Unicode")
+            }
+        
+        guard let eng = english, let other = nonEnglish else { return nil }
+        return (source1: eng.id, source2: other.id)
     }
     
     // MARK: - Private Helpers
     
     private func getSourceID(_ source: TISInputSource) -> String {
-        guard let idPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else {
-            return ""
-        }
+        guard let idPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { return "" }
         return Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
+    }
+    
+    private func getSourceName(_ source: TISInputSource) -> String {
+        guard let namePtr = TISGetInputSourceProperty(source, kTISPropertyLocalizedName) else { return "" }
+        return Unmanaged<CFString>.fromOpaque(namePtr).takeUnretainedValue() as String
+    }
+    
+    private func getSourceCategory(_ source: TISInputSource) -> String {
+        guard let catPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceCategory) else { return "" }
+        return Unmanaged<CFString>.fromOpaque(catPtr).takeUnretainedValue() as String
+    }
+    
+    /// 부분 매칭 (예: "Korean" 포함 여부)
+    private func matchesSource(_ sourceID: String, target: String) -> Bool {
+        if sourceID == target { return true }
+        // 같은 패밀리인지 확인 (예: Korean.2Set vs Korean.3Set)
+        let sourceParts = sourceID.split(separator: ".")
+        let targetParts = target.split(separator: ".")
+        if sourceParts.count >= 3 && targetParts.count >= 3 {
+            return sourceParts.prefix(3).joined(separator: ".") == targetParts.prefix(3).joined(separator: ".")
+        }
+        return false
     }
 }
