@@ -27,8 +27,8 @@ class KeyInterceptor: ObservableObject {
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
 
-    // 한영 전환 트리거 키 (기본: Right Cmd, 옵션: Right Opt)
-    var triggerKeyCode: Int64 = Int64(kVK_RightCommand)
+    // 한영 전환 트리거 키 (HID 스왕 후 Right Option으로 감지됨)
+    var triggerKeyCode: Int64 = Int64(kVK_RightOption)
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
@@ -127,7 +127,8 @@ class KeyInterceptor: ObservableObject {
         keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
         
         // HID 레벨 리매핑 적용 (Fn/Globe 포함)
-        HIDRemapper.shared.applyMappings(mappings)
+        // 참고: Right Cmd ↔ Right Option 스왑은 Karabiner DriverKit이 처리
+        HIDRemapper.shared.applyMappings(keyMappings)
     }
     
     /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때
@@ -138,7 +139,7 @@ class KeyInterceptor: ObservableObject {
         }
         keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
         
-        HIDRemapper.shared.applyMappingsSync(mappings)
+        HIDRemapper.shared.applyMappingsSync(keyMappings)
     }
     
     func updateMappings(from profileId: String) {
@@ -304,8 +305,9 @@ class KeyInterceptor: ObservableObject {
             }
 
             if interceptor.isVdiAppFocused {
-                // ── VDI 앱 포커스: 이벤트를 그대로 통과 시킴 ──
-                // Right Option은 VMware에서 Right Alt로 인식 → 네이티브 한/영 전환
+                // ── VDI 앱 포커스: 이벤트를 그대로 통과 ──
+                // HID 스왑으로 Right Option이 된 이벤트가 VMware에 Right Alt로 전달됨
+                interceptor.logger.info("🖥️ VDI passthrough: Right Option \(isDown ? "Down" : "Up")")
                 interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
                 return Unmanaged.passUnretained(event)  // ← 통과!
             } else {
@@ -315,9 +317,8 @@ class KeyInterceptor: ObservableObject {
                     interceptor.onInputSourceToggle?()
                 }
                 interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+                return nil  // ← suppress: 트리거 키 이벤트를 시스템에 전달하지 않음
             }
-
-            return nil  // ← suppress: 트리거 키 이벤트를 시스템에 전달하지 않음
         }
         
         // ====== 일반 매핑 처리 ======

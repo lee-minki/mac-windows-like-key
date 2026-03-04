@@ -10,8 +10,10 @@ class ContextManager: ObservableObject {
     
     // 알려진 가상화 앱 Bundle ID 목록
     private let virtualizationApps: Set<String> = [
-        "com.vmware.horizon",           // VMware Horizon
+        "com.vmware.horizon",           // VMware Horizon (legacy)
         "com.vmware.fusion",            // VMware Fusion
+        "com.omnissa.horizon.client.mac", // Omnissa Horizon Client (VMware 리브랜딩)
+        "com.omnissa.horizon.protocol",   // Omnissa Horizon Protocol
         "com.parallels.desktop.console", // Parallels Desktop
         "com.microsoft.rdc.macos",      // Microsoft Remote Desktop
         "org.virtualbox.app.VirtualBoxVM" // VirtualBox
