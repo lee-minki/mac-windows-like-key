@@ -33,3 +33,8 @@ MapFile.txt
 
 # Others
 *.dmg
+
+# KarabinerHelper
+KarabinerHelper/vendor/
+KarabinerHelper/build/
+KarabinerHelper/*.xcodeproj

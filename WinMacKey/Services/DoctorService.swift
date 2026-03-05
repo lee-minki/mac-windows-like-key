@@ -32,6 +32,7 @@ class DoctorService: ObservableObject {
             case conflict = "충돌"
             case inputSource = "입력 소스"
             case system = "시스템"
+            case virtualHID = "가상 HID"
         }
         
         enum Status {
@@ -72,6 +73,7 @@ class DoctorService: ObservableObject {
             checkInputSources()
             checkInputSourceShortcuts()
             checkCapsLockSetting()
+            checkKarabinerDriver(appState: appState)
 
             lastRunDate = Date()
             isRunning = false
@@ -132,6 +134,10 @@ class DoctorService: ObservableObject {
         // 6. HID 매핑 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
         logger.info("✅ HID mappings cleared")
+        
+        // 7. 가상 HID 헬퍼 종료
+        appState.virtualHIDManager.stop()
+        logger.info("✅ Virtual HID manager stopped")
         
         logger.info("🎉 Emergency Recovery completed — system is clean")
     }
@@ -347,6 +353,77 @@ class DoctorService: ObservableObject {
                 status: .ok,
                 fixAction: nil
             ))
+        }
+    }
+    
+    // MARK: - Karabiner Driver Check
+    
+    private func checkKarabinerDriver(appState: AppState) {
+        let driverInstalled = VirtualHIDManager.isDriverInstalled()
+        let daemonRunning = VirtualHIDManager.isDaemonRunning()
+        
+        if driverInstalled && daemonRunning {
+            checks.append(DoctorCheck(
+                category: .virtualHID,
+                title: "Karabiner 드라이버",
+                detail: "설치됨 & 데몬 실행 중. VDI 모드 사용 가능.",
+                status: .ok,
+                fixAction: nil
+            ))
+        } else if driverInstalled && !daemonRunning {
+            checks.append(DoctorCheck(
+                category: .virtualHID,
+                title: "Karabiner 데몬",
+                detail: "드라이버는 설치되어 있지만 데몬이 실행 중이 아닙니다. 터미널에서 sudo 데몬을 실행하세요.",
+                status: .warning,
+                fixAction: nil
+            ))
+        } else {
+            checks.append(DoctorCheck(
+                category: .virtualHID,
+                title: "Karabiner 드라이버",
+                detail: "설치되지 않음. VDI 모드(VMware 한영전환)을 사용하려면 Karabiner-DriverKit-VirtualHIDDevice 패키지를 설치하세요.",
+                status: .ok,  // 선택적 기능이므로 OK
+                fixAction: nil
+            ))
+        }
+        
+        // Virtual HID 연결 상태
+        switch appState.virtualHIDManager.state {
+        case .ready:
+            checks.append(DoctorCheck(
+                category: .virtualHID,
+                title: "가상 HID 키보드",
+                detail: "연결됨 & 준비 완료.",
+                status: .ok,
+                fixAction: nil
+            ))
+        case .connecting:
+            checks.append(DoctorCheck(
+                category: .virtualHID,
+                title: "가상 HID 키보드",
+                detail: "연결 중...",
+                status: .warning,
+                fixAction: nil
+            ))
+        case .error(let msg):
+            checks.append(DoctorCheck(
+                category: .virtualHID,
+                title: "가상 HID 키보드",
+                detail: "오류: \(msg)",
+                status: .error,
+                fixAction: nil
+            ))
+        case .disconnected:
+            if driverInstalled {
+                checks.append(DoctorCheck(
+                    category: .virtualHID,
+                    title: "가상 HID 키보드",
+                    detail: "연결되지 않음. 엔진을 시작하면 자동 연결됩니다.",
+                    status: .ok,
+                    fixAction: nil
+                ))
+            }
         }
     }
     

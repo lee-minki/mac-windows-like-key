@@ -1,0 +1,18 @@
+name: KarabinerHelper
+
+targets:
+  KarabinerHelper:
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.winmackey.karabiner-helper
+      DEAD_CODE_STRIPPING: 'YES'
+      SYSTEM_HEADER_SEARCH_PATHS:
+        - $(SRCROOT)/vendor/include
+    type: tool
+    platform: macOS
+    deploymentTarget: 13.0
+    sources:
+      - path: src
+        compilerFlags:
+          - -Wall
+          - -Werror
+          - '-std=c++23'

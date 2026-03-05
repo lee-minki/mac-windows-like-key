@@ -6,6 +6,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // 앱 종료 시 HID 매핑 해제 (동기 — 프로세스 종료 전 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
+        // 가상 HID 헬퍼 종료
+        VirtualHIDManager.appShared?.stop()
     }
 }
 
@@ -117,6 +119,7 @@ class AppState: ObservableObject {
     let updateService = UpdateService()
     let stateManager = StateManager()
     let resetService = ResetService()
+    let virtualHIDManager = VirtualHIDManager()
     
     @Published var showResetConfirmation: Bool = false
     
@@ -152,6 +155,10 @@ class AppState: ObservableObject {
             self?.keyInterceptor.isVdiAppFocused = self?.contextManager.isVirtualizationApp ?? false
         }
 
+        // VirtualHIDManager ↔ KeyInterceptor 연결
+        keyInterceptor.virtualHIDManager = virtualHIDManager
+        VirtualHIDManager.appShared = virtualHIDManager
+
         checkPermissions()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
@@ -183,9 +190,16 @@ class AppState: ObservableObject {
     func toggleEngine() {
         if isEngineRunning {
             keyInterceptor.stop()
+            virtualHIDManager.stop()
             LogService.shared.info("Engine stopped", category: "Engine")
         } else {
             keyInterceptor.start()
+            // Karabiner 드라이버가 설치되어 있으면 VirtualHID도 시작
+            if VirtualHIDManager.isDriverInstalled() {
+                virtualHIDManager.start()
+            } else {
+                LogService.shared.info("Karabiner driver not installed, virtual HID skipped", category: "Engine")
+            }
             LogService.shared.info("Engine started", category: "Engine")
         }
         isEngineRunning.toggle()

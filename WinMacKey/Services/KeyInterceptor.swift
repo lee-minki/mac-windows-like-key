@@ -33,6 +33,9 @@ class KeyInterceptor: ObservableObject {
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
 
+    // 가상 HID 키보드 매니저 (VDI 모드에서 사용)
+    var virtualHIDManager: VirtualHIDManager?
+
     // 이벤트 로그 최대 개수
     private let maxEventLogCount = 1000
 
@@ -305,11 +308,23 @@ class KeyInterceptor: ObservableObject {
             }
 
             if interceptor.isVdiAppFocused {
-                // ── VDI 앱 포커스: 이벤트를 그대로 통과 ──
-                // HID 스왑으로 Right Option이 된 이벤트가 VMware에 Right Alt로 전달됨
-                interceptor.logger.info("🖥️ VDI passthrough: Right Option \(isDown ? "Down" : "Up")")
-                interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-                return Unmanaged.passUnretained(event)  // ← 통과!
+                // ── VDI 앱 포커스: 가상 HID 키보드로 Right Alt 전송 ──
+                // VMware는 물리 HID를 직접 읽으므로, 가상 키보드를 통해 Right Alt를 발생시킴
+                if let vhid = interceptor.virtualHIDManager, vhid.isReady {
+                    if isDown {
+                        vhid.postKeyDown(modifiers: VirtualHIDManager.Modifier.rightOption)
+                    } else {
+                        vhid.postKeyUp()
+                    }
+                    interceptor.logger.info("🖥️ VDI virtual HID: Right Alt \(isDown ? "Down" : "Up")")
+                    interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+                    return nil  // suppress 원본 이벤트
+                } else {
+                    // 가상 HID 미준비 — 기존 passthrough로 폴백
+                    interceptor.logger.warning("🖥️ VDI mode but virtual HID not ready, passthrough")
+                    interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+                    return Unmanaged.passUnretained(event)
+                }
             } else {
                 // ── 일반 모드: 누르는 순간(isDown) 즉시 한/영 전환 ──
                 if isDown {
