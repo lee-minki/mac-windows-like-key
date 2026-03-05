@@ -84,10 +84,6 @@ class AppState: ObservableObject {
     @Published var hasAccessibilityPermission: Bool = false
     @Published var isPro: Bool = false  // Pro 버전 활성화 여부
     
-    // VDI 앱 자동 감지 모드 (수동 토글 대신 ContextManager가 자동 처리)
-    // 레거시 호환을 위해 AppStorage 키는 유지하되, 실제로는 ContextManager가 자동 갱신
-    @AppStorage("useVdiMode") var useVdiMode: Bool = false
-    
     // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
     @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
         didSet {

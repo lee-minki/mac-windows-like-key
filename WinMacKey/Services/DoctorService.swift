@@ -115,7 +115,6 @@ class DoctorService: ObservableObject {
             "LastUpdateCheck",
             "AutoCheckUpdates",
             "CustomVirtualizationApps",
-            "useVdiMode",
             "activeMappingProfileId",
             "visualCustomMappings",
             "eventViewerAlwaysOnTop",
@@ -127,11 +126,7 @@ class DoctorService: ObservableObject {
         }
         logger.info("✅ UserDefaults cleared")
         
-        // 5. VDI 모드 해제
-        appState.useVdiMode = false
-        logger.info("✅ VDI mode disabled")
-        
-        // 6. HID 매핑 해제 (동기 — 완료 보장)
+        // 5. HID 매핑 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
         logger.info("✅ HID mappings cleared")
         

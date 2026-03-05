@@ -50,8 +50,8 @@ struct DoctorView: View {
             다음 작업이 수행됩니다:
             • 엔진 정지 (CGEventTap 해제)
             • 모든 설정 초기화
-            • VDI 모드 해제
             • 이벤트 로그 삭제
+            • 가상 HID 헬퍼 종료
             
             모든 키 매핑이 즉시 중지되고 macOS 기본 동작으로 돌아갑니다.
             """)

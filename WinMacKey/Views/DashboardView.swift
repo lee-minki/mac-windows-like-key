@@ -165,18 +165,33 @@ struct DashboardView: View {
                         
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("VDI (가상 데스크톱) 자동 감지")
-                                Text("VMware, Parallels, RDP 등이 포커스되면 자동으로 Right Alt 키를 통과시킵니다.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                Text("VMware 한/영 전환")
+                                if VirtualHIDManager.isDriverInstalled() {
+                                    Text("Karabiner 드라이버 설치됨. VMware 등 가상화 앱에서 자동으로 Right Alt 키를 전송합니다.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Karabiner 드라이버 미설치. VMware 호환이 필요하면 Karabiner-DriverKit-VirtualHIDDevice를 설치하세요.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             Spacer()
-                            Text(appState.contextManager.isVirtualizationApp ? "활성" : "대기")
-                                .font(.system(.body, design: .monospaced))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(appState.contextManager.isVirtualizationApp ? .green.opacity(0.2) : .gray.opacity(0.2))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            if VirtualHIDManager.isDriverInstalled() {
+                                Text(appState.contextManager.isVirtualizationApp ? "활성" : "대기")
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(appState.contextManager.isVirtualizationApp ? .green.opacity(0.2) : .gray.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            } else {
+                                Text("미설치")
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(.orange.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
                         }
                     }
                 }

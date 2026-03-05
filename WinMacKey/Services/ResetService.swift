@@ -13,7 +13,6 @@ class ResetService {
         "LastUpdateCheck",
         "AutoCheckUpdates",
         "CustomVirtualizationApps",
-        "useVdiMode",
         "activeMappingProfileId",
         "visualCustomMappings",
         "eventViewerAlwaysOnTop",

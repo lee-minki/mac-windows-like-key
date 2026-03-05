@@ -151,14 +151,14 @@ struct HelpView: View {
                     }
                 }
                 
-                GroupBox("VDI 모드 (설정에서 활성화)") {
+                GroupBox("VMware 호환 (Karabiner 드라이버 필요)") {
                     VStack(spacing: 0) {
                         mappingHeader
                         Divider()
                         mappingRow("Right Command (⌘)", "Right Option (⌥)", "VMware Horizon 등 원격 데스크톱에서 Alt 키로 한/영 전환", .red)
                     }
                     
-                    Text("※ VDI 모드는 트리거 키가 Right Command일 때만 사용할 수 있습니다. Right Option 트리거와는 호환되지 않습니다.")
+                    Text("※ Karabiner-DriverKit-VirtualHIDDevice 설치 시 자동 활성화. VMware 등 가상화 앱이 포커스되면 자동 적용됩니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -374,13 +374,14 @@ struct HelpView: View {
                 )
                 
                 faqItem(
-                    question: "VDI 모드는 무엇인가요?",
+                    question: "VMware에서 한/영 전환이 안 되나요?",
                     answer: """
                     VMware Horizon, Parallels Desktop, Microsoft Remote Desktop 같은 \
                     원격 데스크톱 앱에서는 Right Command 키가 Windows에 전달되지 않을 수 있습니다.\n\n\
-                    VDI 모드를 켜면 Right Command가 Right Option(Alt) 키로 변환되어 \
-                    Windows 원격 환경에서 Alt 키로 한/영 전환이 가능해집니다.\n\n\
-                    설정 → General → \"VDI 키보드 호환 모드\" 토글을 켜세요.
+                    Karabiner-DriverKit-VirtualHIDDevice를 설치하면 WinMac Key가 \
+                    가상 키보드를 통해 Right Alt 키를 직접 전달합니다. \
+                    드라이버 설치 후 자동으로 동작하며, 별도 설정이 필요 없습니다.\n\n\
+                    설치 방법: GitHub 레포의 docs/VDI_SETUP.md를 참조하세요.
                     """
                 )
                 
