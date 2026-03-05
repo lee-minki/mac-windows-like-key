@@ -27,8 +27,8 @@ class KeyInterceptor: ObservableObject {
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
 
-    // 한영 전환 트리거 키 (HID 스왕 후 Right Option으로 감지됨)
-    var triggerKeyCode: Int64 = Int64(kVK_RightOption)
+    // 한영 전환 트리거 키 (기본: Right Command)
+    var triggerKeyCode: Int64 = Int64(kVK_RightCommand)
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
