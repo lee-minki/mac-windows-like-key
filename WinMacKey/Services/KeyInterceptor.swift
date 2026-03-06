@@ -305,6 +305,9 @@ class KeyInterceptor: ObservableObject {
                 // VMware는 물리 HID를 직접 읽으므로, 가상 키보드를 통해 Right Alt를 발생시킴
                 if let vhid = interceptor.virtualHIDManager, vhid.isReady {
                     if isDown {
+                        // 조합 버퍼 확정 → Right Alt 전송
+                        vhid.postKeyDown(modifiers: VirtualHIDManager.Modifier.rightShift)
+                        vhid.postKeyUp()
                         vhid.postKeyDown(modifiers: VirtualHIDManager.Modifier.rightOption)
                     } else {
                         vhid.postKeyUp()
@@ -321,6 +324,8 @@ class KeyInterceptor: ObservableObject {
             } else {
                 // ── 일반 모드: 누르는 순간(isDown) 즉시 한/영 전환 ──
                 if isDown {
+                    // 한국어 IME 조합 버퍼 확정 (글자 씹힘 방지)
+                    Self.commitComposingText()
                     interceptor.logger.info("⚡️ Instant Toggle trigger detected")
                     interceptor.onInputSourceToggle?()
                 }
@@ -442,6 +447,31 @@ class KeyInterceptor: ObservableObject {
         syntheticEvent.flags = isDown ? (flagMap[virtualKey] ?? []) : []
         syntheticEvent.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         syntheticEvent.post(tap: .cghidEventTap)
+    }
+
+    /// 한국어 IME 조합 버퍼를 확정(commit)합니다.
+    /// 한영전환 전에 호출하여 조합 중인 글자가 씹히는 현상을 방지합니다.
+    /// Right Shift press+release를 주입하면 IME가 조합 중인 글자를 확정합니다.
+    private static func commitComposingText() {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        
+        let shiftKey = CGKeyCode(kVK_RightShift)
+        
+        // Right Shift Down
+        if let down = CGEvent(keyboardEventSource: source, virtualKey: shiftKey, keyDown: true) {
+            down.type = .flagsChanged
+            down.flags = .maskShift
+            down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            down.post(tap: .cghidEventTap)
+        }
+        
+        // Right Shift Up
+        if let up = CGEvent(keyboardEventSource: source, virtualKey: shiftKey, keyDown: false) {
+            up.type = .flagsChanged
+            up.flags = []
+            up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            up.post(tap: .cghidEventTap)
+        }
     }
 
     // MARK: - Logging
