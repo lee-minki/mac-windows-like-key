@@ -15,8 +15,6 @@ class DoctorService: ObservableObject {
     @Published var checks: [DoctorCheck] = []
     @Published var isRunning = false
     @Published var lastRunDate: Date?
-    @Published var isInstallingVDI = false
-    @Published var vdiInstallStatus = ""
     
     // MARK: - Check Model
     
@@ -34,7 +32,6 @@ class DoctorService: ObservableObject {
             case conflict = "충돌"
             case inputSource = "입력 소스"
             case system = "시스템"
-            case virtualHID = "가상 HID"
         }
         
         enum Status {
@@ -49,7 +46,6 @@ class DoctorService: ObservableObject {
             case restartEngine
             case resetAll
             case openSystemSettings
-            case installVDIDriver
         }
     }
     
@@ -76,7 +72,6 @@ class DoctorService: ObservableObject {
             checkInputSources()
             checkInputSourceShortcuts()
             checkCapsLockSetting()
-            checkKarabinerDriver(appState: appState)
 
             lastRunDate = Date()
             isRunning = false
@@ -134,10 +129,6 @@ class DoctorService: ObservableObject {
         // 5. HID 매핑 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
         logger.info("✅ HID mappings cleared")
-        
-        // 7. 가상 HID 헬퍼 종료
-        appState.virtualHIDManager.stop()
-        logger.info("✅ Virtual HID manager stopped")
         
         logger.info("🎉 Emergency Recovery completed — system is clean")
     }
@@ -356,77 +347,6 @@ class DoctorService: ObservableObject {
         }
     }
     
-    // MARK: - Karabiner Driver Check
-    
-    private func checkKarabinerDriver(appState: AppState) {
-        let driverInstalled = VirtualHIDManager.isDriverInstalled()
-        let daemonRunning = VirtualHIDManager.isDaemonRunning()
-        
-        if driverInstalled && daemonRunning {
-            checks.append(DoctorCheck(
-                category: .virtualHID,
-                title: "Karabiner 드라이버",
-                detail: "설치됨 & 데몬 실행 중. VDI 모드 사용 가능.",
-                status: .ok,
-                fixAction: nil
-            ))
-        } else if driverInstalled && !daemonRunning {
-            checks.append(DoctorCheck(
-                category: .virtualHID,
-                title: "Karabiner 데몬",
-                detail: "드라이버는 설치되어 있지만 데몬이 실행 중이 아닙니다. 터미널에서 sudo 데몬을 실행하세요.",
-                status: .warning,
-                fixAction: nil
-            ))
-        } else {
-            checks.append(DoctorCheck(
-                category: .virtualHID,
-                title: "Karabiner 드라이버 미설치",
-                detail: "VDI 모드(VMware 한영전환)를 사용하려면 Karabiner-DriverKit-VirtualHIDDevice가 필요합니다. 자동 설치를 클릭하면 다운로드 후 설치됩니다.",
-                status: .warning,
-                fixAction: .installVDIDriver
-            ))
-        }
-        
-        // Virtual HID 연결 상태
-        switch appState.virtualHIDManager.state {
-        case .ready:
-            checks.append(DoctorCheck(
-                category: .virtualHID,
-                title: "가상 HID 키보드",
-                detail: "연결됨 & 준비 완료.",
-                status: .ok,
-                fixAction: nil
-            ))
-        case .connecting:
-            checks.append(DoctorCheck(
-                category: .virtualHID,
-                title: "가상 HID 키보드",
-                detail: "연결 중...",
-                status: .warning,
-                fixAction: nil
-            ))
-        case .error(let msg):
-            checks.append(DoctorCheck(
-                category: .virtualHID,
-                title: "가상 HID 키보드",
-                detail: "오류: \(msg)",
-                status: .error,
-                fixAction: nil
-            ))
-        case .disconnected:
-            if driverInstalled {
-                checks.append(DoctorCheck(
-                    category: .virtualHID,
-                    title: "가상 HID 키보드",
-                    detail: "연결되지 않음. 엔진을 시작하면 자동 연결됩니다.",
-                    status: .ok,
-                    fixAction: nil
-                ))
-            }
-        }
-    }
-    
     // MARK: - Helpers
 
     /// pgrep을 백그라운드 스레드에서 실행하여 메인 스레드를 블로킹하지 않음
@@ -477,89 +397,6 @@ class DoctorService: ObservableObject {
         case .openSystemSettings:
             let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
             NSWorkspace.shared.open(url)
-
-        case .installVDIDriver:
-            Task { await installVDIDriver() }
-        }
-    }
-
-    // MARK: - VDI Driver Auto-Install
-
-    /// Karabiner-DriverKit-VirtualHIDDevice를 GitHub에서 다운로드하여 설치합니다.
-    /// MIT License — 재배포/자동 설치 합법.
-    /// System Extension 승인 1회 클릭은 macOS 보안 정책상 사용자 필수.
-    func installVDIDriver() async {
-        isInstallingVDI = true
-        vdiInstallStatus = "최신 버전 확인 중..."
-        defer { isInstallingVDI = false }
-
-        do {
-            // 1. GitHub API로 최신 .pkg URL 조회
-            let apiURL = URL(string: "https://api.github.com/repos/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases/latest")!
-            var request = URLRequest(url: apiURL)
-            request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
-            request.timeoutInterval = 10
-
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let release = try JSONDecoder().decode(VDIGitHubRelease.self, from: data)
-
-            guard let pkgAsset = release.assets.first(where: { $0.name.hasSuffix(".pkg") }),
-                  let pkgURL = URL(string: pkgAsset.browserDownloadURL) else {
-                vdiInstallStatus = "❌ .pkg 파일을 찾을 수 없습니다"
-                return
-            }
-
-            // 2. 다운로드
-            vdiInstallStatus = "다운로드 중... (\(pkgAsset.name))"
-            let (tempURL, _) = try await URLSession.shared.download(from: pkgURL)
-
-            let pkgPath = FileManager.default.temporaryDirectory
-                .appendingPathComponent("KarabinerVHID.pkg")
-            try? FileManager.default.removeItem(at: pkgPath)
-            try FileManager.default.moveItem(at: tempURL, to: pkgPath)
-
-            // 3. sudo installer 실행 (macOS 표준 비밀번호 다이얼로그)
-            vdiInstallStatus = "설치 중... (비밀번호 입력 필요)"
-            let script = "do shell script \"installer -pkg '\(pkgPath.path)' -target /\" with administrator privileges"
-            let appleScript = NSAppleScript(source: script)
-            var appleScriptError: NSDictionary?
-            appleScript?.executeAndReturnError(&appleScriptError)
-
-            try? FileManager.default.removeItem(at: pkgPath)
-
-            if let err = appleScriptError {
-                let msg = err["NSAppleScriptErrorMessage"] as? String ?? "알 수 없는 오류"
-                vdiInstallStatus = "❌ 설치 실패: \(msg)"
-                return
-            }
-
-            // 4. Manager 앱 실행 → System Extension 활성화
-            vdiInstallStatus = "드라이버 활성화 중..."
-            let managerURL = URL(fileURLWithPath: "/Applications/.Karabiner-VirtualHIDDevice-Manager.app")
-            if FileManager.default.fileExists(atPath: managerURL.path) {
-                NSWorkspace.shared.open(managerURL)
-            }
-
-            vdiInstallStatus = "✅ 설치 완료! 시스템 설정 → 개인정보 보호 및 보안 → '허용' 클릭 후 VDI 모드 사용 가능합니다."
-            logger.info("✅ Karabiner-DriverKit installed successfully")
-
-        } catch {
-            vdiInstallStatus = "❌ 오류: \(error.localizedDescription)"
-            logger.error("VDI driver install failed: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - VDI GitHub Release Model
-
-    private struct VDIGitHubRelease: Decodable {
-        let assets: [VDIAsset]
-        struct VDIAsset: Decodable {
-            let name: String
-            let browserDownloadURL: String
-            enum CodingKeys: String, CodingKey {
-                case name
-                case browserDownloadURL = "browser_download_url"
-            }
         }
     }
 }

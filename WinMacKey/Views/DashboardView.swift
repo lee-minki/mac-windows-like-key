@@ -148,42 +148,7 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         // 시각적 키보드 레이아웃 설정
                         ModifierLayoutView()
-                        
-                        Divider()
-                            .padding(.vertical, 4)
-                        
-                        Toggle("이벤트 뷰어 항상 위", isOn: $eventViewerAlwaysOnTop)
-                        
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("VMware 한/영 전환")
-                                if VirtualHIDManager.isDriverInstalled() {
-                                    Text("Karabiner 드라이버 설치됨. VMware 등 가상화 앱에서 자동으로 Right Alt 키를 전송합니다.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                } else {
-                                    Text("Karabiner 드라이버 미설치. VMware 호환이 필요하면 Karabiner-DriverKit-VirtualHIDDevice를 설치하세요.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            if VirtualHIDManager.isDriverInstalled() {
-                                Text(appState.contextManager.isVirtualizationApp ? "활성" : "대기")
-                                    .font(.system(.body, design: .monospaced))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 2)
-                                    .background(appState.contextManager.isVirtualizationApp ? .green.opacity(0.2) : .gray.opacity(0.2))
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                            } else {
-                                Text("미설치")
-                                    .font(.system(.body, design: .monospaced))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 2)
-                                    .background(.orange.opacity(0.2))
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                            }
-                        }
+                        ModifierLayoutView()
                     }
                 }
                 

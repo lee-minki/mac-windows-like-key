@@ -1,102 +1,71 @@
-# VMware VDI 한/영 전환 설정 가이드
+# VMware / VDI 하이브리드 한영 전환 가이드
 
-WinMac Key의 **VDI 모드**를 사용하면 VMware Horizon, VMware Fusion 등 가상화 앱에서도  
-Right Command 키로 한/영 전환이 가능합니다.
+WinMac Key는 VDI (가상 데스크톱) 환경에서도 Windows와 동일한 감각으로 우측 Command 등을 이용해 한/영 전환을 할 수 있도록 설계되었습니다.
 
-## 왜 필요한가?
-
-VMware는 일반적인 macOS 키 이벤트(`CGEventTap`)를 무시하고, **물리 HID 디바이스**에서 직접 키를 읽습니다.  
-WinMac Key는 Karabiner DriverKit의 **가상 키보드**를 통해 이 제한을 우회합니다.
-
-```
-물리 키보드 → WinMac Key (가로챔) → 가상 키보드에서 Right Alt 발생
-                                      └── VMware: "Right Alt구나!" ✅
-```
+기존 버전과 달리 **별도의 가상 키보드 드라이버(Karabiner 등) 설치가 전혀 필요 없는 네이티브(Native) 방식**을 사용합니다.
 
 ---
 
-## 설치 절차
+## 💡 지원되는 환경 (검증됨)
 
-### 1단계: Karabiner DriverKit 드라이버 설치
-
-```bash
-# GitHub Releases에서 .pkg 다운로드 후 설치
-# https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases
-```
-
-또는 Karabiner-Elements가 이미 설치되어 있다면 드라이버도 함께 설치되어 있습니다.
-
-### 2단계: 드라이버 활성화
-
-```bash
-open "/Applications/.Karabiner-VirtualHIDDevice-Manager.app"
-```
-
-시스템 설정 > 일반 > 로그인 항목에서 드라이버 확장을 **허용**하세요.
-
-### 3단계: 데몬 실행 확인
-
-```bash
-sudo ls "/Library/Application Support/org.pqrs/tmp/rootonly/vhidd_server/"
-# .sock 파일이 보이면 정상
-```
-
-### 4단계: KarabinerHelper 빌드
-
-```bash
-# 사전 요구사항
-brew install xcodegen
-
-# 빌드
-./scripts/build_karabiner_helper.sh
-```
-
-### 5단계: WinMac Key 실행
-
-앱을 실행하면 자동으로 Karabiner 드라이버를 감지하고 VDI 모드를 활성화합니다.  
-메뉴바에서 **가상 HID 키보드** 상태가 🟢 Ready로 표시되면 준비 완료입니다.
+- **Omnissa Horizon Client** (VMware Horizon)
+- **Windows 10 / 11** (VDI 내부 OS)
 
 ---
 
-## 진단
+## ⚙️ 동작 원리 (하이브리드 전환)
 
-WinMac Key의 **Doctor** 기능에서 Karabiner 관련 상태를 확인할 수 있습니다:
+WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안전한 방식으로 단축키를 중계합니다.
 
-| 항목 | 설명 |
-|---|---|
-| Karabiner 드라이버 | 설치 여부 |
-| Karabiner 데몬 | 소켓 실행 여부 |
-| 가상 HID 키보드 | 연결 상태 |
-
----
-
-## 지원되는 가상화 앱
-
-| 앱 | Bundle ID |
-|---|---|
-| VMware Horizon (Omnissa) | `com.vmware.horizon` |
-| VMware Fusion | `com.vmware.fusion` |
-| Parallels Desktop | `com.parallels.desktop.console` |
-| Microsoft RDP | `com.microsoft.rdc.macos` |
-| Apple Screen Sharing | `com.apple.ScreenSharing` |
+1. 사용자가 **Right Command** (우측 커맨드)를 누름
+2. WinMac Key가 이를 가로채서 macOS 시스템 단축키인 **Control + Space** 이벤트를 합성하여 뿌림
+3. **Omnissa Horizon Client** 등 VDI 클라이언트가 해당 단축키를 감지
+4. VDI 내장 매핑을 통해 윈도우의 **Right Alt** (한/영 전환)로 변환되어 전달됨
+5. 윈도우 OS에서 자연스럽게 한영이 전환됨!
 
 ---
 
-## 문제 해결
+## 🛠️ 설정 방법 (Omnissa Horizon 기준)
 
-### "가상 HID 미연결" 표시
+별도의 앱이나 드라이버 설치 없이, VDI 클라이언트 자체 설정만 맞춰주면 끝납니다.
 
-1. Karabiner 드라이버가 설치되었는지 확인
-2. `open "/Applications/.Karabiner-VirtualHIDDevice-Manager.app"` 실행
-3. 시스템 설정에서 드라이버 확장 허용
+### 1. Mac 로컬 설정
 
-### "헬퍼 바이너리 없음" 표시
+- `시스템 설정` > `키보드` > `키보드 단축키...` > `입력 소스`
+- **이전 입력 소스 선택**이 `^ Space` (Control+Space)로 설정되어 있는지 확인합니다. (macOS 기본값)
 
-```bash
-./scripts/build_karabiner_helper.sh
-```
+### 2. Omnissa Horizon Client 설정
 
-### Karabiner-Elements와 충돌
+1. Omnissa Horizon Client 실행
+2. 상단 메뉴 막대  > **설정(Preferences)** (단축키: `Cmd + ,`)
+3. **키보드 및 마우스 (Keyboard & Mouse)** 탭으로 이동
+4. **키 매핑 (Key Mapping)** 탭 선택
+5. **[ + ] 버튼을 눌러 새 매핑 추가:**
+   - **Mac 단축키 (From):** `Control + Space`
+   - **Windows 단축키 (To):** `Right Alt` (우측 Alt)
+6. 체크박스를 켜서 활성화(Enable) 상태로 만듭니다.
 
-Karabiner-Elements와 WinMac Key를 동시에 사용하면 키 가로채기가 충돌할 수 있습니다.  
-Karabiner에서 빈 프로필을 선택하거나, WinMac Key의 Doctor에서 충돌을 확인하세요.
+### 3. WinMac Key 실행
+
+- WinMac Key 켤 필요 없이 평소처럼 사용하세요.
+- VDI 창에 포커스가 맞춰지면, 우측 Command(또는 Option)를 누를 때마다 이 매핑을 타고 윈도우 한영이 부드럽게 전환됩니다.
+
+---
+
+## ❓ 문제 해결 (Troubleshooting)
+
+### Q. 전환할 때마다 윈도우 시작 메뉴가 같이 열립니다
+
+A. 매핑이 `Win` 키나 꼬인 `Alt` 로 넘어간 경우입니다. Horizon 키 매핑 설정에서 정확히 `Right Alt`로 설정되었는지 확인하세요.
+
+### Q. 눌러도 아무 반응이 없습니다
+
+A.
+
+1. Mac 로컬의 시스템 단축키 설정(입력 소스 - `^ Space`)이 켜져 있는지 확인하세요.
+2. WinMac Key의 Dashboard 메뉴에서 "트리거 키"가 본인이 누르는 키(`rightCmd` 등)로 잘 설정되어 있는지 확인하세요.
+3. Karabiner-Elements에서 Complex Rules (특히 Right Command -> F18, 한/영 등)가 켜져 있다면, **WinMac Key와 충돌하므로 반드시 꺼야 합니다.**
+
+### Q. 글자가 밀리거나 씹히는 현상은 없나요?
+
+A. 네! 기존 `TISSelectInputSource` API의 고질적인 버그(조합 중인 한국어 글자 지워짐)를 원천적으로 우회하는 **OS 레벨 단축키 합성**을 사용하기 때문에 매우 매끄럽게 입력됩니다.

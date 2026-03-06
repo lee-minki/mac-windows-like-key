@@ -32,10 +32,7 @@ class KeyInterceptor: ObservableObject {
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
-
-    // 가상 HID 키보드 매니저 (VDI 모드에서 사용)
-    var virtualHIDManager: VirtualHIDManager?
-
+    
     // 이벤트 로그 최대 개수
     private let maxEventLogCount = 1000
 

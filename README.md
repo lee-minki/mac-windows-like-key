@@ -92,18 +92,15 @@ Pro 버전은 **$1 이상 후원**하신 분들을 위한 기능입니다.
 
 ---
 
-## 🖥️ VMware VDI 한/영 전환
+## 🖥️ VMware / VDI 하이브리드 한영 전환
 
-VMware Horizon 등 가상화 앱에서 한/영 전환이 안 되는 문제를 해결합니다.  
-Karabiner DriverKit의 가상 키보드를 통해 Right Alt 키를 VMware에 직접 전달합니다.
+VMware Horizon 등 가상화 앱에서 한/영 전환이 안 되는 문제를 기본적으로 해결합니다.
+**가상 키보드 드라이버 등 별도의 시스템 확장프로그램이 전혀 필요 없는 완전한 네이티브 방식**을 사용합니다.
 
-**→ [VDI 설정 가이드](docs/VDI_SETUP.md)**
+WinMac Key가 VDI 앱에 포커스된 것을 자동 감지하여 macOS 한영 전환(Control+Space) 이벤트를 발생시키면,
+VDI 클라이언트(Omnissa 등)가 이를 가로채 윈도우의 `Right Alt`로 스무스하게 변환해 줍니다.
 
-### 요구사항
-
-- [Karabiner-DriverKit-VirtualHIDDevice](https://github.com/pqrs-org/Karabiner-DriverKit-VirtualHIDDevice/releases) 설치
-- `xcodegen` (`brew install xcodegen`)
-- KarabinerHelper 빌드: `./scripts/build_karabiner_helper.sh`
+**→ [VDI 매핑 및 설정 가이드](docs/VDI_SETUP.md)**
 
 ---
 

@@ -32,7 +32,6 @@
 		42AD7ED7DF7B4F2594E16069 /* MappingProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 816E70983B624FFCAAEEDA41 /* MappingProfile.swift */; };
 		8619BB80B1644CDF8DD8B031 /* ModifierLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E664C16D0C4B9AB8C6CEC4 /* ModifierLayoutView.swift */; };
 		HHH00001 /* HIDRemapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = HHH00002 /* HIDRemapper.swift */; };
-		VHM00001 /* VirtualHIDManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VHM00002 /* VirtualHIDManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,7 +63,6 @@
 		816E70983B624FFCAAEEDA41 /* MappingProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MappingProfile.swift; sourceTree = "<group>"; };
 		38E664C16D0C4B9AB8C6CEC4 /* ModifierLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifierLayoutView.swift; sourceTree = "<group>"; };
 		HHH00002 /* HIDRemapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HIDRemapper.swift; sourceTree = "<group>"; };
-		VHM00002 /* VirtualHIDManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualHIDManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,7 +139,6 @@
 				FFF00002 /* DoctorService.swift */,
 				GGG00002 /* LogService.swift */,
 				HHH00002 /* HIDRemapper.swift */,
-				VHM00002 /* VirtualHIDManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -263,7 +260,6 @@
 				GGG00001 /* LogService.swift in Sources */,
 				GGG00003 /* LogView.swift in Sources */,
 				HHH00001 /* HIDRemapper.swift in Sources */,
-				VHM00001 /* VirtualHIDManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

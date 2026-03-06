@@ -26,12 +26,6 @@ struct MenuBarView: View {
                 // 엔진 상태 및 컨트롤
                 engineSection
                 
-                // 가상 HID 키보드 상태 (VDI 모드용)
-                if VirtualHIDManager.isDriverInstalled() || appState.virtualHIDManager.state.isReady {
-                    Divider()
-                    virtualHIDSection
-                }
-                
                 Divider()
                 
                 // 빠른 액션
@@ -155,43 +149,6 @@ struct MenuBarView: View {
             .controlSize(.small)
         }
         .padding(12)
-    }
-    
-    private var virtualHIDSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("가상 HID 키보드")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(virtualHIDStatusColor)
-                        .frame(width: 8, height: 8)
-                    
-                    Text(appState.virtualHIDManager.state.displayName)
-                        .font(.callout)
-                }
-            }
-            
-            Spacer()
-            
-            if !VirtualHIDManager.isDriverInstalled() {
-                Text("드라이버 없음")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(12)
-    }
-    
-    private var virtualHIDStatusColor: Color {
-        switch appState.virtualHIDManager.state {
-        case .ready: return .green
-        case .connecting: return .yellow
-        case .disconnected: return .gray
-        case .error: return .red
-        }
     }
     
     private var quickActionsSection: some View {

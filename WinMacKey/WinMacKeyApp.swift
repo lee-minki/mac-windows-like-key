@@ -5,8 +5,8 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
-        // 앱 종료 시 모든 HID 매핑 해제 (글로벌 + 디바이스별)
-        HIDRemapper.shared.clearAllMappingsSync()
+        // 앱 종료 시 HID 매핑 해제 (동기 — 프로세스 종료 전 완료 보장)
+        HIDRemapper.shared.clearMappingsSync()
     }
 }
 
@@ -115,7 +115,6 @@ class AppState: ObservableObject {
     let updateService = UpdateService()
     let stateManager = StateManager()
     let resetService = ResetService()
-    let virtualHIDManager = VirtualHIDManager()
     let profileStore = KeyboardProfileStore()
 
     @Published var showResetConfirmation: Bool = false
@@ -199,11 +198,8 @@ class AppState: ObservableObject {
             }
         }
 
-        // VirtualHIDManager ↔ KeyInterceptor 연결
-        keyInterceptor.virtualHIDManager = virtualHIDManager
-        VirtualHIDManager.appShared = virtualHIDManager
-
-        checkPermissions()
+        // AppState 초기화 완료 상태 로깅
+        LogService.shared.info("AppState initialized", category: "App")
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
