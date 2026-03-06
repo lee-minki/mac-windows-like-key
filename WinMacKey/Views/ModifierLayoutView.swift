@@ -23,67 +23,10 @@ struct ModifierSlot: Identifiable, Equatable {
     }
 }
 
-/// 저장 가능한 키보드 프로필
-struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
-    var id: UUID = UUID()
-    var name: String
-    var physicalKeys: [Int64]
-    var desiredKeys: [Int64]
-    
-    var mappings: [Int64: Int64] {
-        var result: [Int64: Int64] = [:]
-        for (index, physKey) in physicalKeys.enumerated() {
-            let desKey = desiredKeys[index]
-            if physKey != desKey {
-                result[physKey] = desKey
-            }
-        }
-        return result
-    }
-    
-    var summary: String {
-        let src = physicalKeys.map { ModifierSlot.label(for: $0) }.joined(separator: "·")
-        let dst = desiredKeys.map { ModifierSlot.label(for: $0) }.joined(separator: "·")
-        return "\(src) → \(dst)"
-    }
-}
-
-/// 프로필 저장소
-class KeyboardProfileStore: ObservableObject {
-    @Published var profiles: [SavedKeyboardProfile] = []
-    private let storageKey = "savedKeyboardProfiles"
-    
-    init() { load() }
-    
-    func load() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([SavedKeyboardProfile].self, from: data) {
-            profiles = decoded
-        }
-    }
-    
-    func save() {
-        if let data = try? JSONEncoder().encode(profiles) {
-            UserDefaults.standard.set(data, forKey: storageKey)
-        }
-    }
-    
-    func add(_ profile: SavedKeyboardProfile) {
-        profiles.append(profile)
-        save()
-    }
-    
-    func delete(id: UUID) {
-        profiles.removeAll { $0.id == id }
-        save()
-    }
-}
-
 // MARK: - Main View
 
 struct ModifierLayoutView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var profileStore = KeyboardProfileStore()
     
     @State private var currentStep: Int = 0 // 0=프로필 선택, 1=물리감지, 2=원하는키입력, 3=검증
     
@@ -136,7 +79,7 @@ struct ModifierLayoutView: View {
             Text("키보드 레이아웃 프로필")
                 .font(.headline)
             
-            if profileStore.profiles.isEmpty {
+            if appState.profileStore.profiles.isEmpty {
                 VStack(spacing: 8) {
                     Text("저장된 프로필이 없습니다")
                         .font(.caption)
@@ -151,7 +94,7 @@ struct ModifierLayoutView: View {
                 .cornerRadius(12)
             } else {
                 VStack(spacing: 4) {
-                    ForEach(profileStore.profiles) { profile in
+                    ForEach(appState.profileStore.profiles) { profile in
                         profileRow(profile)
                     }
                 }
@@ -208,7 +151,7 @@ struct ModifierLayoutView: View {
             .disabled(isActive)
             
             Button {
-                profileStore.delete(id: profile.id)
+                appState.profileStore.delete(id: profile.id)
                 if isActive {
                     appState.activeMappingProfileId = "standardMac"
                     appState.keyInterceptor.applyCustomMappings([:])
@@ -675,7 +618,7 @@ struct ModifierLayoutView: View {
             physicalKeys: detectedPhysicalKeys,
             desiredKeys: desiredKeys
         )
-        profileStore.add(profile)
+        appState.profileStore.add(profile)
         applyProfile(profile)
     }
     

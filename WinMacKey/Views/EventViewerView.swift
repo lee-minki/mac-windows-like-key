@@ -5,12 +5,13 @@ import SwiftUI
 struct EventViewerView: View {
     @EnvironmentObject var appState: AppState
     @State private var isCapturing = true
+    @State private var pausedEvents: [KeyEvent]? = nil  // nil = not paused
     @State private var filterText = ""
     @State private var showOnlyMapped = false
     @AppStorage("eventViewerAlwaysOnTop") private var alwaysOnTop = false
     
     var filteredEvents: [KeyEvent] {
-        var events = appState.keyInterceptor.events
+        var events = pausedEvents ?? appState.keyInterceptor.events
         
         if showOnlyMapped {
             events = events.filter { $0.rawKey != $0.mappedKey }
@@ -242,8 +243,13 @@ struct EventViewerView: View {
     
     private func toggleCapture() {
         isCapturing.toggle()
-        // isCapturing은 UI 로깅 표시만 제어합니다.
-        // 엔진 start/stop은 하지 않습니다 — 메인 엔진에 사이드 이펙트를 주지 않기 위함.
+        if isCapturing {
+            // Resume: 스냅샷 해제 → 라이브 이벤트로 복귀
+            pausedEvents = nil
+        } else {
+            // Pause: 현재 이벤트 목록을 스냅샷으로 고정 → 새 이벤트가 표시에 반영되지 않음
+            pausedEvents = appState.keyInterceptor.events
+        }
     }
     
     private func copyAsJSON() {

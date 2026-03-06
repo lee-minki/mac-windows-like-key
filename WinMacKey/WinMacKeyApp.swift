@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Carbon.HIToolbox
+import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
@@ -22,13 +23,16 @@ struct WinMacKeyApp: App {
             MenuBarView()
                 .environmentObject(appState)
         } label: {
-            // 현재 입력 소스에 따라 아이콘 변경
+            // WM 브랜드 아이콘
+            // VDI 모드: W/한, W/A  |  Mac 모드: M/한, M/A  |  OFF: WM
             if appState.isEngineRunning {
-                Image(systemName: appState.stateManager.isSource1Active
-                      ? "a.square"
-                      : "character.textbox")
+                let prefix = appState.isVdiMode ? "W" : "M"
+                let lang = appState.stateManager.isSource1Active ? "A" : "한"
+                Text("\(prefix)/\(lang)")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
             } else {
-                Image(systemName: "keyboard")
+                Text("WM")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
             }
         }
         .menuBarExtraStyle(.window)
@@ -80,9 +84,10 @@ class AppState: ObservableObject {
     @Published var isEngineRunning: Bool = false
     @Published var currentLatencyMs: Double = 0.0
     @Published var currentAppBundleId: String = ""
-    @Published var currentProfile: Profile?
+    @Published var currentProfileId: String?
     @Published var hasAccessibilityPermission: Bool = false
     @Published var isPro: Bool = false  // Pro 버전 활성화 여부
+    @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부 (메뉴바 아이콘용)
     
     // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
     @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
@@ -116,17 +121,29 @@ class AppState: ObservableObject {
     let stateManager = StateManager()
     let resetService = ResetService()
     let virtualHIDManager = VirtualHIDManager()
-    
+    let profileStore = KeyboardProfileStore()
+
     @Published var showResetConfirmation: Bool = false
-    
+
     private var permissionObserver: NSObjectProtocol?
+    private var cancellables = Set<AnyCancellable>()
+    /// The user's default profile ID (before auto-switching overrides)
+    private var defaultMappingProfileId: String?
     
     init() {
+        // Forward profileStore changes so views observing AppState re-render
+        profileStore.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
         // Right Cmd/Opt 즉시 전환 → 한영전환 연결
+        // EventTap은 메인 RunLoop에서 실행되므로 assumeIsolated 안전
         keyInterceptor.onInputSourceToggle = { [weak self] in
-            self?.stateManager.handleTrigger()
+            MainActor.assumeIsolated {
+                self?.stateManager.handleTrigger()
+            }
         }
-        
+
         // 언어 페어 초기화: 저장된 값이 없으면 자동 감지
         if languagePairSource1.isEmpty || languagePairSource2.isEmpty {
             if let detected = stateManager.inputSourceManager.autoDetectPair() {
@@ -135,20 +152,34 @@ class AppState: ObservableObject {
             }
         }
         stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2)
-        
+
         // 트리거 키 설정
         keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")
             ? Int64(kVK_RightOption)
             : Int64(kVK_RightCommand)
         keyInterceptor.activeProfileID = activeMappingProfileId
         keyInterceptor.setupDefaultMappings()
-        
-        // 앱 전환 시: (1) bundleId 캐시 갱신 (2) VDI 앱 자동 감지
+
+        // 앱 전환 시: (1) bundleId 캐시 갱신 (2) VDI 앱 자동 감지 (3) 프로필 자동 전환
         keyInterceptor.cachedBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         contextManager.onAppChanged = { [weak self] bundleId, _ in
-            self?.keyInterceptor.cachedBundleId = bundleId.isEmpty ? nil : bundleId
-            // VDI 앱 포커스 여부 자동 갱신
-            self?.keyInterceptor.isVdiAppFocused = self?.contextManager.isVirtualizationApp ?? false
+            guard let self = self else { return }
+            self.keyInterceptor.cachedBundleId = bundleId.isEmpty ? nil : bundleId
+            self.keyInterceptor.isVdiAppFocused = self.contextManager.isVirtualizationApp
+            self.isVdiMode = self.contextManager.isVirtualizationApp
+
+            // Auto-switch profile if a matching per-app profile exists
+            if let appProfile = self.profileStore.profile(forBundleId: bundleId) {
+                if self.defaultMappingProfileId == nil {
+                    self.defaultMappingProfileId = self.activeMappingProfileId
+                }
+                self.applyProfile(appProfile)
+            } else if let defaultId = self.defaultMappingProfileId {
+                // Revert to user's default profile
+                self.defaultMappingProfileId = nil
+                self.activeMappingProfileId = defaultId
+                self.keyInterceptor.setupDefaultMappings()
+            }
         }
 
         // VirtualHIDManager ↔ KeyInterceptor 연결
@@ -183,6 +214,17 @@ class AppState: ObservableObject {
         }
     }
     
+    /// Apply a keyboard layout profile's mappings
+    func applyProfile(_ profile: SavedKeyboardProfile) {
+        let mappings = profile.mappings
+        let stringKeyDict = Dictionary(uniqueKeysWithValues: mappings.map { (String($0.key), $0.value) })
+        if let data = try? JSONEncoder().encode(stringKeyDict) {
+            UserDefaults.standard.set(data, forKey: "visualCustomMappings")
+        }
+        activeMappingProfileId = profile.id.uuidString
+        keyInterceptor.applyCustomMappings(mappings)
+    }
+
     func toggleEngine() {
         if isEngineRunning {
             keyInterceptor.stop()

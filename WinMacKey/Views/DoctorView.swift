@@ -23,14 +23,28 @@ struct DoctorView: View {
                 checksList
             }
             
+            // VDI 설치 진행 상태
+            if doctor.isInstallingVDI || !doctor.vdiInstallStatus.isEmpty {
+                vdiInstallBanner
+            }
+
             Divider()
-            
+
             // Footer
             footer
         }
         .frame(width: 560, height: 480)
         .onAppear {
             doctor.runAllChecks(appState: appState)
+        }
+        .onChange(of: doctor.isInstallingVDI) { _, isInstalling in
+            // 설치 완료(false로 바뀜) + 성공 상태면 자동 재진단
+            if !isInstalling && doctor.vdiInstallStatus.hasPrefix("✅") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    doctor.vdiInstallStatus = ""
+                    doctor.runAllChecks(appState: appState)
+                }
+            }
         }
         .confirmationDialog(
             "긴급 복구를 실행하시겠습니까?",
@@ -177,13 +191,15 @@ struct DoctorView: View {
             if let action = check.fixAction, check.status != .ok {
                 Button(fixButtonLabel(action)) {
                     doctor.performFix(action, appState: appState)
-                    // Re-run after fix
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        doctor.runAllChecks(appState: appState)
+                    if action != .installVDIDriver {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            doctor.runAllChecks(appState: appState)
+                        }
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .disabled(action == .installVDIDriver && doctor.isInstallingVDI)
             }
         }
         .padding(.horizontal, 16)
@@ -220,9 +236,37 @@ struct DoctorView: View {
         case .restartEngine: return "재시작"
         case .resetAll: return "초기화"
         case .openSystemSettings: return "설정 열기"
+        case .installVDIDriver: return doctor.isInstallingVDI ? "설치 중..." : "자동 설치"
         }
     }
     
+    // MARK: - VDI Install Banner
+
+    private var vdiInstallBanner: some View {
+        HStack(spacing: 8) {
+            if doctor.isInstallingVDI {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: doctor.vdiInstallStatus.hasPrefix("✅") ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(doctor.vdiInstallStatus.hasPrefix("✅") ? .green : .red)
+            }
+            Text(doctor.vdiInstallStatus)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            if !doctor.isInstallingVDI {
+                Button("닫기") { doctor.vdiInstallStatus = "" }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.08))
+    }
+
     // MARK: - Footer
     
     private var footer: some View {

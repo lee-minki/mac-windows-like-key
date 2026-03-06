@@ -5,9 +5,7 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openWindow) var openWindow
-    @StateObject private var profileManager = ProfileManager()
     @State private var selectedTab = 0
-    @State private var showAddProfileSheet = false
     @AppStorage("eventViewerAlwaysOnTop") private var eventViewerAlwaysOnTop: Bool = false
     
     var body: some View {
@@ -136,11 +134,9 @@ struct DashboardView: View {
                         }
                         
                         if appState.isPro {
-                            Button(action: { showAddProfileSheet = true }) {
-                                Label("Add New App", systemImage: "plus")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
+                            Text("Profiles tab에서 앱별 프로필을 관리하세요")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         } else {
                             Button(action: {}) {
                                 Label("Pro 버전에서 사용 가능", systemImage: "lock.fill")
@@ -253,78 +249,132 @@ struct DashboardView: View {
     }
     
     // MARK: - Profiles Tab
-    
+
     private var profilesTab: some View {
         VStack(spacing: 0) {
-            // Profile List
-            List {
-                ForEach(profileManager.profiles) { profile in
-                    profileRow(profile)
-                }
-                .onDelete(perform: profileManager.removeProfile)
-            }
-            .listStyle(.inset)
-            
-            Divider()
-            
-            // Add Button
+            // Current foreground app context
             HStack {
-                Spacer()
-                
-                Button(action: { showAddProfileSheet = true }) {
-                    Label("새 프로필 추가", systemImage: "plus")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Current App")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(appState.contextManager.currentAppName.isEmpty
+                         ? "-" : appState.contextManager.currentAppName)
+                        .font(.subheadline)
                 }
-                .disabled(!appState.isPro)
+                Spacer()
+                Text(appState.contextManager.currentBundleId)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .foregroundStyle(.secondary)
             }
             .padding(12)
-        }
-        .sheet(isPresented: $showAddProfileSheet) {
-            AddProfileSheet(profileManager: profileManager)
-        }
-    }
-    
-    private func profileRow(_ profile: Profile) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(profile.name)
+            .background(Color(nsColor: .controlBackgroundColor))
+
+            Divider()
+
+            if appState.profileStore.profiles.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "keyboard")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("No saved profiles")
                         .font(.headline)
-                    
-                    if profile.bundleId == nil {
-                        Text("Default")
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.blue.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                }
-                
-                if let bundleId = profile.bundleId {
-                    Text(bundleId)
+                    Text("General > Keyboard Layout > New Profile")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
-                // Mappings
-                ForEach(profile.mappings) { mapping in
-                    Text(mapping.description)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(appState.profileStore.profiles) { profile in
+                        savedProfileRow(profile)
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+    }
+
+    private func savedProfileRow(_ profile: SavedKeyboardProfile) -> some View {
+        let isActive = appState.activeMappingProfileId == profile.id.uuidString
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(profile.name)
+                    .font(.headline)
+
+                if isActive {
+                    Text("Active")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.green.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+
+                Spacer()
+
+                Button(isActive ? "Active" : "Apply") {
+                    appState.applyProfile(profile)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isActive)
+
+                Button {
+                    appState.profileStore.delete(id: profile.id)
+                    if isActive {
+                        appState.activeMappingProfileId = "standardMac"
+                        appState.keyInterceptor.applyCustomMappings([:])
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
+
+            Text(profile.summary)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+
+            // Bundle ID assignment for per-app auto-switching
+            HStack(spacing: 8) {
+                Image(systemName: "app.badge")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let bundleId = profile.bundleId {
+                    Text(bundleId)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.blue)
+
+                    Button {
+                        var updated = profile
+                        updated.bundleId = nil
+                        appState.profileStore.update(updated)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.mini)
+                } else {
+                    Button {
+                        var updated = profile
+                        updated.bundleId = appState.contextManager.currentBundleId
+                        appState.profileStore.update(updated)
+                    } label: {
+                        Label("Assign current app", systemImage: "plus.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .disabled(appState.contextManager.currentBundleId.isEmpty)
                 }
             }
-            
-            Spacer()
-            
-            Toggle("", isOn: Binding(
-                get: { profile.isEnabled },
-                set: { newValue in
-                    var updated = profile
-                    updated.isEnabled = newValue
-                    profileManager.updateProfile(updated)
-                }
-            ))
-            .toggleStyle(.switch)
         }
         .padding(.vertical, 4)
     }
@@ -399,57 +449,6 @@ struct DashboardView: View {
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-// MARK: - Add Profile Sheet
-
-struct AddProfileSheet: View {
-    @ObservedObject var profileManager: ProfileManager
-    @Environment(\.dismiss) var dismiss
-    
-    @State private var profileName = ""
-    @State private var bundleId = ""
-    @State private var selectedMapping = 0
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("새 프로필 추가")
-                .font(.headline)
-            
-            Form {
-                TextField("프로필 이름", text: $profileName)
-                TextField("Bundle ID (예: com.vmware.fusion)", text: $bundleId)
-                
-                Picker("키 매핑", selection: $selectedMapping) {
-                    Text("CapsLock → Windows IME").tag(0)
-                    Text("CapsLock → Pure CapsLock").tag(1)
-                }
-            }
-            
-            HStack {
-                Button("취소") { dismiss() }
-                    .buttonStyle(.bordered)
-                
-                Button("추가") {
-                    let mapping = selectedMapping == 0
-                        ? KeyMapping(fromKey: KeyEvent.capsLockKeyCode, toKey: KeyEvent.windowsIMEKeyCode, description: "CapsLock → Windows IME")
-                        : KeyMapping(fromKey: KeyEvent.capsLockKeyCode, toKey: KeyEvent.capsLockKeyCode, description: "CapsLock → Pure CapsLock")
-                    
-                    let profile = Profile(
-                        name: profileName,
-                        bundleId: bundleId.isEmpty ? nil : bundleId,
-                        mappings: [mapping]
-                    )
-                    profileManager.addProfile(profile)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(profileName.isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 400)
     }
 }
 

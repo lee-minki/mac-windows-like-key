@@ -77,9 +77,7 @@ if [ -f "$BINARY" ]; then
     echo "   sudo $BINARY"
     echo ""
     
-    # 앱 번들에 복사할 위치 안내
-    echo "   앱 번들에 포함하려면:"
-    echo "   cp $BINARY WinMacKey.app/Contents/Helpers/"
+    echo "   release.sh 실행 시 자동으로 앱 번들에 포함됩니다."
 else
     echo "❌ 빌드 실패"
     exit 1

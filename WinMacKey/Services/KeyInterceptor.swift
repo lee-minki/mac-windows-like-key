@@ -286,18 +286,11 @@ class KeyInterceptor: ObservableObject {
 
         if keyCode == triggerKey && type == .flagsChanged {
 
-            // ── isDown 판별: flags 델타 방식 (L+R 동시 홀드 엣지케이스 대응) ──
-            let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
-            let flagsNow    = event.flags.contains(triggerFlag)
-            let flagsBefore = interceptor.previousFlags.contains(triggerFlag)
-            let isDown: Bool
-            if flagsNow && !flagsBefore {
-                isDown = true    // flag 새로 켜짐 → keyDown
-            } else if !flagsNow && flagsBefore {
-                isDown = false   // flag 꺼짐 → keyUp
-            } else {
-                isDown = flagsNow
-            }
+            // ── isDown 판별: device-specific 플래그 (L+R 동시 홀드 엣지케이스 완전 해결) ──
+            // .maskCommand/.maskAlternate는 Left/Right 구분 불가 → NX device 비트 사용
+            // NX_DEVICERCMDKEYMASK=0x10, NX_DEVICERALTKEYMASK=0x40 (CGEventFlags.rawValue 하위 비트)
+            let deviceRightFlag: UInt64 = triggerKey == rightCmdKeyCode ? 0x10 : 0x40
+            let isDown = event.flags.rawValue & deviceRightFlag != 0
             interceptor.previousFlags = event.flags
 
             // 상태 갱신 (반복 토글 방지)

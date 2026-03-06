@@ -1,115 +1,74 @@
 import Foundation
 
-/// 키 매핑 정의
-struct KeyMapping: Codable, Identifiable, Equatable {
-    var id: UUID = UUID()
-    var fromKey: UInt32     // 원본 키코드
-    var toKey: UInt32       // 매핑할 키코드
-    var description: String // 사용자 표시용 설명
-    
-    init(id: UUID = UUID(), fromKey: UInt32, toKey: UInt32, description: String = "") {
-        self.id = id
-        self.fromKey = fromKey
-        self.toKey = toKey
-        self.description = description.isEmpty ? "\(KeyEvent.keyCodeHex(fromKey)) → \(KeyEvent.keyCodeHex(toKey))" : description
-    }
-}
-
-/// 앱별 프로필
-struct Profile: Codable, Identifiable, Equatable {
+/// Per-app keyboard mapping profile
+/// Created via the visual keyboard layout wizard (ModifierLayoutView).
+struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
     var id: UUID = UUID()
     var name: String
-    var bundleId: String?   // nil이면 기본 프로필
-    var mappings: [KeyMapping]
-    var isEnabled: Bool = true
-    
-    init(id: UUID = UUID(), name: String, bundleId: String? = nil, mappings: [KeyMapping] = [], isEnabled: Bool = true) {
-        self.id = id
-        self.name = name
-        self.bundleId = bundleId
-        self.mappings = mappings
-        self.isEnabled = isEnabled
+    var physicalKeys: [Int64]
+    var desiredKeys: [Int64]
+    /// Bundle ID for per-app auto-switching (nil = manual activation only)
+    var bundleId: String?
+
+    var mappings: [Int64: Int64] {
+        var result: [Int64: Int64] = [:]
+        for (index, physKey) in physicalKeys.enumerated() {
+            guard index < desiredKeys.count else { break }
+            let desKey = desiredKeys[index]
+            if physKey != desKey {
+                result[physKey] = desKey
+            }
+        }
+        return result
     }
-    
-    /// 기본 Mac 모드 프로필
-    static var macMode: Profile {
-        Profile(
-            name: "Mac Mode",
-            bundleId: nil,
-            mappings: [
-                KeyMapping(
-                    fromKey: KeyEvent.capsLockKeyCode,
-                    toKey: KeyEvent.capsLockKeyCode,
-                    description: "CapsLock → Pure CapsLock (The Silencer)"
-                )
-            ]
-        )
-    }
-    
-    /// Windows 모드 프로필 (VMware용)
-    static var windowsMode: Profile {
-        Profile(
-            name: "Windows Mode",
-            bundleId: "com.vmware.horizon",  // VMware Horizon
-            mappings: [
-                KeyMapping(
-                    fromKey: KeyEvent.capsLockKeyCode,
-                    toKey: KeyEvent.windowsIMEKeyCode,
-                    description: "CapsLock → Windows IME (0x15)"
-                )
-            ]
-        )
+
+    var summary: String {
+        let src = physicalKeys.map { ModifierSlot.label(for: $0) }.joined(separator: " · ")
+        let dst = desiredKeys.map { ModifierSlot.label(for: $0) }.joined(separator: " · ")
+        return "\(src) -> \(dst)"
     }
 }
 
-// MARK: - 프로필 매니저
-class ProfileManager: ObservableObject {
-    @Published var profiles: [Profile] = []
-    @Published var defaultProfile: Profile = .macMode
-    
-    private let userDefaultsKey = "WinMacKey.Profiles"
-    
-    init() {
-        loadProfiles()
-    }
-    
-    func loadProfiles() {
-        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-           let decoded = try? JSONDecoder().decode([Profile].self, from: data) {
+/// Profile storage (UserDefaults-backed)
+class KeyboardProfileStore: ObservableObject {
+    @Published var profiles: [SavedKeyboardProfile] = []
+    private let storageKey = "savedKeyboardProfiles"
+
+    init() { load() }
+
+    func load() {
+        if let data = UserDefaults.standard.data(forKey: storageKey),
+           let decoded = try? JSONDecoder().decode([SavedKeyboardProfile].self, from: data) {
             profiles = decoded
-        } else {
-            // 기본 프로필 설정
-            profiles = [.macMode, .windowsMode]
-            saveProfiles()
         }
     }
-    
-    func saveProfiles() {
-        if let encoded = try? JSONEncoder().encode(profiles) {
-            UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
+
+    func save() {
+        if let data = try? JSONEncoder().encode(profiles) {
+            UserDefaults.standard.set(data, forKey: storageKey)
         }
     }
-    
-    func addProfile(_ profile: Profile) {
+
+    func add(_ profile: SavedKeyboardProfile) {
         profiles.append(profile)
-        saveProfiles()
+        save()
     }
-    
-    func removeProfile(at offsets: IndexSet) {
-        profiles.remove(atOffsets: offsets)
-        saveProfiles()
-    }
-    
-    func updateProfile(_ profile: Profile) {
+
+    func update(_ profile: SavedKeyboardProfile) {
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
             profiles[index] = profile
-            saveProfiles()
+            save()
         }
     }
-    
-    /// Bundle ID에 맞는 프로필 찾기
-    func profile(for bundleId: String?) -> Profile {
-        guard let bundleId = bundleId else { return defaultProfile }
-        return profiles.first { $0.bundleId == bundleId && $0.isEnabled } ?? defaultProfile
+
+    func delete(id: UUID) {
+        profiles.removeAll { $0.id == id }
+        save()
+    }
+
+    /// Find profile matching a bundle ID for auto-switching
+    func profile(forBundleId bundleId: String) -> SavedKeyboardProfile? {
+        guard !bundleId.isEmpty else { return nil }
+        return profiles.first { $0.bundleId == bundleId }
     }
 }

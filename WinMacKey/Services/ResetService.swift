@@ -17,43 +17,39 @@ class ResetService {
         "visualCustomMappings",
         "eventViewerAlwaysOnTop",
         "savedKeyboardProfiles",
-        "toggleTriggerKey"
+        "toggleTriggerKey",
+        "languagePairSource1",
+        "languagePairSource2"
     ]
     
     /// 모든 앱 설정을 초기화합니다.
     /// - Parameters:
     ///   - keyInterceptor: 엔진 정지를 위한 KeyInterceptor
-    ///   - profileManager: 프로필 재로드를 위한 ProfileManager
     ///   - completion: 초기화 완료 후 콜백
     func resetAll(
         keyInterceptor: KeyInterceptor,
-        profileManager: ProfileManager? = nil,
         completion: (() -> Void)? = nil
     ) {
-        logger.info("🔄 Starting full reset...")
-        
+        logger.info("Starting full reset...")
+
         // 1. 엔진 정지
         keyInterceptor.stop()
-        logger.info("✅ Engine stopped")
-        
+        logger.info("Engine stopped")
+
         // 2. 이벤트 로그 클리어
         keyInterceptor.events.removeAll()
-        logger.info("✅ Event logs cleared")
-        
+        logger.info("Event logs cleared")
+
         // 3. UserDefaults 초기화
         clearUserDefaults()
-        logger.info("✅ UserDefaults cleared")
-        
-        // 4. 프로필 매니저 재로드 (기본 프로필로 복원)
-        profileManager?.loadProfiles()
-        logger.info("✅ Profiles reloaded to defaults")
-        
-        // 5. HID 매핑 해제 (동기 — 완료 보장)
+        logger.info("UserDefaults cleared")
+
+        // 4. HID 매핑 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
-        logger.info("✅ HID mappings cleared")
-        
-        logger.info("🎉 Full reset completed")
-        
+        logger.info("HID mappings cleared")
+
+        logger.info("Full reset completed")
+
         completion?()
     }
     

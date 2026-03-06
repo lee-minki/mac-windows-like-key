@@ -3,6 +3,7 @@ import os.log
 
 /// 직렬 큐 기반 입력 소스 상태 관리자
 /// 빠른 연속 전환 시 순서를 보장합니다.
+@MainActor
 class StateManager: ObservableObject {
     
     let inputSourceManager = InputSourceManager()
@@ -56,13 +57,8 @@ class StateManager: ObservableObject {
     /// 현재 상태 새로고침
     func refreshCurrentSource() {
         let idx = inputSourceManager.currentSourceIndex()
-        let name = inputSourceManager.currentSourceName()
-        let shortName = inputSourceManager.currentSourceShortName()
-        
-        DispatchQueue.main.async {
-            self.currentSourceName = name
-            self.currentSourceShortName = shortName
-            self.isSource1Active = (idx == 1)
-        }
+        currentSourceName = inputSourceManager.currentSourceName()
+        currentSourceShortName = inputSourceManager.currentSourceShortName()
+        isSource1Active = (idx == 1)
     }
 }
