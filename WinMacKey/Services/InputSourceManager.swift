@@ -61,9 +61,11 @@ class InputSourceManager {
         let current = currentSourceID()
         if current == source1ID { return 1 }
         if current == source2ID { return 2 }
-        // 패턴 매칭 폴백
+        // 패턴 매칭 폴백 — 한국어 등 입력기(inputmethod)는 하위 소스 ID가 달라질 수 있음
         if matchesSource(current, target: source1ID) { return 1 }
         if matchesSource(current, target: source2ID) { return 2 }
+        
+        logger.warning("Unknown source: '\(current)' (pair: '\(self.source1ID)' / '\(self.source2ID)')")
         return 0  // 알 수 없음
     }
     
@@ -93,12 +95,15 @@ class InputSourceManager {
     /// source1 ↔ source2 토글 (동기 처리)
     func toggle() {
         let currentIdx = currentSourceIndex()
+        let targetID: String
         if currentIdx == 1 {
-            switchToSource(source2ID)
+            targetID = source2ID
         } else {
             // source2이거나 알 수 없는 경우 → source1로
-            switchToSource(source1ID)
+            targetID = source1ID
         }
+        logger.info("Toggle: idx=\(currentIdx) → switching to '\(targetID)'")
+        switchToSource(targetID)
     }
     
     /// 특정 입력 소스 ID로 전환
@@ -118,15 +123,20 @@ class InputSourceManager {
             let status = TISSelectInputSource(source)
             if status != noErr {
                 logger.error("TISSelectInputSource failed: \(status)")
+            } else {
+                logger.info("Switched to '\(targetID)'")
             }
             return
         }
         
         // 패턴 매칭 폴백
         if let source = sourceList.first(where: { matchesSource(getSourceID($0), target: targetID) }) {
+            let matchedID = getSourceID(source)
             let status = TISSelectInputSource(source)
             if status != noErr {
                 logger.error("TISSelectInputSource fallback failed: \(status)")
+            } else {
+                logger.info("Switched to '\(matchedID)' (fallback for '\(targetID)')")
             }
             return
         }
@@ -172,9 +182,12 @@ class InputSourceManager {
         return Unmanaged<CFString>.fromOpaque(catPtr).takeUnretainedValue() as String
     }
     
-    /// 부분 매칭 (예: "Korean" 포함 여부)
+    /// 부분 매칭 — 한국어 입력기는 하위 모드에 따라 ID가 달라질 수 있음
+    /// 예: "com.apple.inputmethod.Korean.2SetKorean" vs "com.apple.inputmethod.Korean"
     private func matchesSource(_ sourceID: String, target: String) -> Bool {
         if sourceID == target { return true }
+        // 한쪽이 다른 쪽의 prefix인 경우 (Korean 입력기 하위 모드)
+        if sourceID.hasPrefix(target) || target.hasPrefix(sourceID) { return true }
         // 같은 패밀리인지 확인 (예: Korean.2Set vs Korean.3Set)
         let sourceParts = sourceID.split(separator: ".")
         let targetParts = target.split(separator: ".")
