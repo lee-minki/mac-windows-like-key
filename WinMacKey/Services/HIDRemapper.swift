@@ -46,9 +46,51 @@ class HIDRemapper {
         0xFF00000003: "Fn/Globe"
     ]
     
-    // MARK: - Apply Mappings
-    
-    /// keycode 기반 매핑 딕셔너리를 hidutil로 적용
+    // MARK: - Device Matching
+
+    /// 내장 키보드 디바이스 매칭 (Apple Silicon Mac)
+    /// hidutil --matching 파라미터로 사용
+    static let internalKeyboardMatchJSON = "{\"Product\":\"Apple Internal Keyboard / Trackpad\"}"
+
+    // MARK: - Device-Specific Mappings
+
+    /// 내장 키보드에만 매핑 적용 (동기)
+    func applyMappingsForInternalKeyboardSync(_ mappings: [Int64: Int64]) {
+        let json = buildUserKeyMappingJSON(mappings)
+        guard let json = json else {
+            clearMappingsForInternalKeyboardSync()
+            return
+        }
+        let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", json])
+        if result {
+            logger.info("Internal keyboard mappings applied (sync, \(mappings.count) mappings)")
+        } else {
+            logger.error("Failed to apply internal keyboard mappings")
+        }
+    }
+
+    /// 내장 키보드의 매핑만 해제 (동기)
+    func clearMappingsForInternalKeyboardSync() {
+        let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", "{\"UserKeyMapping\":[]}"])
+        if result {
+            logger.info("Internal keyboard mappings cleared (sync)")
+        } else {
+            logger.error("Failed to clear internal keyboard mappings")
+        }
+    }
+
+    /// 모든 디바이스의 매핑을 완전히 해제 (앱 종료/리셋용)
+    func clearAllMappingsSync() {
+        // 글로벌 매핑 해제
+        clearMappingsSync()
+        // 내장 키보드 디바이스별 매핑도 해제
+        clearMappingsForInternalKeyboardSync()
+        logger.info("All mappings cleared (global + internal keyboard)")
+    }
+
+    // MARK: - Apply Mappings (Global)
+
+    /// keycode 기반 매핑 딕셔너리를 hidutil로 적용 (전체 디바이스)
     /// - Parameter mappings: [sourceKeyCode: destinationKeyCode] (macOS virtual keycode 사용)
     func applyMappings(_ mappings: [Int64: Int64]) {
         var userKeyMapping: [[String: UInt64]] = []
@@ -157,15 +199,15 @@ class HIDRemapper {
         let task = Process()
         task.launchPath = "/usr/bin/hidutil"
         task.arguments = ["property", "--get", "UserKeyMapping"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
+
+        let outPipe = Pipe()
+        task.standardOutput = outPipe
         task.standardError = Pipe()
-        
+
         do {
             try task.run()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "(null)"
         } catch {
             return "(error: \(error.localizedDescription))"
@@ -173,17 +215,42 @@ class HIDRemapper {
     }
     
     // MARK: - Private
-    
+
+    /// 매핑 딕셔너리를 hidutil JSON 문자열로 변환. 유효한 매핑이 없으면 nil 반환.
+    private func buildUserKeyMappingJSON(_ mappings: [Int64: Int64]) -> String? {
+        var userKeyMapping: [[String: UInt64]] = []
+        for (src, dst) in mappings {
+            guard src != dst else { continue }
+            guard let srcHID = Self.keycodeToHIDUsage[src],
+                  let dstHID = Self.keycodeToHIDUsage[dst] else { continue }
+            userKeyMapping.append([
+                "HIDKeyboardModifierMappingSrc": srcHID,
+                "HIDKeyboardModifierMappingDst": dstHID
+            ])
+        }
+        guard !userKeyMapping.isEmpty else { return nil }
+        let config: [String: Any] = ["UserKeyMapping": userKeyMapping]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: config),
+              let jsonString = String(data: jsonData, encoding: .utf8) else { return nil }
+        return jsonString
+    }
+
     @discardableResult
     private func runHidutil(arguments: [String]) -> Bool {
         let task = Process()
         task.launchPath = "/usr/bin/hidutil"
         task.arguments = arguments
-        task.standardOutput = Pipe()
-        task.standardError = Pipe()
-        
+
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        task.standardOutput = outPipe
+        task.standardError = errPipe
+
         do {
             try task.run()
+            // 데드락 방지: pipe 버퍼를 먼저 소비한 후 waitUntilExit 호출
+            _ = outPipe.fileHandleForReading.readDataToEndOfFile()
+            _ = errPipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
             return task.terminationStatus == 0
         } catch {

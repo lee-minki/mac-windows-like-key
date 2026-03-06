@@ -5,10 +5,8 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
-        // 앱 종료 시 HID 매핑 해제 (동기 — 프로세스 종료 전 완료 보장)
-        HIDRemapper.shared.clearMappingsSync()
-        // 가상 HID 헬퍼 종료
-        VirtualHIDManager.appShared?.stop()
+        // 앱 종료 시 모든 HID 매핑 해제 (글로벌 + 디바이스별)
+        HIDRemapper.shared.clearAllMappingsSync()
     }
 }
 
@@ -23,16 +21,13 @@ struct WinMacKeyApp: App {
             MenuBarView()
                 .environmentObject(appState)
         } label: {
-            // WM 브랜드 아이콘
-            // VDI 모드: W/한, W/A  |  Mac 모드: M/한, M/A  |  OFF: WM
             if appState.isEngineRunning {
-                let prefix = appState.isVdiMode ? "W" : "M"
-                let lang = appState.stateManager.isSource1Active ? "A" : "한"
-                Text("\(prefix)/\(lang)")
+                Text("WM")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
             } else {
-                Text("WM")
+                Text("wm")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
         }
         .menuBarExtraStyle(.window)
@@ -87,7 +82,7 @@ class AppState: ObservableObject {
     @Published var currentProfileId: String?
     @Published var hasAccessibilityPermission: Bool = false
     @Published var isPro: Bool = false  // Pro 버전 활성화 여부
-    @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부 (메뉴바 아이콘용)
+    @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부
     
     // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
     @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
@@ -129,10 +124,21 @@ class AppState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// The user's default profile ID (before auto-switching overrides)
     private var defaultMappingProfileId: String?
+
+    // MARK: - VDI Internal Keyboard Mapping
+    // VDI 포커스 시 내장 키보드의 Fn→Ctrl로 교체 (Mac 로컬에서는 Fn→Cmd)
+    // 외장 키보드는 글로벌 매핑 그대로 유지
+    private static let vdiInternalKeyboardMappings: [Int64: Int64] = [
+        Int64(kVK_Function): Int64(kVK_Control),   // Fn → Ctrl (VDI Windows용)
+        Int64(kVK_Control): Int64(kVK_Function),    // Ctrl → Fn
+    ]
     
     init() {
-        // Forward profileStore changes so views observing AppState re-render
+        // Forward child ObservableObject changes so views observing AppState re-render
         profileStore.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        stateManager.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
@@ -162,11 +168,23 @@ class AppState: ObservableObject {
 
         // 앱 전환 시: (1) bundleId 캐시 갱신 (2) VDI 앱 자동 감지 (3) 프로필 자동 전환
         keyInterceptor.cachedBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        contextManager.onAppChanged = { [weak self] bundleId, _ in
+        contextManager.onAppChanged = { [weak self] bundleId, appName in
             guard let self = self else { return }
             self.keyInterceptor.cachedBundleId = bundleId.isEmpty ? nil : bundleId
-            self.keyInterceptor.isVdiAppFocused = self.contextManager.isVirtualizationApp
-            self.isVdiMode = self.contextManager.isVirtualizationApp
+
+            let wasVdi = self.isVdiMode
+            let isNowVdi = self.contextManager.isVirtualizationApp
+            self.keyInterceptor.isVdiAppFocused = isNowVdi
+            self.isVdiMode = isNowVdi
+
+            // VDI 모드 전환: 내장 키보드 매핑 교체
+            if isNowVdi && !wasVdi {
+                self.switchToVdiMapping()
+                LogService.shared.info("VDI mode: internal keyboard → Fn=Ctrl (\(appName))", category: "VDI")
+            } else if !isNowVdi && wasVdi {
+                self.switchToMacMapping()
+                LogService.shared.info("Mac mode: internal keyboard → Fn=Cmd (\(appName))", category: "VDI")
+            }
 
             // Auto-switch profile if a matching per-app profile exists
             if let appProfile = self.profileStore.profile(forBundleId: bundleId) {
@@ -175,7 +193,6 @@ class AppState: ObservableObject {
                 }
                 self.applyProfile(appProfile)
             } else if let defaultId = self.defaultMappingProfileId {
-                // Revert to user's default profile
                 self.defaultMappingProfileId = nil
                 self.activeMappingProfileId = defaultId
                 self.keyInterceptor.setupDefaultMappings()
@@ -225,19 +242,26 @@ class AppState: ObservableObject {
         keyInterceptor.applyCustomMappings(mappings)
     }
 
+    // MARK: - VDI / Mac Mapping Switch
+
+    /// VDI 모드: 내장 키보드만 Fn→Ctrl로 교체 (외장 키보드는 글로벌 매핑 유지)
+    func switchToVdiMapping() {
+        HIDRemapper.shared.applyMappingsForInternalKeyboardSync(Self.vdiInternalKeyboardMappings)
+    }
+
+    /// Mac 모드: 내장 키보드의 VDI 오버라이드를 해제하고 글로벌 매핑을 재적용
+    func switchToMacMapping() {
+        HIDRemapper.shared.clearMappingsForInternalKeyboardSync()
+        // 글로벌 매핑 재적용 (프로필 기반)
+        keyInterceptor.setupDefaultMappings()
+    }
+
     func toggleEngine() {
         if isEngineRunning {
             keyInterceptor.stop()
-            virtualHIDManager.stop()
             LogService.shared.info("Engine stopped", category: "Engine")
         } else {
             keyInterceptor.start()
-            // Karabiner 드라이버가 설치되어 있으면 VirtualHID도 시작
-            if VirtualHIDManager.isDriverInstalled() {
-                virtualHIDManager.start()
-            } else {
-                LogService.shared.info("Karabiner driver not installed, virtual HID skipped", category: "Engine")
-            }
             LogService.shared.info("Engine started", category: "Engine")
         }
         isEngineRunning.toggle()

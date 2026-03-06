@@ -294,99 +294,55 @@ class KeyInterceptor: ObservableObject {
             interceptor.previousFlags = event.flags
 
             // 상태 갱신 (반복 토글 방지)
-            if isDown {
-                interceptor.triggerKeyPressed = true
-            } else {
-                interceptor.triggerKeyPressed = false
-            }
+            interceptor.triggerKeyPressed = isDown
 
-            if interceptor.isVdiAppFocused {
-                // ── VDI 앱 포커스: 가상 HID 키보드로 Right Alt 전송 ──
-                // VMware는 물리 HID를 직접 읽으므로, 가상 키보드를 통해 Right Alt를 발생시킴
-                if let vhid = interceptor.virtualHIDManager, vhid.isReady {
-                    if isDown {
-                        vhid.postKeyDown(modifiers: VirtualHIDManager.Modifier.rightOption)
-                    } else {
-                        vhid.postKeyUp()
-                    }
-                    interceptor.logger.info("🖥️ VDI virtual HID: Right Alt \(isDown ? "Down" : "Up")")
-                    interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-                    return nil  // suppress 원본 이벤트
-                } else {
-                    // 가상 HID 미준비 — 기존 passthrough로 폴백
-                    interceptor.logger.warning("🖥️ VDI mode but virtual HID not ready, passthrough")
-                    interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-                    return Unmanaged.passUnretained(event)
-                }
-            } else {
-                // ── 일반 모드: 누르는 순간(isDown) 즉시 한/영 전환 ──
-                if isDown {
-                    interceptor.logger.info("⚡️ Instant Toggle trigger detected")
-                    interceptor.onInputSourceToggle?()
-                }
-                interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-                return nil  // ← suppress: 트리거 키 이벤트를 시스템에 전달하지 않음
+            // ── 통합 전환: Mac/VDI 모두 동일하게 Control+Space 주입 ──
+            // Mac 로컬: macOS가 입력소스 전환 처리
+            // VDI 모드: VDI 앱이 Control+Space를 수신 → 내부 설정으로 Right Alt 변환
+            if isDown {
+                interceptor.logger.info("⚡️ Trigger key detected (VDI=\(interceptor.isVdiAppFocused))")
+                interceptor.onInputSourceToggle?()
             }
+            interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+            return nil  // suppress: 트리거 키 이벤트를 시스템에 전달하지 않음
         }
         
         // ====== 일반 매핑 처리 ======
-        
+        // 이중 매핑 방지: modifier-to-modifier 매핑은 HIDRemapper(hidutil)가 이미 처리하므로
+        // CGEventTap에서는 HID가 처리할 수 없는 매핑만 수행합니다.
+
         if keyCode != triggerKey, let newKeyCode = interceptor.keyMappings[keyCode] {
-            mappedKeyCode = newKeyCode
-            
             let isSourceModifier = interceptor.modifierKeyToFlag[keyCode] != nil
             let isDestModifier = interceptor.modifierKeyToFlag[newKeyCode] != nil
-            
-            if type == .flagsChanged {
-                // ── flagsChanged 이벤트에서의 매핑 ──
-                
-                if isSourceModifier && isDestModifier {
-                    // Modifier → Modifier (예: fn→Cmd, Cmd→Ctrl, Ctrl→fn)
-                    // 새 이벤트를 생성하여 시스템의 기본 modifier 처리를 우회
-                    if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
-                        let isDown = event.flags.contains(srcFlag)
-                        
-                        // flagsChanged 이벤트를 새로 생성
-                        if let newEvent = CGEvent(keyboardEventSource: CGEventSource(event: event),
-                                                   virtualKey: CGKeyCode(newKeyCode),
-                                                   keyDown: isDown) {
-                            // 이벤트 타입을 flagsChanged로 설정
-                            newEvent.type = .flagsChanged
-                            
-                            // 플래그 구성: 원본 플래그에서 소스 플래그를 제거하고 대상 플래그를 추가
-                            var newFlags = event.flags
-                            newFlags.remove(srcFlag)
-                            if isDown, let dstFlag = interceptor.modifierKeyToFlag[newKeyCode] {
-                                newFlags.insert(dstFlag)
-                            } else if !isDown, let dstFlag = interceptor.modifierKeyToFlag[newKeyCode] {
-                                newFlags.remove(dstFlag)
+
+            // HID가 이미 처리한 modifier→modifier 매핑은 스킵 (이중 변환 방지)
+            let hidCanHandle = isSourceModifier && isDestModifier
+                && HIDRemapper.keycodeToHIDUsage[keyCode] != nil
+                && HIDRemapper.keycodeToHIDUsage[newKeyCode] != nil
+
+            if !hidCanHandle {
+                mappedKeyCode = newKeyCode
+
+                if type == .flagsChanged {
+                    if isSourceModifier && !isDestModifier {
+                        // Modifier → General Key
+                        if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
+                            let isDown = event.flags.contains(srcFlag)
+                            if let newEvent = CGEvent(keyboardEventSource: CGEventSource(event: event),
+                                                       virtualKey: CGKeyCode(newKeyCode),
+                                                       keyDown: isDown) {
+                                var newFlags = event.flags
+                                newFlags.remove(srcFlag)
+                                newEvent.flags = newFlags
+                                finalEvent = newEvent
                             }
-                            newEvent.flags = newFlags
-                            
-                            finalEvent = newEvent
                         }
                     }
+                    // modifier→modifier는 HID가 처리, 여기서는 패스
+                } else {
+                    // keyDown / keyUp: 일반 키코드 교체
+                    event.setIntegerValueField(.keyboardEventKeycode, value: newKeyCode)
                 }
-                else if isSourceModifier && !isDestModifier {
-                    // Modifier → General Key (예: 특수 시나리오)
-                    if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
-                        let isDown = event.flags.contains(srcFlag)
-                        if let newEvent = CGEvent(keyboardEventSource: CGEventSource(event: event),
-                                                   virtualKey: CGKeyCode(newKeyCode),
-                                                   keyDown: isDown) {
-                            var newFlags = event.flags
-                            newFlags.remove(srcFlag)
-                            newEvent.flags = newFlags
-                            finalEvent = newEvent
-                        }
-                    }
-                }
-                // General → Modifier in flagsChanged: 거의 발생하지 않으므로 패스
-            }
-            else {
-                // ── keyDown / keyUp 이벤트에서의 매핑 ──
-                // 단순히 keyCode만 교체 (General→General, 또는 Modifier keyCode가 keyDown/keyUp으로 오는 경우)
-                event.setIntegerValueField(.keyboardEventKeycode, value: newKeyCode)
             }
         }
         

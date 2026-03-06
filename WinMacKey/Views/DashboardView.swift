@@ -40,18 +40,13 @@ struct DashboardView: View {
                 cardView(title: "Input Source", icon: "globe") {
                     VStack(spacing: 12) {
                         HStack {
-                            Text("현재 입력 소스")
+                            Text("전환 방식")
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            HStack(spacing: 6) {
-                                Image(systemName: appState.stateManager.isSource1Active ? "a.square" : "character.textbox")
-                                    .foregroundStyle(appState.stateManager.isSource1Active ? .green : .blue)
-                                Text(appState.stateManager.currentSourceShortName)
-                                    .font(.system(.body, design: .monospaced))
-                                    .foregroundStyle(appState.stateManager.isSource1Active ? .green : .blue)
-                            }
+                            Text("Right Cmd → Ctrl+Space")
+                                .font(.system(.caption, design: .monospaced))
                         }
-                        
+
                         HStack {
                             Text("트리거 키")
                                 .foregroundStyle(.secondary)
@@ -63,7 +58,7 @@ struct DashboardView: View {
                             .pickerStyle(.menu)
                             .frame(width: 180)
                         }
-                        
+
                         HStack {
                             Text("전환 횟수")
                                 .foregroundStyle(.secondary)

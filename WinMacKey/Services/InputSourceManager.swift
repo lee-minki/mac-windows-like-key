@@ -91,57 +91,35 @@ class InputSourceManager {
     }
     
     // MARK: - 전환
-    
-    /// source1 ↔ source2 토글 (동기 처리)
-    func toggle() {
-        let currentIdx = currentSourceIndex()
-        let targetID: String
-        if currentIdx == 1 {
-            targetID = source2ID
-        } else {
-            // source2이거나 알 수 없는 경우 → source1로
-            targetID = source1ID
-        }
-        logger.info("Toggle: idx=\(currentIdx) → switching to '\(targetID)'")
-        switchToSource(targetID)
-    }
-    
-    /// 특정 입력 소스 ID로 전환
-    func switchToSource(_ targetID: String) {
-        guard !targetID.isEmpty else {
-            logger.warning("switchToSource called with empty targetID")
+
+    /// Control+Space CGEvent를 합성하여 시스템 입력소스 전환을 트리거합니다.
+    /// TISSelectInputSource 대신 시스템 단축키를 사용하여:
+    /// - CJKV 입력기의 조합 버퍼를 macOS가 자동 commit
+    /// - 메뉴바 아이콘을 macOS가 자동 갱신
+    /// - VDI 앱에서도 Control+Space 이벤트가 전달됨
+    func toggleViaKeyboardShortcut() {
+        // Control+Space keyDown
+        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Space), keyDown: true) else {
+            logger.error("Failed to create Control+Space keyDown event")
             return
         }
-        
-        guard let sourceList = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
-            logger.error("Failed to get input source list")
+        keyDown.flags = .maskControl
+
+        // Control+Space keyUp
+        guard let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Space), keyDown: false) else {
+            logger.error("Failed to create Control+Space keyUp event")
             return
         }
-        
-        // 정확한 ID 매칭
-        if let source = sourceList.first(where: { getSourceID($0) == targetID }) {
-            let status = TISSelectInputSource(source)
-            if status != noErr {
-                logger.error("TISSelectInputSource failed: \(status)")
-            } else {
-                logger.info("Switched to '\(targetID)'")
-            }
-            return
-        }
-        
-        // 패턴 매칭 폴백
-        if let source = sourceList.first(where: { matchesSource(getSourceID($0), target: targetID) }) {
-            let matchedID = getSourceID(source)
-            let status = TISSelectInputSource(source)
-            if status != noErr {
-                logger.error("TISSelectInputSource fallback failed: \(status)")
-            } else {
-                logger.info("Switched to '\(matchedID)' (fallback for '\(targetID)')")
-            }
-            return
-        }
-        
-        logger.error("Could not find input source: \(targetID)")
+        keyUp.flags = .maskControl
+
+        // 합성 이벤트 마커 설정 (CGEventTap 재진입 방지)
+        keyDown.setIntegerValueField(.eventSourceUserData, value: 0x57494E4B)
+        keyUp.setIntegerValueField(.eventSourceUserData, value: 0x57494E4B)
+
+        keyDown.post(tap: .cgSessionEventTap)
+        keyUp.post(tap: .cgSessionEventTap)
+
+        logger.info("Toggle: posted Control+Space shortcut")
     }
     
     // MARK: - 자동 감지

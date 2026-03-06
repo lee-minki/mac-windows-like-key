@@ -32,28 +32,16 @@ class StateManager: ObservableObject {
     }
     
     /// 한영전환 트리거 (Right Cmd tap-only에서 호출)
-    /// ⚠️ EventTap 콜백(메인 스레드)에서 직접 호출됨 — 동기 실행으로 다음 키 이벤트 처리 전 전환 완료 보장
+    /// Control+Space 시스템 단축키를 합성하여 macOS에 전환을 위임합니다.
+    /// 실제 상태 갱신은 DistributedNotification 감지(observeSystemInputSourceChanges)에서 처리됩니다.
     func handleTrigger() {
-        let beforeIdx = inputSourceManager.currentSourceIndex()
         let beforeName = inputSourceManager.currentSourceShortName()
-        
-        // 입력 소스 전환 — 콜백 내에서 동기 완료 (글자 밀림 방지)
-        inputSourceManager.toggle()
-        
-        let afterIdx = inputSourceManager.currentSourceIndex()
-        let afterName = inputSourceManager.currentSourceShortName()
-        
-        logger.info("Toggle: \(beforeName) → \(afterName)")
-        
-        // @Published 업데이트: EventTap은 메인 RunLoop에서 실행되므로 직접 접근 안전
-        currentSourceName = inputSourceManager.currentSourceName()
-        currentSourceShortName = afterName
-        isSource1Active = (afterIdx == 1)
+
+        // Control+Space 합성 이벤트로 시스템 입력소스 전환
+        inputSourceManager.toggleViaKeyboardShortcut()
+
         switchCount += 1
-        
-        if afterIdx == beforeIdx {
-            logger.warning("Switch may have failed: still on \(afterName)")
-        }
+        logger.info("Toggle triggered: was \(beforeName), posted Control+Space (state update via notification)")
     }
     
     /// 현재 상태 새로고침

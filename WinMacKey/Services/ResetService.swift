@@ -44,9 +44,9 @@ class ResetService {
         clearUserDefaults()
         logger.info("UserDefaults cleared")
 
-        // 4. HID 매핑 해제 (동기 — 완료 보장)
-        HIDRemapper.shared.clearMappingsSync()
-        logger.info("HID mappings cleared")
+        // 4. 모든 HID 매핑 해제 — 글로벌 + 디바이스별 (동기 — 완료 보장)
+        HIDRemapper.shared.clearAllMappingsSync()
+        logger.info("All HID mappings cleared")
 
         logger.info("Full reset completed")
 

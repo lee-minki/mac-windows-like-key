@@ -84,23 +84,17 @@ struct MenuBarView: View {
     private var inputSourceSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("입력 소스")
+                Text("입력 소스 전환")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                
-                HStack(spacing: 8) {
-                    Image(systemName: appState.stateManager.isSource1Active ? "a.square" : "character.textbox")
-                        .font(.title2)
-                        .foregroundStyle(appState.stateManager.isSource1Active ? .green : .blue)
-                    
-                    Text(appState.stateManager.currentSourceShortName)
-                        .font(.system(.callout, design: .rounded))
-                        .fontWeight(.medium)
-                }
+
+                Text("Right Command → Control+Space")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
             }
-            
+
             Spacer()
-            
+
             if appState.isEngineRunning {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("\(appState.stateManager.switchCount)")
