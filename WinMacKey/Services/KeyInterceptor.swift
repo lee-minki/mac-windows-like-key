@@ -305,9 +305,6 @@ class KeyInterceptor: ObservableObject {
                 // VMware는 물리 HID를 직접 읽으므로, 가상 키보드를 통해 Right Alt를 발생시킴
                 if let vhid = interceptor.virtualHIDManager, vhid.isReady {
                     if isDown {
-                        // 조합 버퍼 확정 → Right Alt 전송
-                        vhid.postKeyDown(modifiers: VirtualHIDManager.Modifier.rightShift)
-                        vhid.postKeyUp()
                         vhid.postKeyDown(modifiers: VirtualHIDManager.Modifier.rightOption)
                     } else {
                         vhid.postKeyUp()
@@ -324,8 +321,6 @@ class KeyInterceptor: ObservableObject {
             } else {
                 // ── 일반 모드: 누르는 순간(isDown) 즉시 한/영 전환 ──
                 if isDown {
-                    // 한국어 IME 조합 버퍼 확정 (글자 씹힘 방지)
-                    Self.commitComposingText()
                     interceptor.logger.info("⚡️ Instant Toggle trigger detected")
                     interceptor.onInputSourceToggle?()
                 }
@@ -423,56 +418,7 @@ class KeyInterceptor: ObservableObject {
         return Unmanaged.passUnretained(finalEvent)
     }
     
-    // MARK: - Synthetic Event Injection
-
-    /// 합성 modifier 이벤트를 HID 레벨에 주입합니다.
-    /// • syntheticEventMarker를 설정하여 자신의 탭에 재진입되더라도 무시되도록 보장.
-    /// • VDI 모드에서 Right Cmd 엵에 Right Option 을 주입할 때 사용.
-    private static func injectModifierEvent(virtualKey: CGKeyCode, isDown: Bool) {
-        let flagMap: [CGKeyCode: CGEventFlags] = [
-            CGKeyCode(kVK_RightCommand): .maskCommand,
-            CGKeyCode(kVK_Command):      .maskCommand,
-            CGKeyCode(kVK_RightOption):  .maskAlternate,
-            CGKeyCode(kVK_Option):       .maskAlternate,
-            CGKeyCode(kVK_Control):      .maskControl,
-            CGKeyCode(kVK_RightControl): .maskControl,
-            CGKeyCode(kVK_Shift):        .maskShift,
-            CGKeyCode(kVK_RightShift):   .maskShift,
-        ]
-        guard let source = CGEventSource(stateID: .hidSystemState),
-              let syntheticEvent = CGEvent(keyboardEventSource: source,
-                                           virtualKey: virtualKey,
-                                           keyDown: isDown) else { return }
-        syntheticEvent.type = .flagsChanged
-        syntheticEvent.flags = isDown ? (flagMap[virtualKey] ?? []) : []
-        syntheticEvent.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
-        syntheticEvent.post(tap: .cghidEventTap)
-    }
-
-    /// 한국어 IME 조합 버퍼를 확정(commit)합니다.
-    /// 한영전환 전에 호출하여 조합 중인 글자가 씹히는 현상을 방지합니다.
-    /// Right Shift press+release를 주입하면 IME가 조합 중인 글자를 확정합니다.
-    private static func commitComposingText() {
-        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
-        
-        let shiftKey = CGKeyCode(kVK_RightShift)
-        
-        // Right Shift Down
-        if let down = CGEvent(keyboardEventSource: source, virtualKey: shiftKey, keyDown: true) {
-            down.type = .flagsChanged
-            down.flags = .maskShift
-            down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
-            down.post(tap: .cghidEventTap)
-        }
-        
-        // Right Shift Up
-        if let up = CGEvent(keyboardEventSource: source, virtualKey: shiftKey, keyDown: false) {
-            up.type = .flagsChanged
-            up.flags = []
-            up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
-            up.post(tap: .cghidEventTap)
-        }
-    }
+    // MARK: - Synthetic Event Injection (reserved for future use)
 
     // MARK: - Logging
     

@@ -17,9 +17,11 @@ class StateManager: ObservableObject {
     @Published var switchCount: Int = 0
     
     private let logger = Logger(subsystem: "com.winmackey.app", category: "StateManager")
+    private var inputSourceObserver: NSObjectProtocol?
     
     init() {
         refreshCurrentSource()
+        observeSystemInputSourceChanges()
     }
     
     /// 언어 페어 설정 (AppState에서 호출)
@@ -60,5 +62,26 @@ class StateManager: ObservableObject {
         currentSourceName = inputSourceManager.currentSourceName()
         currentSourceShortName = inputSourceManager.currentSourceShortName()
         isSource1Active = (idx == 1)
+    }
+    
+    // MARK: - System Input Source Observer
+    
+    /// 시스템 입력소스 변경 감지 (Ctrl+Space, 메뉴바 클릭 등 외부 전환 시에도 동기화)
+    private func observeSystemInputSourceChanges() {
+        inputSourceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged"),
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshCurrentSource()
+            }
+        }
+    }
+    
+    deinit {
+        if let observer = inputSourceObserver {
+            DistributedNotificationCenter.default().removeObserver(observer)
+        }
     }
 }
