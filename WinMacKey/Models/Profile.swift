@@ -1,4 +1,5 @@
 import Foundation
+import Carbon.HIToolbox
 
 /// Per-app keyboard mapping profile
 /// Created via the visual keyboard layout wizard (ModifierLayoutView).
@@ -7,6 +8,8 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
     var name: String
     var physicalKeys: [Int64]
     var desiredKeys: [Int64]
+    /// Optional non-left-side key that should act as Fn for 3-key layouts.
+    var auxiliaryFnKey: Int64?
     /// Bundle ID for per-app auto-switching (nil = manual activation only)
     var bundleId: String?
 
@@ -19,12 +22,18 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
                 result[physKey] = desKey
             }
         }
+        if let auxiliaryFnKey {
+            result[auxiliaryFnKey] = Int64(kVK_Function)
+        }
         return result
     }
 
     var summary: String {
         let src = physicalKeys.map { ModifierSlot.label(for: $0) }.joined(separator: " · ")
         let dst = desiredKeys.map { ModifierSlot.label(for: $0) }.joined(separator: " · ")
+        if let auxiliaryFnKey {
+            return "\(src) -> \(dst) + \(ModifierSlot.label(for: auxiliaryFnKey)) -> Fn"
+        }
         return "\(src) -> \(dst)"
     }
 }

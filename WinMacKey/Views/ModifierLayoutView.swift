@@ -14,9 +14,11 @@ struct ModifierSlot: Identifiable, Equatable {
         case kVK_Control: return "Ctrl"
         case kVK_Option: return "Opt"
         case kVK_Command: return "Cmd"
+        case kVK_Shift: return "Shift"
         case kVK_RightCommand: return "RCmd"
         case kVK_RightOption: return "ROpt"
         case kVK_RightControl: return "RCtrl"
+        case kVK_RightShift: return "RShift"
         case kVK_CapsLock: return "Caps"
         default: return "0x\(String(keyCode, radix: 16, uppercase: true))"
         }
@@ -39,10 +41,13 @@ struct ModifierLayoutView: View {
     // Step 2: 원하는 키 입력
     @State private var desiredKeys: [Int64] = []
     @State private var waitingSlot2: Int = 0
+    @State private var auxiliaryFnKey: Int64? = nil
+    @State private var isCapturingAuxiliaryFnKey = false
     
     // Step 3: 검증
     @State private var verifyResults: [Int64: Bool] = [:] // desiredKey → pass/fail
     @State private var verifyLogs: [(keyCode: Int64, label: String, pass: Bool)] = []
+    @State private var auxiliaryFnVerified = false
     
     // 프로필 저장
     @State private var showSaveDialog = false
@@ -54,9 +59,33 @@ struct ModifierLayoutView: View {
         Int64(kVK_RightCommand), Int64(kVK_RightOption), Int64(kVK_RightControl),
         Int64(kVK_CapsLock), Int64(kVK_Shift), Int64(kVK_RightShift)
     ]
+    private let auxiliaryFnCandidates: [Int64] = [
+        Int64(kVK_RightControl),
+        Int64(kVK_CapsLock),
+        Int64(kVK_RightShift)
+    ]
 
     private var requiredSlotCount: Int {
         max(detectedPhysicalKeys.count, minimumSlots)
+    }
+
+    private var shouldOfferAuxiliaryFnKey: Bool {
+        detectedPhysicalKeys.count == minimumSlots && !desiredKeys.contains(Int64(kVK_Function))
+    }
+
+    private var currentMappings: [Int64: Int64] {
+        var result: [Int64: Int64] = [:]
+        for (index, physKey) in detectedPhysicalKeys.enumerated() {
+            guard index < desiredKeys.count else { break }
+            let desiredKey = desiredKeys[index]
+            if physKey != desiredKey {
+                result[physKey] = desiredKey
+            }
+        }
+        if let auxiliaryFnKey {
+            result[auxiliaryFnKey] = Int64(kVK_Function)
+        }
+        return result
     }
     
     var body: some View {
@@ -294,6 +323,10 @@ struct ModifierLayoutView: View {
                 .background(Color(nsColor: .windowBackgroundColor))
                 .cornerRadius(8)
             }
+
+            if desiredKeys.count == requiredSlotCount && shouldOfferAuxiliaryFnKey {
+                auxiliaryFnSection
+            }
             
             HStack {
                 Button("← 이전") {
@@ -326,8 +359,15 @@ struct ModifierLayoutView: View {
             stepIndicator
             Divider()
             
-            Text("아무 키나 눌러서 매핑이 올바르게 적용되었는지 확인하세요")
-                .font(.subheadline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("아무 키나 눌러서 매핑이 올바르게 적용되었는지 확인하세요")
+                    .font(.subheadline)
+                if auxiliaryFnKey != nil {
+                    Text("보조 Fn 키도 한 번 눌러서 함께 확인하세요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             
             // 매핑 + 검증 결과
             VStack(alignment: .leading, spacing: 6) {
@@ -359,6 +399,27 @@ struct ModifierLayoutView: View {
                                 .font(.caption2)
                                 .foregroundColor(.gray)
                         }
+                    }
+                }
+
+                if let auxiliaryFnKey {
+                    HStack {
+                        Text(ModifierSlot.label(for: auxiliaryFnKey))
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(width: 40, alignment: .trailing)
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                        Text("Fn")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.blue)
+                            .frame(width: 40)
+
+                        Image(systemName: auxiliaryFnVerified ? "checkmark.circle.fill" : "circle.dotted")
+                            .foregroundColor(auxiliaryFnVerified ? .green : .gray)
+                        Text(auxiliaryFnVerified ? "확인됨" : "눌러서 확인")
+                            .font(.caption2)
+                            .foregroundColor(auxiliaryFnVerified ? .green : .gray)
                     }
                 }
             }
@@ -412,6 +473,63 @@ struct ModifierLayoutView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
+    }
+
+    private var auxiliaryFnSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("보조 Fn 키 (선택)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("3키 키보드에서는 오른쪽 키 하나를 Fn으로 둘 수 있습니다. `RCtrl`이 가장 무난합니다.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Text(auxiliaryFnKey.map { ModifierSlot.label(for: $0) } ?? "미지정")
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(width: 64, alignment: .leading)
+                    .foregroundStyle(auxiliaryFnKey == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.blue))
+
+                if isCapturingAuxiliaryFnKey {
+                    Text("오른쪽 보조 키를 눌러주세요")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("지원 키: RCtrl, Caps, RShift")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            HStack {
+                Button(isCapturingAuxiliaryFnKey ? "입력 중..." : auxiliaryFnKey == nil ? "보조 Fn 키 지정" : "다른 키로 변경") {
+                    isCapturingAuxiliaryFnKey = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(isCapturingAuxiliaryFnKey)
+
+                if isCapturingAuxiliaryFnKey {
+                    Button("취소") {
+                        isCapturingAuxiliaryFnKey = false
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if auxiliaryFnKey != nil {
+                    Button("선택 해제") {
+                        auxiliaryFnKey = nil
+                        isCapturingAuxiliaryFnKey = false
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .cornerRadius(8)
     }
     
     // MARK: - Shared Key Slot Row
@@ -494,6 +612,13 @@ struct ModifierLayoutView: View {
                         .frame(width: 45)
                     }
                 }
+
+                if let auxiliaryFnKey {
+                    Text("\(ModifierSlot.label(for: auxiliaryFnKey)) -> Fn")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.blue)
+                        .padding(.top, 4)
+                }
             }
             .padding(8)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -547,6 +672,11 @@ struct ModifierLayoutView: View {
     private func startStep1() {
         detectedPhysicalKeys = []
         waitingSlot1 = 0
+        desiredKeys = []
+        waitingSlot2 = 0
+        auxiliaryFnKey = nil
+        isCapturingAuxiliaryFnKey = false
+        auxiliaryFnVerified = false
         
         appState.keyInterceptor.onVerifyKeyEvent = { [self] original, _, _ in
             guard currentStep == 1 else { return }
@@ -568,25 +698,32 @@ struct ModifierLayoutView: View {
     private func startStep2() {
         desiredKeys = []
         waitingSlot2 = 0
+        auxiliaryFnKey = nil
+        isCapturingAuxiliaryFnKey = false
+        auxiliaryFnVerified = false
         
         appState.keyInterceptor.onVerifyKeyEvent = { [self] original, _, _ in
             guard currentStep == 2 else { return }
-            guard desiredKeys.count < requiredSlotCount else { return }
             guard knownModifiers.contains(original) else { return }
-            // 원하는 키에서는 중복 허용하지 않음
+
+            if isCapturingAuxiliaryFnKey {
+                guard auxiliaryFnCandidates.contains(original) else { return }
+                guard !detectedPhysicalKeys.contains(original) else { return }
+                auxiliaryFnKey = original
+                isCapturingAuxiliaryFnKey = false
+                return
+            }
+
+            guard desiredKeys.count < requiredSlotCount else { return }
             guard !desiredKeys.contains(original) else { return }
-            
+
             desiredKeys.append(original)
             waitingSlot2 = desiredKeys.count
         }
     }
     
     private func applyAndGoToStep3() {
-        var newMappings: [Int64: Int64] = [:]
-        for (index, physKey) in detectedPhysicalKeys.enumerated() {
-            let desKey = desiredKeys[index]
-            if physKey != desKey { newMappings[physKey] = desKey }
-        }
+        let newMappings = currentMappings
         
         // UserDefaults에 저장
         let stringKeyDict = Dictionary(uniqueKeysWithValues: newMappings.map { (String($0.key), $0.value) })
@@ -601,10 +738,12 @@ struct ModifierLayoutView: View {
         // Step 3: 검증 모드
         verifyResults = [:]
         verifyLogs = []
+        auxiliaryFnVerified = false
         currentStep = 3
         
         // 검증 콜백: HID가 적용되었으므로 들어오는 keyCode가 이미 desired key여야 함
         let desiredSet = Set(desiredKeys)
+        let fnKeyCode = Int64(kVK_Function)
         
         appState.keyInterceptor.onVerifyKeyEvent = { [self] incomingKey, _, _ in
             guard currentStep == 3 else { return }
@@ -615,6 +754,9 @@ struct ModifierLayoutView: View {
                 // 원하는 키 중 하나가 도착 → 매핑 성공
                 verifyResults[incomingKey] = true
                 verifyLogs.append((keyCode: incomingKey, label: "\(label) ✅ 매핑 확인", pass: true))
+            } else if auxiliaryFnKey != nil && incomingKey == fnKeyCode {
+                auxiliaryFnVerified = true
+                verifyLogs.append((keyCode: incomingKey, label: "Fn ✅ 보조 키 확인", pass: true))
             } else if knownModifiers.contains(incomingKey) {
                 // modifier 키인데 desired에 없는 경우 → 매핑 안 된 키
                 verifyLogs.append((keyCode: incomingKey, label: "\(label) — 미매핑", pass: false))
@@ -631,7 +773,8 @@ struct ModifierLayoutView: View {
         let profile = SavedKeyboardProfile(
             name: newProfileName.trimmingCharacters(in: .whitespaces),
             physicalKeys: detectedPhysicalKeys,
-            desiredKeys: desiredKeys
+            desiredKeys: desiredKeys,
+            auxiliaryFnKey: auxiliaryFnKey
         )
         appState.profileStore.add(profile)
         applyProfile(profile)

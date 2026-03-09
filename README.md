@@ -77,6 +77,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 ### 5. 키보드 프로필 참고
 
 - 프로필 위저드는 스페이스바 왼쪽 modifier가 3개인 키보드와 4개인 키보드를 모두 지원합니다
+- 3키 키보드에서는 `RCtrl`, `Caps`, `RShift` 중 하나를 보조 `Fn` 키로 지정할 수 있습니다
 - 프로필 이름은 구분용 라벨입니다
 - 자동 전환은 키보드 장치명이 아니라 현재 앱의 Bundle ID 기준으로 동작합니다
 
