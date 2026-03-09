@@ -230,11 +230,10 @@ class AppState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.hasAccessibilityPermission = true
-                if self?.isEngineRunning == false {
-                    self?.toggleEngine()
-                }
+            guard let self = self else { return }
+            self.hasAccessibilityPermission = true
+            if !self.isEngineRunning {
+                self.toggleEngine()
             }
         }
     }
