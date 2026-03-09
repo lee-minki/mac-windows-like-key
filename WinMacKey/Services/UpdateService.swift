@@ -55,6 +55,7 @@ class UpdateService: ObservableObject {
             var request = URLRequest(url: url)
             request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
             request.timeoutInterval = 10
+            downloadURL = nil
             
             let (data, response) = try await URLSession.shared.data(for: request)
             
@@ -168,7 +169,8 @@ class UpdateService: ObservableObject {
         
         let expectedLength = response.expectedContentLength
         let tempDir = FileManager.default.temporaryDirectory
-        let tempFile = tempDir.appendingPathComponent("WinMacKey-update.zip")
+        let fileExtension = url.pathExtension.isEmpty ? "zip" : url.pathExtension
+        let tempFile = tempDir.appendingPathComponent("WinMacKey-update.\(fileExtension)")
         
         // 기존 파일 제거
         try? FileManager.default.removeItem(at: tempFile)
@@ -189,8 +191,9 @@ class UpdateService: ObservableObject {
                 buffer.removeAll(keepingCapacity: true)
                 
                 if expectedLength > 0 {
+                    let progress = min(Double(downloaded) / Double(expectedLength) * 0.75, 0.75)
                     await MainActor.run {
-                        downloadProgress = min(Double(downloaded) / Double(expectedLength) * 0.75, 0.75)
+                        downloadProgress = progress
                     }
                 }
             }
@@ -205,8 +208,20 @@ class UpdateService: ObservableObject {
         return (tempFile, response)
     }
     
+    /// 다운로드된 업데이트 파일을 풀어 .app 경로를 반환
+    private func extractUpdate(from downloadedFileURL: URL) throws -> URL {
+        switch downloadedFileURL.pathExtension.lowercased() {
+        case "zip":
+            return try extractZipUpdate(from: downloadedFileURL)
+        case "dmg":
+            return try extractDmgUpdate(from: downloadedFileURL)
+        default:
+            throw UpdateError.unsupportedArchiveFormat(downloadedFileURL.pathExtension)
+        }
+    }
+
     /// .zip 압축 해제 → .app 경로 반환
-    private func extractUpdate(from zipURL: URL) throws -> URL {
+    private func extractZipUpdate(from zipURL: URL) throws -> URL {
         let extractDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("WinMacKeyUpdate", isDirectory: true)
         
@@ -228,24 +243,56 @@ class UpdateService: ObservableObject {
             throw UpdateError.extractFailed
         }
         
-        // .app 찾기 (재귀 탐색)
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: extractDir, includingPropertiesForKeys: nil)
-        
-        // 1차: 직접 .app 찾기
-        if let appURL = contents.first(where: { $0.pathExtension == "app" }) {
-            return appURL
+        return try findAppBundle(in: extractDir)
+    }
+
+    /// .dmg 마운트 후 .app을 임시 디렉터리로 복사하여 반환
+    private func extractDmgUpdate(from dmgURL: URL) throws -> URL {
+        let fm = FileManager.default
+        let mountPoint = fm.temporaryDirectory.appendingPathComponent("WinMacKeyMount-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+
+        let attachTask = Process()
+        attachTask.launchPath = "/usr/bin/hdiutil"
+        attachTask.arguments = ["attach", dmgURL.path, "-nobrowse", "-readonly", "-mountpoint", mountPoint.path]
+        attachTask.standardOutput = Pipe()
+        attachTask.standardError = Pipe()
+
+        try attachTask.run()
+        attachTask.waitUntilExit()
+
+        guard attachTask.terminationStatus == 0 else {
+            throw UpdateError.extractFailed
         }
-        
-        // 2차: 하위 디렉토리에서 찾기
-        for dir in contents where dir.hasDirectoryPath {
-            let subContents = try FileManager.default.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: nil)
-            if let appURL = subContents.first(where: { $0.pathExtension == "app" }) {
-                return appURL
+
+        defer {
+            let detachTask = Process()
+            detachTask.launchPath = "/usr/bin/hdiutil"
+            detachTask.arguments = ["detach", mountPoint.path]
+            detachTask.standardOutput = Pipe()
+            detachTask.standardError = Pipe()
+            try? detachTask.run()
+            detachTask.waitUntilExit()
+            try? fm.removeItem(at: mountPoint)
+        }
+
+        let mountedAppURL = try findAppBundle(in: mountPoint)
+        let copiedAppURL = fm.temporaryDirectory.appendingPathComponent("WinMacKeyUpdate-\(UUID().uuidString).app")
+        try? fm.removeItem(at: copiedAppURL)
+        try fm.copyItem(at: mountedAppURL, to: copiedAppURL)
+        return copiedAppURL
+    }
+
+    private func findAppBundle(in directory: URL) throws -> URL {
+        if let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for case let url as URL in enumerator where url.pathExtension == "app" {
+                return url
             }
         }
-        
         throw UpdateError.appNotFoundInArchive
     }
     
@@ -340,6 +387,7 @@ enum UpdateError: LocalizedError {
     case downloadFailed
     case extractFailed
     case appNotFoundInArchive
+    case unsupportedArchiveFormat(String)
     case installFailed(String)
     
     var errorDescription: String? {
@@ -360,6 +408,8 @@ enum UpdateError: LocalizedError {
             return "압축 해제에 실패했습니다."
         case .appNotFoundInArchive:
             return "다운로드한 파일에서 앱을 찾을 수 없습니다."
+        case .unsupportedArchiveFormat(let ext):
+            return "자동 설치를 지원하지 않는 업데이트 형식입니다. (\(ext))"
         case .installFailed(let reason):
             return "설치 실패: \(reason)"
         }

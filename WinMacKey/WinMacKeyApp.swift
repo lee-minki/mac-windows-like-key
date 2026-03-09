@@ -5,8 +5,8 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
-        // 앱 종료 시 HID 매핑 해제 (동기 — 프로세스 종료 전 완료 보장)
-        HIDRemapper.shared.clearMappingsSync()
+        // 앱 종료 시 모든 HID 매핑 해제 — 글로벌 + 내장 키보드 디바이스별 (동기)
+        HIDRemapper.shared.clearAllMappingsSync()
     }
 }
 
@@ -48,6 +48,7 @@ struct WinMacKeyApp: App {
         // Update Window
         Window("소프트웨어 업데이트", id: "update-window") {
             UpdateView()
+                .environmentObject(appState)
         }
         .defaultSize(width: 400, height: 350)
         .windowResizability(.contentSize)
@@ -125,11 +126,13 @@ class AppState: ObservableObject {
     private var defaultMappingProfileId: String?
 
     // MARK: - VDI Internal Keyboard Mapping
-    // VDI 포커스 시 내장 키보드의 Fn→Ctrl로 교체 (Mac 로컬에서는 Fn→Cmd)
+    // VDI 포커스 시 내장 키보드만 Windows 감각의 좌측 modifier 레이아웃으로 교체
     // 외장 키보드는 글로벌 매핑 그대로 유지
     private static let vdiInternalKeyboardMappings: [Int64: Int64] = [
-        Int64(kVK_Function): Int64(kVK_Control),   // Fn → Ctrl (VDI Windows용)
-        Int64(kVK_Control): Int64(kVK_Function),    // Ctrl → Fn
+        Int64(kVK_Function): Int64(kVK_Control),   // Fn → Ctrl
+        Int64(kVK_Control): Int64(kVK_Function),   // Control → Fn
+        Int64(kVK_Option): Int64(kVK_Command),     // Option → Windows key
+        Int64(kVK_Command): Int64(kVK_Option),     // Command → Alt
     ]
     
     init() {
@@ -140,12 +143,23 @@ class AppState: ObservableObject {
         stateManager.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        updateService.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        stateManager.onSystemInputSourceChanged = { [weak self] in
+            self?.keyInterceptor.completeInputSourceCommitWindow()
+        }
 
         // Right Cmd/Opt 즉시 전환 → 한영전환 연결
         // EventTap은 메인 RunLoop에서 실행되므로 assumeIsolated 안전
         keyInterceptor.onInputSourceToggle = { [weak self] in
             MainActor.assumeIsolated {
-                self?.stateManager.handleTrigger()
+                let isVdiMode = self?.isVdiMode == true
+                if !isVdiMode {
+                    self?.keyInterceptor.beginInputSourceCommitWindow()
+                }
+                self?.stateManager.handleTrigger(isVdiMode: isVdiMode)
             }
         }
 
@@ -179,10 +193,10 @@ class AppState: ObservableObject {
             // VDI 모드 전환: 내장 키보드 매핑 교체
             if isNowVdi && !wasVdi {
                 self.switchToVdiMapping()
-                LogService.shared.info("VDI mode: internal keyboard → Fn=Ctrl (\(appName))", category: "VDI")
+                LogService.shared.info("VDI mode: internal keyboard → Fn=Ctrl, Option=Win, Command=Alt (\(appName))", category: "VDI")
             } else if !isNowVdi && wasVdi {
                 self.switchToMacMapping()
-                LogService.shared.info("Mac mode: internal keyboard → Fn=Cmd (\(appName))", category: "VDI")
+                LogService.shared.info("Mac mode: internal keyboard override cleared (\(appName))", category: "VDI")
             }
 
             // Auto-switch profile if a matching per-app profile exists
@@ -198,14 +212,12 @@ class AppState: ObservableObject {
             }
         }
 
-        // AppState 초기화 완료 상태 로깅
-        LogService.shared.info("AppState initialized", category: "App")
+        checkPermissions()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
-        
-        LogService.shared.info("AppState initialized", category: "App")
-        LogService.shared.info("Accessibility: \(hasAccessibilityPermission)", category: "App")
+
+        LogService.shared.info("AppState initialized (accessibility: \(hasAccessibilityPermission))", category: "App")
     }
     
     func checkPermissions() {
@@ -240,7 +252,7 @@ class AppState: ObservableObject {
 
     // MARK: - VDI / Mac Mapping Switch
 
-    /// VDI 모드: 내장 키보드만 Fn→Ctrl로 교체 (외장 키보드는 글로벌 매핑 유지)
+    /// VDI 모드: 내장 키보드만 Windows 감각 레이아웃으로 교체 (외장 키보드는 글로벌 매핑 유지)
     func switchToVdiMapping() {
         HIDRemapper.shared.applyMappingsForInternalKeyboardSync(Self.vdiInternalKeyboardMappings)
     }
@@ -255,12 +267,17 @@ class AppState: ObservableObject {
     func toggleEngine() {
         if isEngineRunning {
             keyInterceptor.stop()
+            isEngineRunning = false
             LogService.shared.info("Engine stopped", category: "Engine")
         } else {
-            keyInterceptor.start()
-            LogService.shared.info("Engine started", category: "Engine")
+            let started = keyInterceptor.start()
+            isEngineRunning = started
+            if started {
+                LogService.shared.info("Engine started", category: "Engine")
+            } else {
+                LogService.shared.error("Engine failed to start", category: "Engine")
+            }
         }
-        isEngineRunning.toggle()
     }
     
     /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.

@@ -3,9 +3,11 @@ import SwiftUI
 /// 업데이트 확인 뷰
 /// GitHub Releases에서 자동 다운로드 + 설치 + 재시작
 struct UpdateView: View {
-    @StateObject private var updateService = UpdateService()
+    @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @State private var showInstallConfirm = false
+
+    private var updateService: UpdateService { appState.updateService }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -244,8 +246,10 @@ struct UpdateView: View {
 // MARK: - Settings에서 사용할 간단한 업데이트 Row
 
 struct UpdateSettingsRow: View {
-    @StateObject private var updateService = UpdateService()
+    @EnvironmentObject var appState: AppState
     @State private var showUpdateSheet = false
+
+    private var updateService: UpdateService { appState.updateService }
     
     var body: some View {
         HStack {
@@ -275,6 +279,7 @@ struct UpdateSettingsRow: View {
         }
         .sheet(isPresented: $showUpdateSheet) {
             UpdateView()
+                .environmentObject(appState)
         }
         .task {
             if updateService.autoCheckEnabled {
@@ -286,4 +291,5 @@ struct UpdateSettingsRow: View {
 
 #Preview {
     UpdateView()
+        .environmentObject(AppState())
 }

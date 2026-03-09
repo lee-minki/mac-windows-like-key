@@ -7,6 +7,7 @@ import os.log
 class StateManager: ObservableObject {
     
     let inputSourceManager = InputSourceManager()
+    var onSystemInputSourceChanged: (() -> Void)?
     
     /// 현재 입력 소스 표시 이름 (UI 바인딩용)
     @Published var currentSourceName: String = ""
@@ -18,6 +19,8 @@ class StateManager: ObservableObject {
     
     private let logger = Logger(subsystem: "com.winmackey.app", category: "StateManager")
     private var inputSourceObserver: NSObjectProtocol?
+    private var inputSourcePollTask: Task<Void, Never>?
+    private let toggleRetryLimit = 1
     
     init() {
         refreshCurrentSource()
@@ -31,17 +34,24 @@ class StateManager: ObservableObject {
         refreshCurrentSource()
     }
     
-    /// 한영전환 트리거 (Right Cmd tap-only에서 호출)
-    /// Control+Space 시스템 단축키를 합성하여 macOS에 전환을 위임합니다.
-    /// 실제 상태 갱신은 DistributedNotification 감지(observeSystemInputSourceChanges)에서 처리됩니다.
-    func handleTrigger() {
+    /// 한영전환 트리거 (Right Cmd/Opt에서 호출)
+    /// - Mac 로컬 / 원격 Mac: Control+Space
+    /// - Windows VDI: F16 릴레이 키
+    /// 실제 상태 갱신은 macOS 입력소스 변경 알림에서 처리됩니다.
+    func handleTrigger(isVdiMode: Bool) {
         let beforeName = inputSourceManager.currentSourceShortName()
-
-        // Control+Space 합성 이벤트로 시스템 입력소스 전환
-        inputSourceManager.toggleViaKeyboardShortcut()
+        let beforeIndex = inputSourceManager.currentSourceIndex()
 
         switchCount += 1
-        logger.info("Toggle triggered: was \(beforeName), posted Control+Space (state update via notification)")
+
+        if isVdiMode {
+            inputSourceManager.emitVDIRelayKey()
+            logger.info("Toggle triggered: was \(beforeName), posted F16 relay for VDI")
+        } else {
+            inputSourceManager.toggleViaKeyboardShortcut()
+            startPollingForInputSourceChange(from: beforeIndex, retryCount: 0)
+            logger.info("Toggle triggered: was \(beforeName), posted Control+Space (state update via notification)")
+        }
     }
     
     /// 현재 상태 새로고침
@@ -62,12 +72,48 @@ class StateManager: ObservableObject {
             queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
+                self?.inputSourcePollTask?.cancel()
+                self?.inputSourcePollTask = nil
                 self?.refreshCurrentSource()
+                self?.onSystemInputSourceChanged?()
             }
+        }
+    }
+
+    private func startPollingForInputSourceChange(from previousIndex: Int, retryCount: Int) {
+        inputSourcePollTask?.cancel()
+        inputSourcePollTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 2_000_000)
+
+                if Task.isCancelled { return }
+
+                let currentIndex = self.inputSourceManager.currentSourceIndex()
+                if currentIndex != 0 && currentIndex != previousIndex {
+                    self.refreshCurrentSource()
+                    self.onSystemInputSourceChanged?()
+                    self.inputSourcePollTask = nil
+                    return
+                }
+            }
+
+            if retryCount < toggleRetryLimit {
+                self.logger.warning("Toggle verification timeout; retrying Control+Space once")
+                self.inputSourceManager.toggleViaKeyboardShortcut()
+                self.startPollingForInputSourceChange(from: previousIndex, retryCount: retryCount + 1)
+                return
+            }
+
+            self.logger.warning("Toggle verification timeout after retry")
+            self.onSystemInputSourceChanged?()
+            self.inputSourcePollTask = nil
         }
     }
     
     deinit {
+        inputSourcePollTask?.cancel()
         if let observer = inputSourceObserver {
             DistributedNotificationCenter.default().removeObserver(observer)
         }

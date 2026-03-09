@@ -21,6 +21,8 @@ struct InputSourceInfo: Identifiable, Codable, Equatable, Hashable {
 class InputSourceManager {
     
     private let logger = Logger(subsystem: "com.winmackey.app", category: "InputSourceManager")
+    private static let syntheticEventMarker: Int64 = 0x57494E4B
+    private static let vdiRelayKeyCode = CGKeyCode(kVK_F16)
     
     /// 사용자가 설정한 언어 페어 (Source 1 ↔ Source 2 토글)
     /// UserDefaults에서 로드되며, 비어있으면 자동 감지합니다.
@@ -96,30 +98,85 @@ class InputSourceManager {
     /// TISSelectInputSource 대신 시스템 단축키를 사용하여:
     /// - CJKV 입력기의 조합 버퍼를 macOS가 자동 commit
     /// - 메뉴바 아이콘을 macOS가 자동 갱신
-    /// - VDI 앱에서도 Control+Space 이벤트가 전달됨
+    /// - 로컬 macOS 및 원격 Mac 세션에서 동일하게 동작
     func toggleViaKeyboardShortcut() {
-        // Control+Space keyDown
-        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Space), keyDown: true) else {
-            logger.error("Failed to create Control+Space keyDown event")
+        guard let controlDown = CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: CGKeyCode(kVK_Control),
+                keyDown: true
+        ) else {
+            logger.error("Failed to create Control keyDown event")
             return
         }
-        keyDown.flags = .maskControl
+        controlDown.flags = .maskControl
 
-        // Control+Space keyUp
-        guard let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Space), keyDown: false) else {
-            logger.error("Failed to create Control+Space keyUp event")
+        guard let spaceDown = CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: CGKeyCode(kVK_Space),
+                keyDown: true
+        ) else {
+            logger.error("Failed to create Space keyDown event")
             return
         }
-        keyUp.flags = .maskControl
+        spaceDown.flags = .maskControl
 
-        // 합성 이벤트 마커 설정 (CGEventTap 재진입 방지)
-        keyDown.setIntegerValueField(.eventSourceUserData, value: 0x57494E4B)
-        keyUp.setIntegerValueField(.eventSourceUserData, value: 0x57494E4B)
+        guard let spaceUp = CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: CGKeyCode(kVK_Space),
+                keyDown: false
+        ) else {
+            logger.error("Failed to create Space keyUp event")
+            return
+        }
+        spaceUp.flags = .maskControl
 
-        keyDown.post(tap: .cgSessionEventTap)
-        keyUp.post(tap: .cgSessionEventTap)
+        guard let controlUp = CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: CGKeyCode(kVK_Control),
+                keyDown: false
+        ) else {
+            logger.error("Failed to create Control keyUp event")
+            return
+        }
+        controlUp.flags = []
 
-        logger.info("Toggle: posted Control+Space shortcut")
+        // Physical Control+Space is not just "Space with a control flag".
+        // A short full chord sequence is more likely to be handled like the real shortcut.
+        post(event: controlDown)
+        usleep(1_000)
+        post(event: spaceDown)
+        usleep(1_000)
+        post(event: spaceUp)
+        usleep(1_000)
+        post(event: controlUp)
+
+        logger.info("Toggle: posted Control down + Space down/up + Control up")
+    }
+
+    /// Windows VDI 클라이언트가 Right Alt(AltGr)로 매핑할 수 있는 릴레이 키를 보냅니다.
+    /// 현재 기본값은 F16입니다.
+    func emitVDIRelayKey() {
+        guard let keyDown = CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: Self.vdiRelayKeyCode,
+                keyDown: true
+        ) else {
+            logger.error("Failed to create F16 relay keyDown event")
+            return
+        }
+
+        guard let keyUp = CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: Self.vdiRelayKeyCode,
+                keyDown: false
+        ) else {
+            logger.error("Failed to create F16 relay keyUp event")
+            return
+        }
+
+        post(event: keyDown)
+        post(event: keyUp)
+        logger.info("Toggle: posted VDI relay key F16")
     }
     
     // MARK: - 자동 감지
@@ -173,5 +230,10 @@ class InputSourceManager {
             return sourceParts.prefix(3).joined(separator: ".") == targetParts.prefix(3).joined(separator: ".")
         }
         return false
+    }
+
+    private func post(event: CGEvent) {
+        event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+        event.post(tap: .cgSessionEventTap)
     }
 }

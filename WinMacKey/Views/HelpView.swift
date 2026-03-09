@@ -80,19 +80,22 @@ struct HelpView: View {
                     number: 3,
                     title: "입력 소스 단축키 확인",
                     description: """
-                    macOS에 기본으로 설정된 "이전 입력 소스 전환" 단축키(⌃Space)가 \
-                    WinMac Key와 간섭할 수 있습니다. 비활성화하는 것을 권장합니다.
+                    WinMac Key는 Right Command/Option 입력을 내부적으로 \
+                    "이전 입력 소스 선택" 단축키(⌃Space)로 합성합니다. \
+                    이 항목이 켜져 있고 Control+Space로 설정되어 있어야 합니다.
                     """,
                     steps: [
                         "시스템 설정 → 키보드 → 키보드 단축키... 를 클릭합니다.",
                         "좌측 목록에서 \"입력 소스\" 를 선택합니다.",
-                        "\"이전 입력 소스 선택\" 의 체크박스를 해제합니다.",
-                        "\"입력 메뉴에서 다음 소스 선택\" 의 체크박스도 해제합니다.",
+                        "\"이전 입력 소스 선택\" 의 체크박스가 켜져 있는지 확인합니다.",
+                        "단축키가 \"Control + Space\" 인지 확인합니다.",
+                        "다른 키로 되어 있다면 더블클릭 후 \"Control + Space\" 로 변경합니다.",
+                        "\"입력 메뉴에서 다음 소스 선택\" 은 필요 시 비활성화해도 됩니다.",
                         "\"완료\" 를 클릭합니다."
                     ],
                     warning: """
-                    체크박스를 해제하면 해당 단축키가 비활성화됩니다. \
-                    별도의 키를 등록할 필요 없이, 체크만 해제하시면 됩니다.
+                    이 항목이 꺼져 있거나 다른 키로 바뀌어 있으면 \
+                    WinMac Key의 한/영 전환이 동작하지 않습니다.
                     """
                 )
                 
@@ -151,14 +154,16 @@ struct HelpView: View {
                     }
                 }
                 
-                GroupBox("VMware 호환 (Karabiner 드라이버 필요)") {
+                GroupBox("VDI 호환 (추가 드라이버 불필요)") {
                     VStack(spacing: 0) {
                         mappingHeader
                         Divider()
-                        mappingRow("Right Command (⌘)", "Right Option (⌥)", "VMware Horizon 등 원격 데스크톱에서 Alt 키로 한/영 전환", .red)
+                        mappingRow("Right Command (⌘)", "F16", "WinMac Key가 Windows VDI용 릴레이 키를 전송", .red)
+                        Divider()
+                        mappingRow("VDI Client", "Right Alt", "Omnissa Horizon 등에서 F16을 Right Alt로 매핑", .orange)
                     }
                     
-                    Text("※ Karabiner-DriverKit-VirtualHIDDevice 설치 시 자동 활성화. VMware 등 가상화 앱이 포커스되면 자동 적용됩니다.")
+                    Text("※ 로컬 macOS/원격 Mac은 Control+Space, Windows VDI는 F16 릴레이 키를 사용합니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -274,22 +279,21 @@ struct HelpView: View {
                 // macOS Shortcuts
                 stepCard(
                     number: 3,
-                    title: "macOS 입력 소스 단축키 비활성화",
+                    title: "macOS 입력 소스 단축키 확인",
                     description: """
-                    macOS의 기본 입력 소스 전환 단축키가 WinMac Key와 간섭할 수 있습니다. \
-                    체크박스를 해제하여 비활성화합니다.
+                    WinMac Key의 로컬 macOS/원격 Mac 경로는 "이전 입력 소스 선택" 단축키를 \
+                    Control+Space로 합성합니다. 비활성화하지 말고, 올바른 키로 맞춰 두어야 합니다.
                     """,
                     steps: [
                         "시스템 설정 → 키보드 → 키보드 단축키... 를 클릭합니다.",
                         "좌측 목록에서 \"입력 소스\" 를 선택합니다.",
-                        "\"이전 입력 소스 선택\" 체크박스를 해제합니다.",
-                        "\"입력 메뉴에서 다음 소스 선택\" 체크박스를 해제합니다.",
+                        "\"이전 입력 소스 선택\" 체크박스가 켜져 있는지 확인합니다.",
+                        "단축키가 \"Control + Space\" 인지 확인하고, 다르면 변경합니다.",
+                        "\"입력 메뉴에서 다음 소스 선택\" 은 필요 시 비활성화합니다.",
                         "\"완료\" 를 클릭합니다."
                     ],
                     warning: """
-                    이 단축키들은 체크 해제만 하면 됩니다. \
-                    다른 키를 등록하거나 초기화할 필요 없이, \
-                    체크박스를 끄는 것만으로 충분합니다.
+                    이 항목을 끄면 로컬 macOS/원격 Mac 환경에서 WinMac Key 전환이 동작하지 않습니다.
                     """
                 )
                 
@@ -368,8 +372,21 @@ struct HelpView: View {
                     answer: """
                     Right Command 키를 짧게 \"탭\" 해야 합니다. 길게 누르거나, 누른 상태에서 \
                     다른 키를 함께 누르면 한/영 전환이 아닌 단축키 조합으로 인식됩니다.\n\n\
+                    또한 macOS의 \"이전 입력 소스 선택\"이 반드시 `Control + Space`로 켜져 있어야 합니다:\n\
+                    시스템 설정 → 키보드 → 키보드 단축키... → 입력 소스.\n\n\
                     또한 macOS에 한글 입력 소스가 등록되어 있어야 합니다:\n\
                     시스템 설정 → 키보드 → 입력 소스 → 편집... → + 버튼으로 \"한국어 - 2벌식\" 추가.
+                    """
+                )
+
+                faqItem(
+                    question: "입력 소스 전환창이 뜨거나 두세 번 눌러야 바뀌어요.",
+                    answer: """
+                    대부분 WinMac Key 외의 다른 앱이 같은 전환 키를 함께 처리할 때 생깁니다.\n\n\
+                    1. Karabiner-Elements에서 `right_command`, `right_option`, `Control+Space`, `F18/F19` 관련 규칙을 끄세요.\n\
+                    2. Leader Key 류 앱에서 `Control+Space`를 쓰고 있지 않은지 확인하세요.\n\
+                    3. Hammerspoon/BetterTouchTool/Keyboard Maestro에 한영 전환 핫키가 있으면 해제하세요.\n\n\
+                    특히 Karabiner의 Right Command 규칙이 켜져 있으면 한 번 눌렀을 때 전환이 중복 실행되어, 즉시 토글되지 않거나 입력 소스 전환창이 뜰 수 있습니다.
                     """
                 )
                 
@@ -378,10 +395,10 @@ struct HelpView: View {
                     answer: """
                     VMware Horizon, Parallels Desktop, Microsoft Remote Desktop 같은 \
                     원격 데스크톱 앱에서는 Right Command 키가 Windows에 전달되지 않을 수 있습니다.\n\n\
-                    Karabiner-DriverKit-VirtualHIDDevice를 설치하면 WinMac Key가 \
-                    가상 키보드를 통해 Right Alt 키를 직접 전달합니다. \
-                    드라이버 설치 후 자동으로 동작하며, 별도 설정이 필요 없습니다.\n\n\
-                    설치 방법: GitHub 레포의 docs/VDI_SETUP.md를 참조하세요.
+                    현재 버전은 별도 드라이버 없이 동작합니다. 로컬 macOS/원격 Mac에서는 \
+                    \"이전 입력 소스 선택\"이 `Control + Space`로 켜져 있어야 하고, \
+                    Windows VDI 클라이언트에서는 `F16 → Right Alt` 매핑을 추가해야 합니다.\n\n\
+                    설정 방법은 GitHub 레포의 docs/VDI_SETUP.md를 참조하세요.
                     """
                 )
                 

@@ -23,6 +23,12 @@ class KeyInterceptor: ObservableObject {
     // Right Cmd/Opt toggle 상태 (연속 토글 방지용)
     private var triggerKeyPressed = false
     private var previousFlags: CGEventFlags = []
+    private var awaitingInputSourceCommit = false
+    private var bufferedKeyEvents: [CGEvent] = []
+    private var bufferedFlushWorkItem: DispatchWorkItem?
+
+    private let inputSourceCommitTimeout: TimeInterval = 0.040
+    private let maxBufferedEventCount = 8
 
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
@@ -127,7 +133,6 @@ class KeyInterceptor: ObservableObject {
         keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
         
         // HID 레벨 리매핑 적용 (Fn/Globe 포함)
-        // 참고: Right Cmd ↔ Right Option 스왑은 Karabiner DriverKit이 처리
         HIDRemapper.shared.applyMappings(keyMappings)
     }
     
@@ -149,8 +154,9 @@ class KeyInterceptor: ObservableObject {
     
     // MARK: - Engine Control
     
-    func start() {
-        guard !isRunning else { return }
+    @discardableResult
+    func start() -> Bool {
+        guard !isRunning else { return true }
         
         logger.info("Attempting to start engine...")
         
@@ -170,7 +176,7 @@ class KeyInterceptor: ObservableObject {
             userInfo: nil
         ) else {
             logger.error("Failed to create event tap. Check Accessibility permissions.")
-            return
+            return false
         }
         
         eventTap = tap
@@ -186,6 +192,7 @@ class KeyInterceptor: ObservableObject {
         
         // EventTap 자동 재활성화 타이머 시작
         startReactivationTimer()
+        return true
     }
     
     func stop() {
@@ -205,11 +212,32 @@ class KeyInterceptor: ObservableObject {
         eventTap = nil
         runLoopSource = nil
         isRunning = false
+        cancelPendingInputSourceCommit(dropBufferedEvents: true)
         
         // HID 매핑도 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
         
         logger.info("Engine stopped.")
+    }
+
+    func beginInputSourceCommitWindow() {
+        guard !isVdiAppFocused else { return }
+
+        if awaitingInputSourceCommit {
+            flushBufferedKeyEvents(reason: "superseded")
+        }
+        cancelPendingInputSourceCommit(dropBufferedEvents: true)
+        awaitingInputSourceCommit = true
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.flushBufferedKeyEvents(reason: "timeout")
+        }
+        bufferedFlushWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + inputSourceCommitTimeout, execute: workItem)
+    }
+
+    func completeInputSourceCommitWindow() {
+        flushBufferedKeyEvents(reason: "input-source-changed")
     }
     
     // MARK: - EventTap Reactivation
@@ -276,10 +304,11 @@ class KeyInterceptor: ObservableObject {
             }
         }
         
-        // ====== 트리거 키 처리 (한영 전환 / VDI 모드) ======
+        // ====== 트리거 키 처리 (한영 전환 / VDI 릴레이) ======
         // 핵심 원칙: 트리거 키 이벤트를 시스템에 그대로 전달하지 않음 (suppress).
         // → 우발적인 Cmd+Space(Spotlight) 등 단축키 발동 원천 차단.
-        // VDI 모드는 Right Option 이벤트를 합성(inject)하여 대체.
+        // → AppState/StateManager가 현재 컨텍스트에 따라
+        //    macOS 입력소스 전환(Control+Space) 또는 VDI 릴레이 키(F16)를 선택.
 
         if keyCode == triggerKey && type == .flagsChanged {
 
@@ -288,15 +317,13 @@ class KeyInterceptor: ObservableObject {
             // NX_DEVICERCMDKEYMASK=0x10, NX_DEVICERALTKEYMASK=0x40 (CGEventFlags.rawValue 하위 비트)
             let deviceRightFlag: UInt64 = triggerKey == rightCmdKeyCode ? 0x10 : 0x40
             let isDown = event.flags.rawValue & deviceRightFlag != 0
+            let wasDown = interceptor.previousFlags.rawValue & deviceRightFlag != 0
             interceptor.previousFlags = event.flags
 
             // 상태 갱신 (반복 토글 방지)
             interceptor.triggerKeyPressed = isDown
 
-            // ── 통합 전환: Mac/VDI 모두 동일하게 Control+Space 주입 ──
-            // Mac 로컬: macOS가 입력소스 전환 처리
-            // VDI 모드: VDI 앱이 Control+Space를 수신 → 내부 설정으로 Right Alt 변환
-            if isDown {
+            if isDown && !wasDown {
                 interceptor.logger.info("⚡️ Trigger key detected (VDI=\(interceptor.isVdiAppFocused))")
                 interceptor.onInputSourceToggle?()
             }
@@ -345,6 +372,11 @@ class KeyInterceptor: ObservableObject {
         
         // 로깅
         interceptor.logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
+
+        if interceptor.awaitingInputSourceCommit && keyCode != triggerKey {
+            interceptor.bufferKeyEvent(finalEvent)
+            return nil
+        }
         
         // 검증 콜백 호출 (Step 1 키 감지 / Step 3 실시간 확인용)
         if let verify = interceptor.onVerifyKeyEvent {
@@ -369,6 +401,41 @@ class KeyInterceptor: ObservableObject {
             return Unmanaged.passRetained(finalEvent)
         }
         return Unmanaged.passUnretained(finalEvent)
+    }
+
+    private func bufferKeyEvent(_ event: CGEvent) {
+        bufferedKeyEvents.append(event)
+        if bufferedKeyEvents.count >= maxBufferedEventCount {
+            flushBufferedKeyEvents(reason: "buffer-limit")
+        }
+    }
+
+    private func flushBufferedKeyEvents(reason: String) {
+        bufferedFlushWorkItem?.cancel()
+        bufferedFlushWorkItem = nil
+
+        guard awaitingInputSourceCommit else { return }
+        awaitingInputSourceCommit = false
+
+        guard !bufferedKeyEvents.isEmpty else { return }
+        let events = bufferedKeyEvents
+        bufferedKeyEvents.removeAll()
+
+        for event in events {
+            event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+            event.post(tap: .cgSessionEventTap)
+        }
+
+        logger.info("Replayed \(events.count) buffered key events (\(reason))")
+    }
+
+    private func cancelPendingInputSourceCommit(dropBufferedEvents: Bool = false) {
+        bufferedFlushWorkItem?.cancel()
+        bufferedFlushWorkItem = nil
+        awaitingInputSourceCommit = false
+        if dropBufferedEvents {
+            bufferedKeyEvents.removeAll()
+        }
     }
     
     // MARK: - Synthetic Event Injection (reserved for future use)

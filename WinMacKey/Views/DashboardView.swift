@@ -7,6 +7,11 @@ struct DashboardView: View {
     @Environment(\.openWindow) var openWindow
     @State private var selectedTab = 0
     @AppStorage("eventViewerAlwaysOnTop") private var eventViewerAlwaysOnTop: Bool = false
+
+    private var triggerShortcutDescription: String {
+        let trigger = appState.toggleTriggerKey == "rightOpt" ? "Right Option" : "Right Command"
+        return "\(trigger) → Ctrl+Space (Mac) / F16 (VDI)"
+    }
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -43,7 +48,7 @@ struct DashboardView: View {
                             Text("전환 방식")
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("Right Cmd → Ctrl+Space")
+                            Text(triggerShortcutDescription)
                                 .font(.system(.caption, design: .monospaced))
                         }
 
@@ -147,7 +152,6 @@ struct DashboardView: View {
                 cardView(title: "General Settings", icon: "gearshape") {
                     VStack(alignment: .leading, spacing: 12) {
                         // 시각적 키보드 레이아웃 설정
-                        ModifierLayoutView()
                         ModifierLayoutView()
                     }
                 }

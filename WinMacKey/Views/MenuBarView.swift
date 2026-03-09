@@ -6,6 +6,11 @@ struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openWindow) var openWindow
     @Environment(\.openSettings) var openSettings
+
+    private var triggerShortcutDescription: String {
+        let trigger = appState.toggleTriggerKey == "rightOpt" ? "Right Option" : "Right Command"
+        return "\(trigger) → Control+Space (Mac) / F16 (VDI)"
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -82,7 +87,7 @@ struct MenuBarView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("Right Command → Control+Space")
+                Text(triggerShortcutDescription)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
