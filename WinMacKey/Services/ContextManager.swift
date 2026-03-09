@@ -1,7 +1,7 @@
 import Foundation
 import AppKit
 
-/// 앱 컨텍스트 매니저 (Pro 기능)
+/// 앱 컨텍스트 매니저
 /// 현재 포커스된 앱을 감지하고 적절한 프로필을 자동 전환합니다.
 class ContextManager: ObservableObject {
     @Published var currentAppName: String = ""

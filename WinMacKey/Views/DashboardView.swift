@@ -109,8 +109,8 @@ struct DashboardView: View {
                     }
                 }
                 
-                // Context Awareness Card (Pro Feature)
-                cardView(title: "Context Awareness", icon: "app.badge.checkmark", isPro: true) {
+                // Context Awareness Card
+                cardView(title: "Context Awareness", icon: "app.badge.checkmark") {
                     VStack(spacing: 12) {
                         HStack {
                             Text("Current App")
@@ -120,7 +120,7 @@ struct DashboardView: View {
                                 .font(.system(.body, design: .monospaced))
                                 .lineLimit(1)
                         }
-                        
+
                         HStack {
                             Text("Auto-Profile")
                                 .foregroundStyle(.secondary)
@@ -132,19 +132,10 @@ struct DashboardView: View {
                                 .background(appState.contextManager.isVirtualizationApp ? .blue.opacity(0.2) : .gray.opacity(0.2))
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
                         }
-                        
-                        if appState.isPro {
-                            Text("Profiles tab에서 앱별 프로필을 관리하세요")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Button(action: {}) {
-                                Label("Pro 버전에서 사용 가능", systemImage: "lock.fill")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(true)
-                        }
+
+                        Text("Profiles tab에서 앱별 프로필을 관리하세요")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -387,24 +378,13 @@ struct DashboardView: View {
     private func cardView<Content: View>(
         title: String,
         icon: String,
-        isPro: Bool = false,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label(title, systemImage: icon)
                     .font(.headline)
-                
-                if isPro {
-                    Text("PRO")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.orange)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-                
+
                 Spacer()
             }
             

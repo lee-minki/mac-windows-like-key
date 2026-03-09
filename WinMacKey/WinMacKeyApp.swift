@@ -82,7 +82,6 @@ class AppState: ObservableObject {
     @Published var currentAppBundleId: String = ""
     @Published var currentProfileId: String?
     @Published var hasAccessibilityPermission: Bool = false
-    @Published var isPro: Bool = false  // Pro 버전 활성화 여부
     @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부
     
     // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"

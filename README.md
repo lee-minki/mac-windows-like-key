@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>macOS에서 CapsLock을 당신의 방식대로</strong><br>
+  <strong>macOS에서 Right Command로 한/영 전환</strong><br>
   <em>Right Command 한/영 전환 | 네이티브 VDI 지원 | 메뉴바 유틸리티</em>
 </p>
 
@@ -13,7 +13,6 @@
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
-  <a href="#pro-features">Pro Features</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -24,7 +23,7 @@
 - **⌨️ Right Command / Right Option 전환**: macOS 입력 소스를 즉시 토글
 - **🖥️ Native VDI Support**: 로컬 macOS/원격 Mac은 `Control+Space`, Windows VDI는 `F16 → Right Alt` 매핑으로 동작
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
-- **🧩 Keyboard Profiles**: 내장/외장 키보드에 맞춘 프로필 저장 및 앱별 자동 전환
+- **🧩 Keyboard Profiles**: 3키/4키 modifier 레이아웃 프로필 저장 및 앱별 자동 전환
 - **📍 Menu Bar Utility**: 상태 확인, 로그, Doctor, 업데이트 창에 빠르게 접근
 
 ---
@@ -40,7 +39,8 @@
 ### Build From Source
 
 ```bash
-cd ~/worksapces/mac-windows-like-key
+git clone https://github.com/lee-minki/mac-windows-like-key.git
+cd mac-windows-like-key
 xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -derivedDataPath build/DerivedData build
 open build/DerivedData/Build/Products/Debug/WinMacKey.app
 ```
@@ -74,7 +74,13 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 키 입력이 정상적으로 캡처되고 있는지 Event Viewer에서 확인하세요.
 
-### 5. 권장 추가 설정
+### 5. 키보드 프로필 참고
+
+- 프로필 위저드는 스페이스바 왼쪽 modifier가 3개인 키보드와 4개인 키보드를 모두 지원합니다
+- 프로필 이름은 구분용 라벨입니다
+- 자동 전환은 키보드 장치명이 아니라 현재 앱의 Bundle ID 기준으로 동작합니다
+
+### 6. 권장 추가 설정
 
 - `Caps Lock 키로 ABC 입력 소스 전환`은 꺼두는 것을 권장합니다
 - Windows VDI를 사용한다면 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요
@@ -88,14 +94,13 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 - Windows VDI 앱 포커스에서는 `F16`
 를 상황에 맞게 전송합니다.
 
-### 지원되는 앱
+### 검증된 환경
 
 | 앱 | Bundle ID |
 |---|---|
-| VMware Horizon | `com.vmware.horizon` |
-| VMware Fusion | `com.vmware.fusion` |
-| Parallels Desktop | `com.parallels.desktop.console` |
-| Microsoft RDP | `com.microsoft.rdc.macos` |
+| Omnissa Horizon Client | `com.omnissa.horizon.client.mac` |
+
+> 그 외 VMware Fusion, Parallels Desktop, Microsoft RDP, VirtualBox도 코드에서 자동 감지하지만 아직 테스트되지 않았습니다.
 
 ---
 
@@ -120,9 +125,9 @@ VDI 클라이언트(Omnissa 등)가 이를 윈도우의 `Right Alt`로 변환하
 
 ### 사용 기술
 
-- **IOKit HIDManager**: 저수준 키보드 이벤트 후킹
-- **SwiftUI**: 현대적인 macOS UI
-- **MenuBarExtra**: 네이티브 메뉴바 통합
+- **CGEventTap**: 키보드 이벤트 인터셉트 및 키코드 리매핑
+- **hidutil**: HID 레벨 modifier 키 리매핑 (Fn/Ctrl/Cmd/Option)
+- **SwiftUI + MenuBarExtra**: 네이티브 메뉴바 유틸리티
 
 ### 성능
 

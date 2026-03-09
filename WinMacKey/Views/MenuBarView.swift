@@ -52,14 +52,9 @@ struct MenuBarView: View {
                 Text("WinMac Key")
                     .font(.headline)
                 
-                HStack(spacing: 4) {
-                    Text(appState.isPro ? "Pro Edition" : "Free Edition")
-                        .foregroundStyle(appState.isPro ? .orange : .secondary)
-                    
-                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption)
+                Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             
             Spacer()

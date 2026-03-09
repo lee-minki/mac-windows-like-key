@@ -33,7 +33,8 @@ struct ModifierLayoutView: View {
     // Step 1: 물리 키 감지
     @State private var detectedPhysicalKeys: [Int64] = []
     @State private var waitingSlot1: Int = 0
-    private let totalSlots = 4
+    private let minimumSlots = 3
+    private let maximumSlots = 4
     
     // Step 2: 원하는 키 입력
     @State private var desiredKeys: [Int64] = []
@@ -53,6 +54,10 @@ struct ModifierLayoutView: View {
         Int64(kVK_RightCommand), Int64(kVK_RightOption), Int64(kVK_RightControl),
         Int64(kVK_CapsLock), Int64(kVK_Shift), Int64(kVK_RightShift)
     ]
+
+    private var requiredSlotCount: Int {
+        max(detectedPhysicalKeys.count, minimumSlots)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -203,13 +208,18 @@ struct ModifierLayoutView: View {
             stepIndicator
             Divider()
             
-            Text("현재 키보드의 **스페이스바 왼쪽 키**를 왼쪽부터 순서대로 눌러주세요")
-                .font(.subheadline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("현재 키보드의 **스페이스바 왼쪽 키**를 왼쪽부터 순서대로 눌러주세요")
+                    .font(.subheadline)
+                Text("3키 키보드는 3개만 눌러도 됩니다. 4번째 키가 있으면 이어서 눌러주세요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             
             keySlotRow(
                 detected: detectedPhysicalKeys,
-                waitingSlot: waitingSlot1,
-                total: totalSlots,
+                waitingSlot: detectedPhysicalKeys.count >= minimumSlots ? nil : waitingSlot1,
+                total: maximumSlots,
                 stepLabel: "물리 키"
             )
             
@@ -226,7 +236,7 @@ struct ModifierLayoutView: View {
                 
                 Spacer()
                 
-                if detectedPhysicalKeys.count == totalSlots {
+                if detectedPhysicalKeys.count >= minimumSlots {
                     Button("다음 →") {
                         goToStep2()
                     }
@@ -254,7 +264,7 @@ struct ModifierLayoutView: View {
             keySlotRow(
                 detected: desiredKeys,
                 waitingSlot: waitingSlot2,
-                total: totalSlots,
+                total: requiredSlotCount,
                 stepLabel: "원하는 키"
             )
             
@@ -299,7 +309,7 @@ struct ModifierLayoutView: View {
                 
                 Spacer()
                 
-                if desiredKeys.count == totalSlots {
+                if desiredKeys.count == requiredSlotCount {
                     Button("적용 및 검증 →") {
                         applyAndGoToStep3()
                     }
@@ -321,7 +331,7 @@ struct ModifierLayoutView: View {
             
             // 매핑 + 검증 결과
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(0..<totalSlots, id: \.self) { idx in
+                ForEach(0..<requiredSlotCount, id: \.self) { idx in
                     let physKey = detectedPhysicalKeys[idx]
                     let desKey = desiredKeys[idx]
                     
@@ -406,7 +416,7 @@ struct ModifierLayoutView: View {
     
     // MARK: - Shared Key Slot Row
     
-    private func keySlotRow(detected: [Int64], waitingSlot: Int, total: Int, stepLabel: String) -> some View {
+    private func keySlotRow(detected: [Int64], waitingSlot: Int?, total: Int, stepLabel: String) -> some View {
         HStack(spacing: 8) {
             ForEach(0..<total, id: \.self) { idx in
                 let isDetected = idx < detected.count
@@ -471,7 +481,7 @@ struct ModifierLayoutView: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
-                    ForEach(0..<totalSlots, id: \.self) { idx in
+                    ForEach(0..<requiredSlotCount, id: \.self) { idx in
                         VStack(spacing: 2) {
                             Text(ModifierSlot.label(for: detectedPhysicalKeys[idx]))
                                 .font(.system(.caption2, design: .monospaced))
@@ -492,6 +502,11 @@ struct ModifierLayoutView: View {
             TextField("예: 맥북 내장, Keychron K2, ...", text: $newProfileName)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 280)
+
+            Text("프로필 이름은 표시용입니다. 장치 자동 식별은 아직 지원하지 않고, 자동 전환은 앱 할당으로만 동작합니다.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 280, alignment: .leading)
             
             HStack {
                 Button("취소") { showSaveDialog = false }
@@ -535,7 +550,7 @@ struct ModifierLayoutView: View {
         
         appState.keyInterceptor.onVerifyKeyEvent = { [self] original, _, _ in
             guard currentStep == 1 else { return }
-            guard detectedPhysicalKeys.count < totalSlots else { return }
+            guard detectedPhysicalKeys.count < maximumSlots else { return }
             guard knownModifiers.contains(original) else { return }
             guard !detectedPhysicalKeys.contains(original) else { return }
             
@@ -556,7 +571,7 @@ struct ModifierLayoutView: View {
         
         appState.keyInterceptor.onVerifyKeyEvent = { [self] original, _, _ in
             guard currentStep == 2 else { return }
-            guard desiredKeys.count < totalSlots else { return }
+            guard desiredKeys.count < requiredSlotCount else { return }
             guard knownModifiers.contains(original) else { return }
             // 원하는 키에서는 중복 허용하지 않음
             guard !desiredKeys.contains(original) else { return }
