@@ -1,63 +1,60 @@
 import SwiftUI
 import Carbon.HIToolbox
 
-// MARK: - Data Models
-
 struct ModifierSlot: Identifiable, Equatable {
     let id: UUID
     let keyCode: Int64
     var label: String
-    
-    static func label(for keyCode: Int64) -> String {
+
+    static func label(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String {
         switch Int(keyCode) {
         case kVK_Function: return "Fn"
         case kVK_Control: return "Ctrl"
-        case kVK_Option: return "Opt"
-        case kVK_Command: return "Cmd"
+        case kVK_Option: return style == .windows ? "Alt" : "Opt"
+        case kVK_Command: return style == .windows ? "Win" : "Cmd"
         case kVK_Shift: return "Shift"
-        case kVK_RightCommand: return "RCmd"
-        case kVK_RightOption: return "ROpt"
+        case kVK_RightCommand: return style == .windows ? "RWin" : "RCmd"
+        case kVK_RightOption: return style == .windows ? "RAlt" : "ROpt"
         case kVK_RightControl: return "RCtrl"
         case kVK_RightShift: return "RShift"
         case kVK_CapsLock: return "Caps"
         default: return "0x\(String(keyCode, radix: 16, uppercase: true))"
         }
     }
-}
 
-// MARK: - Main View
+    static func detailedLabel(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String {
+        let primary = label(for: keyCode, style: style)
+        let macLabel = label(for: keyCode, style: .mac)
+        if style == .windows && primary != macLabel {
+            return "\(primary) (\(macLabel))"
+        }
+        return primary
+    }
+}
 
 struct ModifierLayoutView: View {
     @EnvironmentObject var appState: AppState
-    
-    @State private var currentStep: Int = 0 // 0=프로필 선택, 1=물리감지, 2=원하는키입력, 3=검증
-    
-    // Step 1: 물리 키 감지
-    @State private var detectedPhysicalKeys: [Int64] = []
-    @State private var waitingSlot1: Int = 0
-    private let minimumSlots = 3
-    private let maximumSlots = 4
-    
-    // Step 2: 원하는 키 입력
-    @State private var desiredKeys: [Int64] = []
-    @State private var waitingSlot2: Int = 0
+
+    @State private var currentStep: Int = 0 // 0=프로필 목록, 1=형상, 2=현재 입력, 3=Mac 로컬, 4=VDI, 5=검증
+    @State private var selectedLegendStyle: KeyboardLegendStyle = .mac
+    @State private var slotCount: Int = 3
+    @State private var physicalKeys: [Int64] = []
+    @State private var localDesiredKeys: [Int64] = []
+    @State private var vdiDesiredKeys: [Int64] = []
     @State private var auxiliaryFnKey: Int64? = nil
-    @State private var isCapturingAuxiliaryFnKey = false
-    
-    // Step 3: 검증
-    @State private var verifyResults: [Int64: Bool] = [:] // desiredKey → pass/fail
+
+    @State private var verifyResults: [Int64: Bool] = [:]
     @State private var verifyLogs: [(keyCode: Int64, label: String, pass: Bool)] = []
     @State private var auxiliaryFnVerified = false
-    
-    // 프로필 저장
+
     @State private var showSaveDialog = false
     @State private var newProfileName = ""
-    
-    // Modifier 키코드
-    private let knownModifiers: Set<Int64> = [
-        Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command),
-        Int64(kVK_RightCommand), Int64(kVK_RightOption), Int64(kVK_RightControl),
-        Int64(kVK_CapsLock), Int64(kVK_Shift), Int64(kVK_RightShift)
+
+    private let leftSideChoices: [Int64] = [
+        Int64(kVK_Function),
+        Int64(kVK_Control),
+        Int64(kVK_Command),
+        Int64(kVK_Option)
     ]
     private let auxiliaryFnCandidates: [Int64] = [
         Int64(kVK_RightControl),
@@ -65,60 +62,63 @@ struct ModifierLayoutView: View {
         Int64(kVK_RightShift)
     ]
 
-    private var requiredSlotCount: Int {
-        max(detectedPhysicalKeys.count, minimumSlots)
+    private var currentVerificationContext: KeyboardUsageContext {
+        appState.isVdiMode ? .vdi : .localMac
+    }
+
+    private var currentVerificationDesiredKeys: [Int64] {
+        desiredKeys(for: currentVerificationContext)
     }
 
     private var shouldOfferAuxiliaryFnKey: Bool {
-        detectedPhysicalKeys.count == minimumSlots && !desiredKeys.contains(Int64(kVK_Function))
+        slotCount == 3
+            && !localDesiredKeys.contains(Int64(kVK_Function))
+            && !vdiDesiredKeys.contains(Int64(kVK_Function))
     }
 
-    private var currentMappings: [Int64: Int64] {
-        var result: [Int64: Int64] = [:]
-        for (index, physKey) in detectedPhysicalKeys.enumerated() {
-            guard index < desiredKeys.count else { break }
-            let desiredKey = desiredKeys[index]
-            if physKey != desiredKey {
-                result[physKey] = desiredKey
-            }
+    private var legendGuideText: String {
+        switch selectedLegendStyle {
+        case .mac:
+            return "Mac 표기는 Ctrl / Opt / Cmd / Fn 기준으로 안내합니다."
+        case .windows:
+            return "Windows 표기는 Ctrl / Win / Alt / Fn 기준으로 안내합니다. 내부적으로 Win=Cmd, Alt=Opt로 저장됩니다."
         }
-        if let auxiliaryFnKey {
-            result[auxiliaryFnKey] = Int64(kVK_Function)
-        }
-        return result
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             switch currentStep {
             case 0: profileSelectorView
-            case 1: stepOneView
-            case 2: stepTwoView
-            case 3: stepThreeView
+            case 1: shapeSetupView
+            case 2: physicalInputView
+            case 3: localMappingView
+            case 4: vdiMappingView
+            case 5: verificationView
             default: EmptyView()
             }
         }
         .onDisappear {
             appState.keyInterceptor.onVerifyKeyEvent = nil
+            if currentStep != 0 {
+                appState.refreshActiveProfileForCurrentContext()
+            }
         }
         .sheet(isPresented: $showSaveDialog) {
             saveProfileSheet
         }
     }
-    
-    // MARK: - Step 0: Profile Selector
-    
+
     private var profileSelectorView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("키보드 레이아웃 프로필")
                 .font(.headline)
-            
+
             if appState.profileStore.profiles.isEmpty {
                 VStack(spacing: 8) {
                     Text("저장된 프로필이 없습니다")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("새 프로필을 만들어 키보드 배치를 설정하세요")
+                    Text("새 프로필을 만들어 로컬 Mac과 VDI 배치를 각각 설정하세요")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -136,17 +136,16 @@ struct ModifierLayoutView: View {
                 .background(Color(nsColor: .windowBackgroundColor))
                 .cornerRadius(12)
             }
-            
+
             HStack {
                 Button("매핑 초기화") {
                     appState.activeMappingProfileId = "standardMac"
-                    appState.keyInterceptor.applyCustomMappings([:])
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                
+
                 Spacer()
-                
+
                 Button {
                     startWizard()
                 } label: {
@@ -157,38 +156,46 @@ struct ModifierLayoutView: View {
             }
         }
     }
-    
+
     private func profileRow(_ profile: SavedKeyboardProfile) -> some View {
         let isActive = appState.activeMappingProfileId == profile.id.uuidString
-        
+
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(profile.name)
-                    .font(.system(.body, weight: isActive ? .semibold : .regular))
+                HStack(spacing: 6) {
+                    Text(profile.name)
+                        .font(.system(.body, weight: isActive ? .semibold : .regular))
+                    Text(profile.legendStyle.title)
+                        .font(.system(size: 10, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.gray.opacity(0.12))
+                        .cornerRadius(6)
+                }
                 Text(profile.summary)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .lineLimit(3)
             }
-            
+
             Spacer()
-            
+
             if isActive {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
             }
-            
+
             Button(isActive ? "사용 중" : "적용") {
-                applyProfile(profile)
+                appState.applyProfile(profile)
             }
             .buttonStyle(.bordered)
             .controlSize(.mini)
             .disabled(isActive)
-            
+
             Button {
                 appState.profileStore.delete(id: profile.id)
                 if isActive {
                     appState.activeMappingProfileId = "standardMac"
-                    appState.keyInterceptor.applyCustomMappings([:])
                 }
             } label: {
                 Image(systemName: "trash")
@@ -202,18 +209,18 @@ struct ModifierLayoutView: View {
         .background(isActive ? Color.blue.opacity(0.08) : Color.clear)
         .cornerRadius(8)
     }
-    
-    // MARK: - Step Indicator
-    
+
     private var stepIndicator: some View {
-        HStack(spacing: 20) {
-            stepDot(step: 1, title: "물리 키")
-            stepDot(step: 2, title: "원하는 키")
-            stepDot(step: 3, title: "검증")
+        HStack(spacing: 12) {
+            stepDot(step: 1, title: "형상")
+            stepDot(step: 2, title: "현재 입력")
+            stepDot(step: 3, title: "Mac 로컬")
+            stepDot(step: 4, title: "VDI")
+            stepDot(step: 5, title: "검증")
         }
         .frame(maxWidth: .infinity)
     }
-    
+
     private func stepDot(step: Int, title: String) -> some View {
         VStack(spacing: 4) {
             ZStack {
@@ -229,164 +236,336 @@ struct ModifierLayoutView: View {
                 .foregroundColor(step <= currentStep ? .primary : .secondary)
         }
     }
-    
-    // MARK: - Step 1: 물리 키 감지
-    
-    private var stepOneView: some View {
+
+    private var shapeSetupView: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepIndicator
             Divider()
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("현재 키보드의 **스페이스바 왼쪽 키**를 왼쪽부터 순서대로 눌러주세요")
+                Text("현재 키보드 형상과 표기 기준을 먼저 선택하세요")
                     .font(.subheadline)
-                Text("3키 키보드는 3개만 눌러도 됩니다. 4번째 키가 있으면 이어서 눌러주세요.")
+                Text("다음 단계부터는 실제 키를 누르지 않고 목록에서 선택합니다. 키캡 인쇄와 실제 입력이 다르더라도 직접 고를 수 있습니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
-            keySlotRow(
-                detected: detectedPhysicalKeys,
-                waitingSlot: detectedPhysicalKeys.count >= minimumSlots ? nil : waitingSlot1,
-                total: maximumSlots,
-                stepLabel: "물리 키"
-            )
-            
+
+            VStack(spacing: 10) {
+                legendStyleCard(
+                    style: .mac,
+                    title: "Mac 키보드 표기",
+                    detail: "Ctrl · Opt · Cmd · Fn"
+                )
+                legendStyleCard(
+                    style: .windows,
+                    title: "Windows / VDI 표기",
+                    detail: "Ctrl · Win · Alt · Fn"
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("왼쪽 modifier 키 개수")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("", selection: $slotCount) {
+                    Text("3키").tag(3)
+                    Text("4키").tag(4)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Text(legendGuideText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             HStack {
                 Button("← 취소") {
                     cancelWizard()
                 }
                 .buttonStyle(.bordered)
-                
-                Button("초기화") {
-                    startStep1()
-                }
-                .buttonStyle(.bordered)
-                
+
                 Spacer()
-                
-                if detectedPhysicalKeys.count >= minimumSlots {
-                    Button("다음 →") {
-                        goToStep2()
-                    }
-                    .buttonStyle(.borderedProminent)
+
+                Button("다음 →") {
+                    syncSelectionBuffersWithSlotCount()
+                    currentStep = 2
                 }
+                .buttonStyle(.borderedProminent)
             }
         }
     }
-    
-    // MARK: - Step 2: 원하는 키 입력 (키 누르기)
-    
-    private var stepTwoView: some View {
+
+    private func legendStyleCard(style: KeyboardLegendStyle, title: String, detail: String) -> some View {
+        let isSelected = selectedLegendStyle == style
+
+        return Button {
+            selectedLegendStyle = style
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(title)
+                        .font(.system(.body, weight: .semibold))
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? .blue : .secondary)
+                }
+                Text(detail)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.blue)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.blue : Color.gray.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+            )
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var physicalInputView: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepIndicator
             Divider()
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("각 슬롯에 **원하는 기능 키**를 순서대로 눌러주세요")
+                Text("현재 키보드가 실제로 보내는 왼쪽 modifier 입력 순서를 선택하세요")
                     .font(.subheadline)
-                Text("물리 배치: \(detectedPhysicalKeys.map { ModifierSlot.label(for: $0) }.joined(separator: " · "))")
+                Text("키캡 인쇄가 헷갈리면 `Win (Cmd)`처럼 괄호 안의 macOS 입력명을 참고하세요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(legendGuideText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
-            keySlotRow(
-                detected: desiredKeys,
-                waitingSlot: waitingSlot2,
-                total: requiredSlotCount,
-                stepLabel: "원하는 키"
-            )
-            
-            // 매핑 미리보기
-            if !desiredKeys.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("매핑 미리보기")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 12) {
-                        ForEach(0..<desiredKeys.count, id: \.self) { idx in
-                            HStack(spacing: 4) {
-                                Text(ModifierSlot.label(for: detectedPhysicalKeys[idx]))
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.blue)
-                                Text(ModifierSlot.label(for: desiredKeys[idx]))
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                    }
-                }
-                .padding(8)
-                .background(Color(nsColor: .windowBackgroundColor))
-                .cornerRadius(8)
-            }
 
-            if desiredKeys.count == requiredSlotCount && shouldOfferAuxiliaryFnKey {
-                auxiliaryFnSection
-            }
-            
+            presetButtons(for: .physical)
+            slotSelectionCard(
+                title: "현재 입력",
+                selections: physicalKeys,
+                total: slotCount
+            )
+            selectionPalette(
+                selections: physicalKeys,
+                choices: leftSideChoices,
+                onSelect: selectPhysicalKey
+            )
+
             HStack {
                 Button("← 이전") {
-                    startStep1() // Step 1로 돌아가기
                     currentStep = 1
                 }
                 .buttonStyle(.bordered)
-                
-                Button("초기화") {
-                    startStep2()
+
+                Button("한 칸 지우기") {
+                    _ = physicalKeys.popLast()
                 }
                 .buttonStyle(.bordered)
-                
-                Spacer()
-                
-                if desiredKeys.count == requiredSlotCount {
-                    Button("적용 및 검증 →") {
-                        applyAndGoToStep3()
-                    }
-                    .buttonStyle(.borderedProminent)
+                .disabled(physicalKeys.isEmpty)
+
+                Button("초기화") {
+                    physicalKeys = []
                 }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("다음 →") {
+                    currentStep = 3
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(physicalKeys.count != slotCount)
             }
         }
     }
-    
-    // MARK: - Step 3: 검증
-    
-    private var stepThreeView: some View {
+
+    private var localMappingView: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepIndicator
             Divider()
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("아무 키나 눌러서 매핑이 올바르게 적용되었는지 확인하세요")
+                Text("로컬 macOS에서 원하는 배치를 선택하세요")
                     .font(.subheadline)
-                if auxiliaryFnKey != nil {
-                    Text("보조 Fn 키도 한 번 눌러서 함께 확인하세요.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("현재 입력: \(formattedLabels(physicalKeys))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            
-            // 매핑 + 검증 결과
+
+            presetButtons(for: .local)
+            slotSelectionCard(
+                title: "Mac 로컬 목표",
+                selections: localDesiredKeys,
+                total: slotCount
+            )
+            mappingPreviewCard(
+                title: "Mac 로컬 미리보기",
+                source: physicalKeys,
+                target: localDesiredKeys
+            )
+            selectionPalette(
+                selections: localDesiredKeys,
+                choices: leftSideChoices,
+                onSelect: selectLocalDesiredKey
+            )
+
+            HStack {
+                Button("← 이전") {
+                    currentStep = 2
+                }
+                .buttonStyle(.bordered)
+
+                Button("한 칸 지우기") {
+                    _ = localDesiredKeys.popLast()
+                }
+                .buttonStyle(.bordered)
+                .disabled(localDesiredKeys.isEmpty)
+
+                Button("초기화") {
+                    localDesiredKeys = []
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("다음 →") {
+                    if vdiDesiredKeys.isEmpty {
+                        vdiDesiredKeys = localDesiredKeys
+                    }
+                    currentStep = 4
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(localDesiredKeys.count != slotCount)
+            }
+        }
+    }
+
+    private var vdiMappingView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            stepIndicator
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Windows VDI 안에서 원하는 배치를 선택하세요")
+                    .font(.subheadline)
+                Text("현재 입력: \(formattedLabels(physicalKeys))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("로컬 Mac과 다르게 동작하길 원하면 여기서 별도로 배치하세요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Mac 로컬 배치 복사") {
+                    vdiDesiredKeys = localDesiredKeys
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Spacer()
+            }
+
+            presetButtons(for: .vdi)
+            slotSelectionCard(
+                title: "VDI 목표",
+                selections: vdiDesiredKeys,
+                total: slotCount
+            )
+            mappingPreviewCard(
+                title: "VDI 미리보기",
+                source: physicalKeys,
+                target: vdiDesiredKeys
+            )
+            selectionPalette(
+                selections: vdiDesiredKeys,
+                choices: leftSideChoices,
+                onSelect: selectVdiDesiredKey
+            )
+
+            if vdiDesiredKeys.count == slotCount && shouldOfferAuxiliaryFnKey {
+                auxiliaryFnSection
+            }
+
+            HStack {
+                Button("← 이전") {
+                    currentStep = 3
+                }
+                .buttonStyle(.bordered)
+
+                Button("한 칸 지우기") {
+                    _ = vdiDesiredKeys.popLast()
+                }
+                .buttonStyle(.bordered)
+                .disabled(vdiDesiredKeys.isEmpty)
+
+                Button("초기화") {
+                    vdiDesiredKeys = []
+                    auxiliaryFnKey = nil
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("적용 및 검증 →") {
+                    applyAndGoToVerification()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(vdiDesiredKeys.count != slotCount)
+            }
+        }
+    }
+
+    private var verificationView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            stepIndicator
+            Divider()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("현재 \(currentVerificationContext.title) 기준 매핑을 실시간으로 확인하세요")
+                    .font(.subheadline)
+                Text("프로필 저장 후에는 로컬 Mac과 VDI 사이를 오갈 때 자동으로 해당 배치로 전환됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            mappingPreviewCard(
+                title: "Mac 로컬",
+                source: physicalKeys,
+                target: localDesiredKeys,
+                highlight: currentVerificationContext == .localMac
+            )
+            mappingPreviewCard(
+                title: "VDI",
+                source: physicalKeys,
+                target: vdiDesiredKeys,
+                highlight: currentVerificationContext == .vdi
+            )
+
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(0..<requiredSlotCount, id: \.self) { idx in
-                    let physKey = detectedPhysicalKeys[idx]
-                    let desKey = desiredKeys[idx]
-                    
+                Text("현재 컨텍스트 검증")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ForEach(0..<slotCount, id: \.self) { index in
+                    let physKey = physicalKeys[index]
+                    let desiredKey = currentVerificationDesiredKeys[index]
+
                     HStack {
-                        Text(ModifierSlot.label(for: physKey))
+                        Text(ModifierSlot.label(for: physKey, style: selectedLegendStyle))
                             .font(.system(.caption, design: .monospaced))
-                            .frame(width: 40, alignment: .trailing)
+                            .frame(width: 48, alignment: .trailing)
                         Image(systemName: "arrow.right")
-                            .font(.caption2).foregroundColor(.blue)
-                        Text(ModifierSlot.label(for: desKey))
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                        Text(ModifierSlot.label(for: desiredKey, style: selectedLegendStyle))
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.blue)
-                            .frame(width: 40)
-                        
-                        if let pass = verifyResults[desKey] {
+                            .frame(width: 48)
+
+                        if let pass = verifyResults[desiredKey] {
                             Image(systemName: pass ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .foregroundColor(pass ? .green : .red)
                             Text(pass ? "확인됨" : "불일치")
@@ -404,17 +583,16 @@ struct ModifierLayoutView: View {
 
                 if let auxiliaryFnKey {
                     HStack {
-                        Text(ModifierSlot.label(for: auxiliaryFnKey))
+                        Text(ModifierSlot.label(for: auxiliaryFnKey, style: selectedLegendStyle))
                             .font(.system(.caption, design: .monospaced))
-                            .frame(width: 40, alignment: .trailing)
+                            .frame(width: 48, alignment: .trailing)
                         Image(systemName: "arrow.right")
                             .font(.caption2)
                             .foregroundColor(.blue)
                         Text("Fn")
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.blue)
-                            .frame(width: 40)
-
+                            .frame(width: 48)
                         Image(systemName: auxiliaryFnVerified ? "checkmark.circle.fill" : "circle.dotted")
                             .foregroundColor(auxiliaryFnVerified ? .green : .gray)
                         Text(auxiliaryFnVerified ? "확인됨" : "눌러서 확인")
@@ -426,14 +604,15 @@ struct ModifierLayoutView: View {
             .padding(12)
             .background(Color(nsColor: .windowBackgroundColor))
             .cornerRadius(12)
-            
-            // 실시간 로그
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("실시간 이벤트 로그").font(.caption).foregroundStyle(.secondary)
+                Text("실시간 이벤트 로그")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(verifyLogs.indices.reversed(), id: \.self) { idx in
-                            let log = verifyLogs[idx]
+                        ForEach(verifyLogs.indices.reversed(), id: \.self) { index in
+                            let log = verifyLogs[index]
                             HStack(spacing: 6) {
                                 Text(log.label)
                                     .font(.system(.caption, design: .monospaced))
@@ -450,20 +629,20 @@ struct ModifierLayoutView: View {
             .padding(12)
             .background(Color(nsColor: .windowBackgroundColor))
             .cornerRadius(12)
-            
+
             HStack {
                 Button("← 다시 설정") {
-                    // HID 정리 후 Step 2로 (동기 — 완료 보장)
-                    HIDRemapper.shared.clearMappingsSync()
-                    appState.keyInterceptor.applyCustomMappings([:])
                     appState.keyInterceptor.onVerifyKeyEvent = nil
-                    startStep2()
-                    currentStep = 2
+                    appState.refreshActiveProfileForCurrentContext()
+                    verifyResults = [:]
+                    verifyLogs = []
+                    auxiliaryFnVerified = false
+                    currentStep = 4
                 }
                 .buttonStyle(.bordered)
-                
+
                 Spacer()
-                
+
                 Button {
                     newProfileName = ""
                     showSaveDialog = true
@@ -480,40 +659,17 @@ struct ModifierLayoutView: View {
             Text("보조 Fn 키 (선택)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            Text("3키 키보드에서는 오른쪽 키 하나를 Fn으로 둘 수 있습니다. `RCtrl`이 가장 무난합니다.")
+            Text("3키 키보드라면 오른쪽 보조 키 하나를 Fn으로 지정할 수 있습니다. 이 값은 로컬 Mac과 VDI에 공통 적용됩니다.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 8) {
-                Text(auxiliaryFnKey.map { ModifierSlot.label(for: $0) } ?? "미지정")
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(width: 64, alignment: .leading)
-                    .foregroundStyle(auxiliaryFnKey == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.blue))
-
-                if isCapturingAuxiliaryFnKey {
-                    Text("오른쪽 보조 키를 눌러주세요")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("지원 키: RCtrl, Caps, RShift")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-            }
-
-            HStack {
-                Button(isCapturingAuxiliaryFnKey ? "입력 중..." : auxiliaryFnKey == nil ? "보조 Fn 키 지정" : "다른 키로 변경") {
-                    isCapturingAuxiliaryFnKey = true
-                }
-                .buttonStyle(.bordered)
-                .disabled(isCapturingAuxiliaryFnKey)
-
-                if isCapturingAuxiliaryFnKey {
-                    Button("취소") {
-                        isCapturingAuxiliaryFnKey = false
+                ForEach(auxiliaryFnCandidates, id: \.self) { keyCode in
+                    let isSelected = auxiliaryFnKey == keyCode
+                    Button(isSelected
+                           ? "\(ModifierSlot.detailedLabel(for: keyCode, style: selectedLegendStyle)) ✓"
+                           : ModifierSlot.detailedLabel(for: keyCode, style: selectedLegendStyle)) {
+                        auxiliaryFnKey = keyCode
                     }
                     .buttonStyle(.bordered)
                 }
@@ -521,7 +677,6 @@ struct ModifierLayoutView: View {
                 if auxiliaryFnKey != nil {
                     Button("선택 해제") {
                         auxiliaryFnKey = nil
-                        isCapturingAuxiliaryFnKey = false
                     }
                     .buttonStyle(.bordered)
                 }
@@ -531,112 +686,203 @@ struct ModifierLayoutView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(8)
     }
-    
-    // MARK: - Shared Key Slot Row
-    
-    private func keySlotRow(detected: [Int64], waitingSlot: Int?, total: Int, stepLabel: String) -> some View {
+
+    private func presetButtons(for mode: SelectionMode) -> some View {
         HStack(spacing: 8) {
-            ForEach(0..<total, id: \.self) { idx in
-                let isDetected = idx < detected.count
-                let isWaiting = idx == waitingSlot && !isDetected
-                
+            Button("기본 \(selectedLegendStyle == .windows ? "Windows" : "Mac") \(slotCount)키") {
+                applyDefaultPreset(for: mode)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            if mode == .physical {
+                Button("Windows 3키") {
+                    slotCount = 3
+                    applyWindowsThreeKeyPreset(for: mode)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Mac 4키") {
+                    slotCount = 4
+                    applyMacFourKeyPreset(for: mode)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else {
+                Button("Windows 기준") {
+                    assignPreset(
+                        slotCount == 4
+                            ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
+                            : [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)],
+                        to: mode
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Mac 기준") {
+                    assignPreset(
+                        slotCount == 4
+                            ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+                            : [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)],
+                        to: mode
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Spacer()
+        }
+    }
+
+    private func slotSelectionCard(title: String, selections: [Int64], total: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            selectionSlotRow(selections: selections, total: total)
+        }
+    }
+
+    private func selectionSlotRow(selections: [Int64], total: Int) -> some View {
+        HStack(spacing: 8) {
+            ForEach(0..<total, id: \.self) { index in
+                let isFilled = index < selections.count
+
                 VStack(spacing: 4) {
-                    if isDetected {
-                        Text(ModifierSlot.label(for: detected[idx]))
-                            .font(.system(.body, weight: .semibold))
-                            .frame(width: 55, height: 46)
-                            .background(Color.green.opacity(0.15))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.5), lineWidth: 1))
-                            .cornerRadius(8)
-                        
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.caption)
-                    } else if isWaiting {
-                        Text("눌러요")
-                            .font(.system(.caption, weight: .medium))
-                            .frame(width: 55, height: 46)
-                            .background(Color.blue.opacity(0.1))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue, lineWidth: 2).opacity(0.8))
-                            .cornerRadius(8)
-                        
-                        Text("슬롯 \(idx + 1)")
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("—")
-                            .font(.system(.body, weight: .medium))
-                            .frame(width: 55, height: 46)
-                            .background(Color.gray.opacity(0.08))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2), lineWidth: 1))
-                            .cornerRadius(8)
-                        
-                        Text("슬롯 \(idx + 1)")
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary)
-                    }
+                    Text(isFilled ? ModifierSlot.label(for: selections[index], style: selectedLegendStyle) : "선택")
+                        .font(.system(.body, weight: .semibold))
+                        .frame(width: 62, height: 46)
+                        .background(isFilled ? Color.green.opacity(0.15) : Color.gray.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isFilled ? Color.green.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                        .cornerRadius(8)
+
+                    Text("슬롯 \(index + 1)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
                 }
             }
-            
+
             Text("Space")
                 .font(.system(.caption, weight: .bold))
                 .frame(width: 80, height: 46)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(8)
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         }
         .padding(12)
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(12)
     }
-    
-    // MARK: - Save Profile Sheet
-    
+
+    private func selectionPalette(
+        selections: [Int64],
+        choices: [Int64],
+        onSelect: @escaping (Int64) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("목록에서 선택")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
+                ForEach(choices, id: \.self) { keyCode in
+                    let isUsed = selections.contains(keyCode)
+                    Button(ModifierSlot.detailedLabel(for: keyCode, style: selectedLegendStyle)) {
+                        onSelect(keyCode)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isUsed)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .cornerRadius(8)
+    }
+
+    private func mappingPreviewCard(
+        title: String,
+        source: [Int64],
+        target: [Int64],
+        highlight: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if highlight {
+                    Text("현재 적용")
+                        .font(.system(size: 10, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.12))
+                        .foregroundColor(.blue)
+                        .cornerRadius(6)
+                }
+            }
+
+            if target.isEmpty {
+                Text("아직 선택되지 않았습니다")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 12) {
+                    ForEach(0..<min(source.count, target.count), id: \.self) { index in
+                        HStack(spacing: 4) {
+                            Text(ModifierSlot.label(for: source[index], style: selectedLegendStyle))
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 8))
+                                .foregroundColor(.blue)
+                            Text(ModifierSlot.label(for: target[index], style: selectedLegendStyle))
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .cornerRadius(8)
+    }
+
     private var saveProfileSheet: some View {
         VStack(spacing: 16) {
             Text("프로필 이름을 입력하세요")
                 .font(.headline)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    ForEach(0..<requiredSlotCount, id: \.self) { idx in
-                        VStack(spacing: 2) {
-                            Text(ModifierSlot.label(for: detectedPhysicalKeys[idx]))
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "arrow.down").font(.system(size: 8)).foregroundColor(.blue)
-                            Text(ModifierSlot.label(for: desiredKeys[idx]))
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.blue)
-                        }
-                        .frame(width: 45)
-                    }
-                }
 
-                if let auxiliaryFnKey {
-                    Text("\(ModifierSlot.label(for: auxiliaryFnKey)) -> Fn")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.blue)
-                        .padding(.top, 4)
-                }
+            mappingPreviewCard(title: "Mac 로컬", source: physicalKeys, target: localDesiredKeys)
+            mappingPreviewCard(title: "VDI", source: physicalKeys, target: vdiDesiredKeys)
+
+            if let auxiliaryFnKey {
+                Text("\(ModifierSlot.label(for: auxiliaryFnKey, style: selectedLegendStyle)) -> Fn")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.blue)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(8)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .cornerRadius(8)
-            
-            TextField("예: 맥북 내장, Keychron K2, ...", text: $newProfileName)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 280)
 
-            Text("프로필 이름은 표시용입니다. 장치 자동 식별은 아직 지원하지 않고, 자동 전환은 앱 할당으로만 동작합니다.")
+            TextField("예: 회사 키보드, VDI 외장 3키", text: $newProfileName)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 320)
+
+            Text("프로필은 현재 입력, Mac 로컬 목표, VDI 목표를 함께 저장합니다. 자동 전환은 현재 앱의 Bundle ID 기준으로 동작합니다.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(width: 280, alignment: .leading)
-            
+                .frame(width: 320, alignment: .leading)
+
             HStack {
-                Button("취소") { showSaveDialog = false }
-                    .buttonStyle(.bordered)
-                
+                Button("취소") {
+                    showSaveDialog = false
+                }
+                .buttonStyle(.bordered)
+
                 Button("저장") {
                     saveCurrentProfile()
                     showSaveDialog = false
@@ -648,147 +894,166 @@ struct ModifierLayoutView: View {
             }
         }
         .padding(24)
-        .frame(width: 360)
+        .frame(width: 400)
     }
-    
-    // MARK: - Logic
-    
+
     private func startWizard() {
-        // HID 매핑 해제 → 원래 물리 키코드를 감지할 수 있도록 (동기 — 완료 보장)
-        HIDRemapper.shared.clearMappingsSync()
-        appState.keyInterceptor.applyCustomMappings([:])
-        
-        startStep1()
-        currentStep = 1
-    }
-    
-    private func cancelWizard() {
-        appState.keyInterceptor.onVerifyKeyEvent = nil
-        // 기존 프로필 다시 적용
-        appState.keyInterceptor.setupDefaultMappings()
-        currentStep = 0
-    }
-    
-    private func startStep1() {
-        detectedPhysicalKeys = []
-        waitingSlot1 = 0
-        desiredKeys = []
-        waitingSlot2 = 0
+        selectedLegendStyle = appState.isVdiMode ? .windows : .mac
+        slotCount = appState.isVdiMode ? 3 : 4
+        physicalKeys = []
+        localDesiredKeys = []
+        vdiDesiredKeys = []
         auxiliaryFnKey = nil
-        isCapturingAuxiliaryFnKey = false
-        auxiliaryFnVerified = false
-        
-        appState.keyInterceptor.onVerifyKeyEvent = { [self] original, _, _ in
-            guard currentStep == 1 else { return }
-            guard detectedPhysicalKeys.count < maximumSlots else { return }
-            guard knownModifiers.contains(original) else { return }
-            guard !detectedPhysicalKeys.contains(original) else { return }
-            
-            detectedPhysicalKeys.append(original)
-            waitingSlot1 = detectedPhysicalKeys.count
-        }
-    }
-    
-    private func goToStep2() {
-        appState.keyInterceptor.onVerifyKeyEvent = nil
-        startStep2()
-        currentStep = 2
-    }
-    
-    private func startStep2() {
-        desiredKeys = []
-        waitingSlot2 = 0
-        auxiliaryFnKey = nil
-        isCapturingAuxiliaryFnKey = false
-        auxiliaryFnVerified = false
-        
-        appState.keyInterceptor.onVerifyKeyEvent = { [self] original, _, _ in
-            guard currentStep == 2 else { return }
-            guard knownModifiers.contains(original) else { return }
-
-            if isCapturingAuxiliaryFnKey {
-                guard auxiliaryFnCandidates.contains(original) else { return }
-                guard !detectedPhysicalKeys.contains(original) else { return }
-                auxiliaryFnKey = original
-                isCapturingAuxiliaryFnKey = false
-                return
-            }
-
-            guard desiredKeys.count < requiredSlotCount else { return }
-            guard !desiredKeys.contains(original) else { return }
-
-            desiredKeys.append(original)
-            waitingSlot2 = desiredKeys.count
-        }
-    }
-    
-    private func applyAndGoToStep3() {
-        let newMappings = currentMappings
-        
-        // UserDefaults에 저장
-        let stringKeyDict = Dictionary(uniqueKeysWithValues: newMappings.map { (String($0.key), $0.value) })
-        if let data = try? JSONEncoder().encode(stringKeyDict) {
-            UserDefaults.standard.set(data, forKey: "visualCustomMappings")
-        }
-        
-        // HID + CGEventTap 모두 적용 (동기 — Step 3 진입 전 완료 보장)
-        appState.activeMappingProfileId = "visualCustomProfile"
-        appState.keyInterceptor.applyCustomMappingsSync(newMappings)
-        
-        // Step 3: 검증 모드
         verifyResults = [:]
         verifyLogs = []
         auxiliaryFnVerified = false
-        currentStep = 3
-        
-        // 검증 콜백: HID가 적용되었으므로 들어오는 keyCode가 이미 desired key여야 함
-        let desiredSet = Set(desiredKeys)
+        appState.keyInterceptor.onVerifyKeyEvent = nil
+        currentStep = 1
+    }
+
+    private func cancelWizard() {
+        appState.keyInterceptor.onVerifyKeyEvent = nil
+        appState.refreshActiveProfileForCurrentContext()
+        currentStep = 0
+    }
+
+    private func syncSelectionBuffersWithSlotCount() {
+        physicalKeys = Array(physicalKeys.prefix(slotCount))
+        localDesiredKeys = Array(localDesiredKeys.prefix(slotCount))
+        vdiDesiredKeys = Array(vdiDesiredKeys.prefix(slotCount))
+    }
+
+    private func selectPhysicalKey(_ keyCode: Int64) {
+        guard physicalKeys.count < slotCount else { return }
+        guard !physicalKeys.contains(keyCode) else { return }
+        physicalKeys.append(keyCode)
+    }
+
+    private func selectLocalDesiredKey(_ keyCode: Int64) {
+        guard localDesiredKeys.count < slotCount else { return }
+        guard !localDesiredKeys.contains(keyCode) else { return }
+        localDesiredKeys.append(keyCode)
+    }
+
+    private func selectVdiDesiredKey(_ keyCode: Int64) {
+        guard vdiDesiredKeys.count < slotCount else { return }
+        guard !vdiDesiredKeys.contains(keyCode) else { return }
+        vdiDesiredKeys.append(keyCode)
+    }
+
+    private func desiredKeys(for context: KeyboardUsageContext) -> [Int64] {
+        switch context {
+        case .localMac: return localDesiredKeys
+        case .vdi: return vdiDesiredKeys
+        }
+    }
+
+    private func currentMappings(for context: KeyboardUsageContext) -> [Int64: Int64] {
+        let desiredKeys = desiredKeys(for: context)
+        var result: [Int64: Int64] = [:]
+        for (index, physKey) in physicalKeys.enumerated() {
+            guard index < desiredKeys.count else { break }
+            let desiredKey = desiredKeys[index]
+            if physKey != desiredKey {
+                result[physKey] = desiredKey
+            }
+        }
+        if let auxiliaryFnKey {
+            result[auxiliaryFnKey] = Int64(kVK_Function)
+        }
+        return result
+    }
+
+    private func applyAndGoToVerification() {
+        let mappings = currentMappings(for: currentVerificationContext)
+        appState.persistCustomMappings(mappings)
+        appState.keyInterceptor.activeProfileID = "visualCustomProfile"
+        appState.keyInterceptor.applyCustomMappingsSync(mappings)
+
+        verifyResults = [:]
+        verifyLogs = []
+        auxiliaryFnVerified = false
+        currentStep = 5
+
+        let desiredSet = Set(currentVerificationDesiredKeys)
         let fnKeyCode = Int64(kVK_Function)
-        
+
         appState.keyInterceptor.onVerifyKeyEvent = { [self] incomingKey, _, _ in
-            guard currentStep == 3 else { return }
-            
-            let label = ModifierSlot.label(for: incomingKey)
-            
+            guard currentStep == 5 else { return }
+
+            let label = ModifierSlot.label(for: incomingKey, style: selectedLegendStyle)
             if desiredSet.contains(incomingKey) {
-                // 원하는 키 중 하나가 도착 → 매핑 성공
                 verifyResults[incomingKey] = true
                 verifyLogs.append((keyCode: incomingKey, label: "\(label) ✅ 매핑 확인", pass: true))
             } else if auxiliaryFnKey != nil && incomingKey == fnKeyCode {
                 auxiliaryFnVerified = true
                 verifyLogs.append((keyCode: incomingKey, label: "Fn ✅ 보조 키 확인", pass: true))
-            } else if knownModifiers.contains(incomingKey) {
-                // modifier 키인데 desired에 없는 경우 → 매핑 안 된 키
+            } else if leftSideChoices.contains(incomingKey) || auxiliaryFnCandidates.contains(incomingKey) {
                 verifyLogs.append((keyCode: incomingKey, label: "\(label) — 미매핑", pass: false))
             } else {
-                // 일반 키
-                verifyLogs.append((keyCode: incomingKey, label: "\(label)", pass: true))
+                verifyLogs.append((keyCode: incomingKey, label: label, pass: true))
             }
-            
-            if verifyLogs.count > 50 { verifyLogs.removeFirst() }
+
+            if verifyLogs.count > 50 {
+                verifyLogs.removeFirst()
+            }
         }
     }
-    
+
     private func saveCurrentProfile() {
         let profile = SavedKeyboardProfile(
             name: newProfileName.trimmingCharacters(in: .whitespaces),
-            physicalKeys: detectedPhysicalKeys,
-            desiredKeys: desiredKeys,
+            legendStyle: selectedLegendStyle,
+            physicalKeys: physicalKeys,
+            localDesiredKeys: localDesiredKeys,
+            vdiDesiredKeys: vdiDesiredKeys,
             auxiliaryFnKey: auxiliaryFnKey
         )
         appState.profileStore.add(profile)
-        applyProfile(profile)
+        appState.applyProfile(profile)
     }
-    
-    private func applyProfile(_ profile: SavedKeyboardProfile) {
-        let mappings = profile.mappings
-        
-        let stringKeyDict = Dictionary(uniqueKeysWithValues: mappings.map { (String($0.key), $0.value) })
-        if let data = try? JSONEncoder().encode(stringKeyDict) {
-            UserDefaults.standard.set(data, forKey: "visualCustomMappings")
+
+    private func formattedLabels(_ keyCodes: [Int64]) -> String {
+        keyCodes.map { ModifierSlot.label(for: $0, style: selectedLegendStyle) }.joined(separator: " · ")
+    }
+
+    private enum SelectionMode {
+        case physical
+        case local
+        case vdi
+    }
+
+    private func applyDefaultPreset(for mode: SelectionMode) {
+        switch selectedLegendStyle {
+        case .mac:
+            if slotCount == 4 {
+                applyMacFourKeyPreset(for: mode)
+            } else {
+                assignPreset([Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
+            }
+        case .windows:
+            if slotCount == 4 {
+                assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
+            } else {
+                applyWindowsThreeKeyPreset(for: mode)
+            }
         }
-        
-        appState.activeMappingProfileId = profile.id.uuidString
-        appState.keyInterceptor.applyCustomMappings(mappings)
+    }
+
+    private func applyWindowsThreeKeyPreset(for mode: SelectionMode) {
+        assignPreset([Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
+    }
+
+    private func applyMacFourKeyPreset(for mode: SelectionMode) {
+        assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
+    }
+
+    private func assignPreset(_ values: [Int64], to mode: SelectionMode) {
+        let trimmed = Array(values.prefix(slotCount))
+        switch mode {
+        case .physical: physicalKeys = trimmed
+        case .local: localDesiredKeys = trimmed
+        case .vdi: vdiDesiredKeys = trimmed
+        }
     }
 }

@@ -259,6 +259,13 @@ struct DashboardView: View {
                 Text(profile.name)
                     .font(.headline)
 
+                Text(profile.legendStyle.title)
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.gray.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+
                 if isActive {
                     Text("Active")
                         .font(.caption2)
@@ -294,6 +301,7 @@ struct DashboardView: View {
             Text(profile.summary)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .lineLimit(3)
 
             // Bundle ID assignment for per-app auto-switching
             HStack(spacing: 8) {

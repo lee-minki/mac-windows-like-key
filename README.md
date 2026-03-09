@@ -23,7 +23,7 @@
 - **⌨️ Right Command / Right Option 전환**: macOS 입력 소스를 즉시 토글
 - **🖥️ Native VDI Support**: 로컬 macOS/원격 Mac은 `Control+Space`, Windows VDI는 `F16 → Right Alt` 매핑으로 동작
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
-- **🧩 Keyboard Profiles**: 3키/4키 modifier 레이아웃 프로필 저장 및 앱별 자동 전환
+- **🧩 Keyboard Profiles**: 3키/4키 modifier 레이아웃과 `Mac 로컬` / `VDI` 목표 배치를 함께 저장
 - **📍 Menu Bar Utility**: 상태 확인, 로그, Doctor, 업데이트 창에 빠르게 접근
 
 ---
@@ -76,10 +76,14 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 ### 5. 키보드 프로필 참고
 
+- 프로필 위저드에서 먼저 키보드 형상과 표기 기준을 `Mac` 또는 `Windows / VDI`로 선택할 수 있습니다
+- 현재 입력 순서, `Mac 로컬`에서 원하는 배치, `VDI`에서 원하는 배치를 각각 따로 저장합니다
+- 실제 키를 누르는 대신 목록에서 `Win (Cmd)`, `Alt (Opt)`처럼 직접 선택할 수 있습니다
 - 프로필 위저드는 스페이스바 왼쪽 modifier가 3개인 키보드와 4개인 키보드를 모두 지원합니다
 - 3키 키보드에서는 `RCtrl`, `Caps`, `RShift` 중 하나를 보조 `Fn` 키로 지정할 수 있습니다
 - 프로필 이름은 구분용 라벨입니다
-- 자동 전환은 키보드 장치명이 아니라 현재 앱의 Bundle ID 기준으로 동작합니다
+- 저장된 프로필은 현재 앱 컨텍스트에 따라 `Mac 로컬` 목표와 `VDI` 목표 사이를 자동으로 전환합니다
+- 프로필 자동 할당은 키보드 장치명이 아니라 현재 앱의 Bundle ID 기준으로 동작합니다
 
 ### 6. 권장 추가 설정
 

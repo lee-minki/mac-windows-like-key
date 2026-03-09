@@ -176,11 +176,13 @@ struct HelpView: View {
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("1. 설정 → General Settings → \"새 프로필 만들기\"")
-                            Text("2. Step 1: 스페이스바 왼쪽 키를 순서대로 눌러 물리 키 감지 (3키/4키 지원)")
-                            Text("3. Step 2: 각 슬롯에 원하는 기능 키를 입력")
-                            Text("4. 3키 키보드라면 Step 2에서 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
-                            Text("5. Step 3: 매핑 검증 후 프로필 저장")
-                            Text("6. 프로필 이름은 표시용이며, 자동 전환은 현재 앱 기준으로 동작")
+                            Text("2. Step 1: 키보드 표기(`Mac` 또는 `Windows / VDI`)와 3키/4키 형상 선택")
+                            Text("3. Step 2: 현재 입력 순서를 목록에서 선택 (`Win (Cmd)`, `Alt (Opt)` 같이 표시)")
+                            Text("4. Step 3: 로컬 macOS에서 원하는 배치 선택")
+                            Text("5. Step 4: VDI에서 원하는 배치 선택")
+                            Text("6. 3키 키보드라면 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
+                            Text("7. Step 5: 현재 컨텍스트를 검증한 뒤 프로필 저장")
+                            Text("8. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환하며, 앱 할당은 현재 앱 기준으로 동작")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -421,8 +423,9 @@ struct HelpView: View {
                     네, 동작합니다. WinMac Key는 모든 키보드 입력을 시스템 레벨에서 인터셉트하므로 \
                     내장 키보드, USB 키보드, Bluetooth 키보드 모두에서 동작합니다.\n\n\
                     외장 키보드의 경우 스페이스바 왼쪽 modifier가 3개인 키보드와 4개인 키보드를 모두 지원합니다.\n\n\
+                    위저드에서 키캡 표기를 `Mac` 또는 `Windows / VDI`로 고르고, 현재 입력과 로컬 Mac / VDI 목표 배치를 각각 따로 지정할 수 있습니다.\n\n\
                     3키 키보드라면 `RCtrl`, `Caps`, `RShift` 중 하나를 보조 Fn 키로 지정할 수 있습니다.\n\n\
-                    다만 프로필 이름은 장치 식별자가 아니라 표시용이며, 자동 전환은 현재 앱 기준으로 동작합니다.
+                    다만 프로필 이름은 장치 식별자가 아니라 표시용이며, 앱 할당은 현재 앱 기준으로 동작합니다.
                     """
                 )
                 

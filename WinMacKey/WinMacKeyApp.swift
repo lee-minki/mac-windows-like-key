@@ -106,7 +106,7 @@ class AppState: ObservableObject {
     @AppStorage("activeMappingProfileId") var activeMappingProfileId: String = "standardMac" {
         didSet {
             keyInterceptor.activeProfileID = activeMappingProfileId
-            keyInterceptor.setupDefaultMappings()
+            refreshActiveProfileForCurrentContext()
         }
     }
     
@@ -126,8 +126,8 @@ class AppState: ObservableObject {
     private var defaultMappingProfileId: String?
 
     // MARK: - VDI Internal Keyboard Mapping
-    // VDI 포커스 시 내장 키보드만 Windows 감각의 좌측 modifier 레이아웃으로 교체
-    // 외장 키보드는 글로벌 매핑 그대로 유지
+    // VDI 포커스 시 내장 키보드는 디바이스별 오버라이드로 Windows 감각 레이아웃 적용
+    // 외장 키보드는 저장된 프로필이 있다면 현재 컨텍스트(Local/VDI)에 맞는 매핑으로 재적용
     private static let vdiInternalKeyboardMappings: [Int64: Int64] = [
         Int64(kVK_Function): Int64(kVK_Control),   // Fn → Ctrl
         Int64(kVK_Control): Int64(kVK_Function),   // Control → Fn
@@ -179,7 +179,7 @@ class AppState: ObservableObject {
             ? Int64(kVK_RightOption)
             : Int64(kVK_RightCommand)
         keyInterceptor.activeProfileID = activeMappingProfileId
-        keyInterceptor.setupDefaultMappings()
+        refreshActiveProfileForCurrentContext()
 
         // 앱 전환 시: (1) bundleId 캐시 갱신 (2) VDI 앱 자동 감지 (3) 프로필 자동 전환
         keyInterceptor.cachedBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
@@ -210,8 +210,8 @@ class AppState: ObservableObject {
             } else if let defaultId = self.defaultMappingProfileId {
                 self.defaultMappingProfileId = nil
                 self.activeMappingProfileId = defaultId
-                self.keyInterceptor.setupDefaultMappings()
             }
+            self.refreshActiveProfileForCurrentContext()
         }
 
         checkPermissions()
@@ -242,18 +242,33 @@ class AppState: ObservableObject {
     
     /// Apply a keyboard layout profile's mappings
     func applyProfile(_ profile: SavedKeyboardProfile) {
-        let mappings = profile.mappings
+        activeMappingProfileId = profile.id.uuidString
+    }
+
+    func persistCustomMappings(_ mappings: [Int64: Int64]) {
         let stringKeyDict = Dictionary(uniqueKeysWithValues: mappings.map { (String($0.key), $0.value) })
         if let data = try? JSONEncoder().encode(stringKeyDict) {
             UserDefaults.standard.set(data, forKey: "visualCustomMappings")
         }
-        activeMappingProfileId = profile.id.uuidString
-        keyInterceptor.applyCustomMappings(mappings)
+    }
+
+    func refreshActiveProfileForCurrentContext() {
+        keyInterceptor.activeProfileID = activeMappingProfileId
+
+        if let activeProfile = profileStore.profile(idString: activeMappingProfileId) {
+            let context: KeyboardUsageContext = isVdiMode ? .vdi : .localMac
+            let mappings = activeProfile.mappings(for: context)
+            persistCustomMappings(mappings)
+            keyInterceptor.applyCustomMappings(mappings)
+            return
+        }
+
+        keyInterceptor.setupDefaultMappings()
     }
 
     // MARK: - VDI / Mac Mapping Switch
 
-    /// VDI 모드: 내장 키보드만 Windows 감각 레이아웃으로 교체 (외장 키보드는 글로벌 매핑 유지)
+    /// VDI 모드: 내장 키보드는 Windows 감각 레이아웃으로 교체하고, 외장 프로필도 VDI 컨텍스트로 재적용
     func switchToVdiMapping() {
         HIDRemapper.shared.applyMappingsForInternalKeyboardSync(Self.vdiInternalKeyboardMappings)
     }
@@ -261,8 +276,7 @@ class AppState: ObservableObject {
     /// Mac 모드: 내장 키보드의 VDI 오버라이드를 해제하고 글로벌 매핑을 재적용
     func switchToMacMapping() {
         HIDRemapper.shared.clearMappingsForInternalKeyboardSync()
-        // 글로벌 매핑 재적용 (프로필 기반)
-        keyInterceptor.setupDefaultMappings()
+        refreshActiveProfileForCurrentContext()
     }
 
     func toggleEngine() {
