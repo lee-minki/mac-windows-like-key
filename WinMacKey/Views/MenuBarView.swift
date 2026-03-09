@@ -5,6 +5,7 @@ import SwiftUI
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openWindow) var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     private var triggerShortcutDescription: String {
         let trigger = appState.toggleTriggerKey == "rightOpt" ? "Right Option" : "Right Command"
@@ -185,7 +186,8 @@ struct MenuBarView: View {
     private var appMenuSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button(action: {
-                openSettingsWindow()
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
             }) {
                 Label("설정...", systemImage: "gear")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -278,13 +280,6 @@ struct MenuBarView: View {
         }
     }
 
-    private func openSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            return
-        }
-        _ = NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-    }
 }
 
 #Preview {

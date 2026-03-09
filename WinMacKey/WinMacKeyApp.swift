@@ -37,6 +37,7 @@ struct WinMacKeyApp: App {
             DashboardView()
                 .environmentObject(appState)
         }
+        .defaultSize(width: 550, height: 450)
         
         // Event Viewer Window
         Window("Event Viewer", id: "event-viewer") {
@@ -135,6 +136,8 @@ class AppState: ObservableObject {
     ]
     
     init() {
+        Self.sanitizeSavedWindowFrame(forKey: "NSWindow Frame com_apple_SwiftUI_Settings_window")
+
         // Forward child ObservableObject changes so views observing AppState re-render
         profileStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -305,5 +308,30 @@ class AppState: ObservableObject {
         if let observer = permissionObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+
+    private static func sanitizeSavedWindowFrame(forKey key: String) {
+        guard let rawFrame = UserDefaults.standard.string(forKey: key),
+              let frame = parseSavedWindowFrame(rawFrame) else {
+            return
+        }
+
+        let isVisible = NSScreen.screens
+            .map(\.visibleFrame)
+            .contains { $0.intersects(frame) }
+
+        if !isVisible {
+            UserDefaults.standard.removeObject(forKey: key)
+            LogService.shared.info("Removed off-screen saved window frame for \(key)", category: "UI")
+        }
+    }
+
+    private static func parseSavedWindowFrame(_ value: String) -> CGRect? {
+        let numbers = value
+            .split(whereSeparator: \.isWhitespace)
+            .compactMap { Double($0) }
+
+        guard numbers.count >= 4 else { return nil }
+        return CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
     }
 }
