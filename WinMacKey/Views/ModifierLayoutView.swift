@@ -47,9 +47,8 @@ struct ModifierSlot: Identifiable, Equatable {
 struct ModifierLayoutView: View {
     @EnvironmentObject var appState: AppState
 
-    @State private var currentStep: Int = 0 // 0=프로필 목록, 1=형상, 2=현재 입력, 3=Mac 로컬, 4=VDI, 5=검증
+    @State private var currentStep: Int = 0 // 0=프로필 목록, 1=표기, 2=현재 입력, 3=Mac 로컬, 4=VDI, 5=검증
     @State private var selectedLegendStyle: KeyboardLegendStyle = .mac
-    @State private var slotCount: Int = 3
     @State private var physicalKeys: [Int64] = []
     @State private var localDesiredKeys: [Int64] = []
     @State private var vdiDesiredKeys: [Int64] = []
@@ -68,6 +67,8 @@ struct ModifierLayoutView: View {
         Int64(kVK_Command),
         Int64(kVK_Option)
     ]
+    private let minimumPhysicalKeyCount = 3
+    private let maximumPhysicalKeyCount = 4
     private let auxiliaryFnCandidates: [Int64] = [
         Int64(kVK_RightControl),
         Int64(kVK_CapsLock),
@@ -82,10 +83,25 @@ struct ModifierLayoutView: View {
         desiredKeys(for: currentVerificationContext)
     }
 
+    private var configuredSlotCount: Int {
+        physicalKeys.count
+    }
+
     private var shouldOfferAuxiliaryFnKey: Bool {
-        slotCount == 3
+        configuredSlotCount == 3
             && !localDesiredKeys.contains(Int64(kVK_Function))
             && !vdiDesiredKeys.contains(Int64(kVK_Function))
+    }
+
+    private var physicalCaptureHint: String {
+        switch physicalKeys.count {
+        case ..<minimumPhysicalKeyCount:
+            return "스페이스바 왼쪽 modifier를 왼쪽부터 계속 눌러 주세요. 최소 3개가 필요합니다."
+        case minimumPhysicalKeyCount:
+            return "3키 감지가 끝났습니다. 여기서 다음으로 가거나, 4키 키보드라면 마지막 키를 한 번 더 눌러 주세요."
+        default:
+            return "4키 감지가 끝났습니다."
+        }
     }
 
     private var legendGuideText: String {
@@ -224,7 +240,7 @@ struct ModifierLayoutView: View {
 
     private var stepIndicator: some View {
         HStack(spacing: 12) {
-            stepDot(step: 1, title: "형상")
+            stepDot(step: 1, title: "표기")
             stepDot(step: 2, title: "현재 입력")
             stepDot(step: 3, title: "Mac 로컬")
             stepDot(step: 4, title: "VDI")
@@ -255,9 +271,9 @@ struct ModifierLayoutView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("현재 키보드 형상과 표기 기준을 먼저 선택하세요")
+                Text("키캡 표기 기준만 먼저 선택하세요")
                     .font(.subheadline)
-                Text("다음 단계부터는 실제 키를 누르지 않고 목록에서 선택합니다. 키캡 인쇄와 실제 입력이 다르더라도 직접 고를 수 있습니다.")
+                Text("다음 단계에서 스페이스바 왼쪽 modifier를 실제로 눌러 현재 입력을 감지합니다. 3키/4키는 입력된 개수로 자동 판단합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -275,17 +291,6 @@ struct ModifierLayoutView: View {
                 )
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("왼쪽 modifier 키 개수")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Picker("", selection: $slotCount) {
-                    Text("3키").tag(3)
-                    Text("4키").tag(4)
-                }
-                .pickerStyle(.segmented)
-            }
-
             Text(legendGuideText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -299,7 +304,7 @@ struct ModifierLayoutView: View {
                 Spacer()
 
                 Button("다음 →") {
-                    syncSelectionBuffersWithSlotCount()
+                    beginPhysicalKeyCapture()
                     currentStep = 2
                 }
                 .buttonStyle(.borderedProminent)
@@ -343,9 +348,9 @@ struct ModifierLayoutView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("현재 키보드가 실제로 보내는 왼쪽 modifier 입력 순서를 선택하세요")
+                Text("현재 키보드의 스페이스바 왼쪽 modifier를 실제로 눌러 주세요")
                     .font(.subheadline)
-                Text("키캡 인쇄가 헷갈리면 `Win (Cmd)`처럼 괄호 안의 macOS 입력명을 참고하세요.")
+                Text("왼쪽부터 순서대로 누르면 현재 입력 배열을 기록합니다. 3개를 누르면 다음으로 갈 수 있고, 4키 키보드라면 마지막 키를 한 번 더 누르세요.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(legendGuideText)
@@ -353,42 +358,48 @@ struct ModifierLayoutView: View {
                     .foregroundStyle(.secondary)
             }
 
-            presetButtons(for: .physical)
             slotSelectionCard(
-                title: "현재 입력",
+                title: "현재 입력 감지",
                 selections: physicalKeys,
-                total: slotCount
+                total: maximumPhysicalKeyCount,
+                emptyTitle: "대기"
             )
-            selectionPalette(
-                selections: physicalKeys,
-                choices: leftSideChoices,
-                onSelect: selectPhysicalKey
-            )
+            Text(physicalCaptureHint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 2)
 
             HStack {
                 Button("← 이전") {
+                    appState.keyInterceptor.onVerifyKeyEvent = nil
                     currentStep = 1
                 }
                 .buttonStyle(.bordered)
 
                 Button("한 칸 지우기") {
                     _ = physicalKeys.popLast()
+                    if physicalKeys.count < maximumPhysicalKeyCount {
+                        auxiliaryFnKey = nil
+                    }
                 }
                 .buttonStyle(.bordered)
                 .disabled(physicalKeys.isEmpty)
 
                 Button("초기화") {
                     physicalKeys = []
+                    auxiliaryFnKey = nil
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("다음 →") {
+                    syncSelectionBuffersWithPhysicalKeys()
+                    appState.keyInterceptor.onVerifyKeyEvent = nil
                     currentStep = 3
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(physicalKeys.count != slotCount)
+                .disabled(physicalKeys.count < minimumPhysicalKeyCount)
             }
         }
     }
@@ -399,7 +410,7 @@ struct ModifierLayoutView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("로컬 macOS에서 원하는 배치를 선택하세요")
+                Text("로컬 macOS에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
                     .font(.subheadline)
                 Text("현재 입력: \(formattedLabels(physicalKeys))")
                     .font(.caption)
@@ -410,7 +421,7 @@ struct ModifierLayoutView: View {
             slotSelectionCard(
                 title: "Mac 로컬 목표",
                 selections: localDesiredKeys,
-                total: slotCount
+                total: configuredSlotCount
             )
             mappingPreviewCard(
                 title: "Mac 로컬 미리보기",
@@ -425,6 +436,7 @@ struct ModifierLayoutView: View {
 
             HStack {
                 Button("← 이전") {
+                    beginPhysicalKeyCapture()
                     currentStep = 2
                 }
                 .buttonStyle(.bordered)
@@ -446,7 +458,7 @@ struct ModifierLayoutView: View {
                     currentStep = 4
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(localDesiredKeys.count != slotCount)
+                .disabled(localDesiredKeys.count != configuredSlotCount)
             }
         }
     }
@@ -457,12 +469,12 @@ struct ModifierLayoutView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Windows VDI 안에서 원하는 배치를 선택하세요")
+                Text("Windows VDI 안에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
                     .font(.subheadline)
                 Text("현재 입력: \(formattedLabels(physicalKeys))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("로컬 Mac과 다르게 동작하길 원하면 여기서 별도로 배치하세요.")
+                Text("VDI 단계는 비어 있는 상태로 시작합니다. 로컬 Mac과 같게 쓰고 싶을 때만 복사 버튼을 사용하세요.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -480,7 +492,7 @@ struct ModifierLayoutView: View {
             slotSelectionCard(
                 title: "VDI 목표",
                 selections: vdiDesiredKeys,
-                total: slotCount
+                total: configuredSlotCount
             )
             mappingPreviewCard(
                 title: "VDI 미리보기",
@@ -493,7 +505,7 @@ struct ModifierLayoutView: View {
                 onSelect: selectVdiDesiredKey
             )
 
-            if vdiDesiredKeys.count == slotCount && shouldOfferAuxiliaryFnKey {
+            if vdiDesiredKeys.count == configuredSlotCount && shouldOfferAuxiliaryFnKey {
                 auxiliaryFnSection
             }
 
@@ -521,7 +533,7 @@ struct ModifierLayoutView: View {
                     applyAndGoToVerification()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(vdiDesiredKeys.count != slotCount)
+                .disabled(vdiDesiredKeys.count != configuredSlotCount)
             }
         }
     }
@@ -557,7 +569,7 @@ struct ModifierLayoutView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                ForEach(0..<slotCount, id: \.self) { index in
+                ForEach(0..<configuredSlotCount, id: \.self) { index in
                     let physKey = physicalKeys[index]
                     let desiredKey = currentVerificationDesiredKeys[index]
 
@@ -702,66 +714,52 @@ struct ModifierLayoutView: View {
 
     private func presetButtons(for mode: SelectionMode) -> some View {
         HStack(spacing: 8) {
-            Button("기본 \(selectedLegendStyle == .windows ? "Windows" : "Mac") \(slotCount)키") {
+            Button("기본 \(selectedLegendStyle == .windows ? "Windows" : "Mac") \(configuredSlotCount)키") {
                 applyDefaultPreset(for: mode)
             }
             .buttonStyle(ChipButtonStyle(tint: .blue))
 
-            if mode == .physical {
-                Button("Windows 3키") {
-                    slotCount = 3
-                    applyWindowsThreeKeyPreset(for: mode)
-                }
-                .buttonStyle(ChipButtonStyle())
-
-                Button("Mac 4키") {
-                    slotCount = 4
-                    applyMacFourKeyPreset(for: mode)
-                }
-                .buttonStyle(ChipButtonStyle())
-            } else {
-                Button("Windows 기준") {
-                    assignPreset(
-                        slotCount == 4
-                            ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
-                            : [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)],
-                        to: mode
-                    )
-                }
-                .buttonStyle(ChipButtonStyle())
-
-                Button("Mac 기준") {
-                    assignPreset(
-                        slotCount == 4
-                            ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
-                            : [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)],
-                        to: mode
-                    )
-                }
-                .buttonStyle(ChipButtonStyle())
+            Button("Windows 기준") {
+                assignPreset(
+                    configuredSlotCount == 4
+                        ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
+                        : [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)],
+                    to: mode
+                )
             }
+            .buttonStyle(ChipButtonStyle())
+
+            Button("Mac 기준") {
+                assignPreset(
+                    configuredSlotCount == 4
+                        ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+                        : [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)],
+                    to: mode
+                )
+            }
+            .buttonStyle(ChipButtonStyle())
 
             Spacer()
         }
     }
 
-    private func slotSelectionCard(title: String, selections: [Int64], total: Int) -> some View {
+    private func slotSelectionCard(title: String, selections: [Int64], total: Int, emptyTitle: String = "선택") -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            selectionSlotRow(selections: selections, total: total)
+            selectionSlotRow(selections: selections, total: total, emptyTitle: emptyTitle)
         }
     }
 
-    private func selectionSlotRow(selections: [Int64], total: Int) -> some View {
+    private func selectionSlotRow(selections: [Int64], total: Int, emptyTitle: String) -> some View {
         HStack(spacing: 8) {
             ForEach(0..<total, id: \.self) { index in
                 let isFilled = index < selections.count
 
                 VStack(spacing: 4) {
                     slotKeycap(
-                        title: isFilled ? ModifierSlot.label(for: selections[index], style: selectedLegendStyle) : "선택",
+                        title: isFilled ? ModifierSlot.label(for: selections[index], style: selectedLegendStyle) : emptyTitle,
                         subtitle: isFilled ? ModifierSlot.secondaryLabel(for: selections[index], style: selectedLegendStyle) : nil,
                         filled: isFilled
                     )
@@ -796,7 +794,7 @@ struct ModifierLayoutView: View {
         onSelect: @escaping (Int64) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("목록에서 선택")
+            Text("왼쪽부터 순서대로 선택")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
@@ -1008,7 +1006,6 @@ struct ModifierLayoutView: View {
 
     private func startWizard() {
         selectedLegendStyle = appState.isVdiMode ? .windows : .mac
-        slotCount = appState.isVdiMode ? 3 : 4
         physicalKeys = []
         localDesiredKeys = []
         vdiDesiredKeys = []
@@ -1026,26 +1023,34 @@ struct ModifierLayoutView: View {
         currentStep = 0
     }
 
-    private func syncSelectionBuffersWithSlotCount() {
-        physicalKeys = Array(physicalKeys.prefix(slotCount))
-        localDesiredKeys = Array(localDesiredKeys.prefix(slotCount))
-        vdiDesiredKeys = Array(vdiDesiredKeys.prefix(slotCount))
+    private func beginPhysicalKeyCapture() {
+        appState.keyInterceptor.applyCustomMappingsSync([:])
+        appState.keyInterceptor.onVerifyKeyEvent = { [self] originalKeyCode, _, _ in
+            guard currentStep == 2 else { return }
+            guard physicalKeys.count < maximumPhysicalKeyCount else { return }
+            guard leftSideChoices.contains(originalKeyCode) else { return }
+            guard !physicalKeys.contains(originalKeyCode) else { return }
+            physicalKeys.append(originalKeyCode)
+        }
     }
 
-    private func selectPhysicalKey(_ keyCode: Int64) {
-        guard physicalKeys.count < slotCount else { return }
-        guard !physicalKeys.contains(keyCode) else { return }
-        physicalKeys.append(keyCode)
+    private func syncSelectionBuffersWithPhysicalKeys() {
+        let count = configuredSlotCount
+        localDesiredKeys = Array(localDesiredKeys.prefix(count))
+        vdiDesiredKeys = Array(vdiDesiredKeys.prefix(count))
+        if count == maximumPhysicalKeyCount {
+            auxiliaryFnKey = nil
+        }
     }
 
     private func selectLocalDesiredKey(_ keyCode: Int64) {
-        guard localDesiredKeys.count < slotCount else { return }
+        guard localDesiredKeys.count < configuredSlotCount else { return }
         guard !localDesiredKeys.contains(keyCode) else { return }
         localDesiredKeys.append(keyCode)
     }
 
     private func selectVdiDesiredKey(_ keyCode: Int64) {
-        guard vdiDesiredKeys.count < slotCount else { return }
+        guard vdiDesiredKeys.count < configuredSlotCount else { return }
         guard !vdiDesiredKeys.contains(keyCode) else { return }
         vdiDesiredKeys.append(keyCode)
     }
@@ -1127,7 +1132,6 @@ struct ModifierLayoutView: View {
     }
 
     private enum SelectionMode {
-        case physical
         case local
         case vdi
     }
@@ -1135,32 +1139,23 @@ struct ModifierLayoutView: View {
     private func applyDefaultPreset(for mode: SelectionMode) {
         switch selectedLegendStyle {
         case .mac:
-            if slotCount == 4 {
-                applyMacFourKeyPreset(for: mode)
+            if configuredSlotCount == 4 {
+                assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
             } else {
                 assignPreset([Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
             }
         case .windows:
-            if slotCount == 4 {
+            if configuredSlotCount == 4 {
                 assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
             } else {
-                applyWindowsThreeKeyPreset(for: mode)
+                assignPreset([Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
             }
         }
     }
 
-    private func applyWindowsThreeKeyPreset(for mode: SelectionMode) {
-        assignPreset([Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
-    }
-
-    private func applyMacFourKeyPreset(for mode: SelectionMode) {
-        assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
-    }
-
     private func assignPreset(_ values: [Int64], to mode: SelectionMode) {
-        let trimmed = Array(values.prefix(slotCount))
+        let trimmed = Array(values.prefix(configuredSlotCount))
         switch mode {
-        case .physical: physicalKeys = trimmed
         case .local: localDesiredKeys = trimmed
         case .vdi: vdiDesiredKeys = trimmed
         }
