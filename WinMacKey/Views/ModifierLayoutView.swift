@@ -128,9 +128,9 @@ struct ModifierLayoutView: View {
         case ..<minimumPhysicalKeyCount:
             return "왼쪽부터 modifier를 누르고 마지막에 Space를 눌러 입력을 끝내세요."
         case minimumPhysicalKeyCount:
-            return "3개를 감지했습니다. 3키면 Space를, 4키면 마지막 키를 더 누른 뒤 Space를 누르세요."
+            return "3개를 감지했지만 아직 확정 전입니다. 3키면 Space를 눌러 확정하고, 4키면 마지막 키를 더 누른 뒤 Space를 누르세요."
         default:
-            return "4개를 감지했습니다. 마지막에 Space를 눌러 입력을 끝내세요."
+            return "4개를 감지했지만 아직 확정 전입니다. Space를 눌러 4키로 확정하세요."
         }
     }
 
@@ -409,6 +409,10 @@ struct ModifierLayoutView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 2)
 
+            if !physicalKeys.isEmpty {
+                physicalCaptureSummaryCard
+            }
+
             HStack {
                 Button("← 이전") {
                     appState.keyInterceptor.onVerifyKeyEvent = nil
@@ -446,6 +450,45 @@ struct ModifierLayoutView: View {
                 .disabled(!didCaptureSpaceBoundary)
             }
         }
+    }
+
+    private var physicalCaptureSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("감지 요약")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            summaryLine(title: "키캡 기준", keyCodes: physicalKeys, style: selectedLegendStyle)
+
+            if selectedLegendStyle == .windows {
+                summaryLine(title: "macOS 입력", keyCodes: physicalKeys, style: .mac)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .cornerRadius(8)
+    }
+
+    private func summaryLine(title: String, keyCodes: [Int64], style: KeyboardLegendStyle) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 56, alignment: .leading)
+
+            Text(formattedLabels(keyCodes, style: style))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func formattedLabels(_ keyCodes: [Int64], style: KeyboardLegendStyle) -> String {
+        guard !keyCodes.isEmpty else { return "-" }
+        return keyCodes
+            .map { ModifierSlot.label(for: $0, style: style) }
+            .joined(separator: " / ")
     }
 
     private var localMappingView: some View {

@@ -78,6 +78,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 - 프로필 위저드에서는 먼저 키캡 프린팅이 `Mac 키보드`인지 `Windows 키보드`인지 선택합니다
 - 다음 단계에서 스페이스바 왼쪽 modifier를 실제로 누르고 마지막에 `Space`를 눌러 현재 입력을 감지합니다
+- `Windows 키보드`를 고르면 현재 입력 단계에서 `키캡 기준`과 `macOS 입력`을 함께 보여줘 `Win`/`Alt` 뒤바뀜을 바로 확인할 수 있습니다
 - `Space` 앞에 감지된 키 개수에 따라 3키/4키가 자동으로 정해집니다
 - `Mac 로컬` 단계는 항상 `Fn / Ctrl / Cmd / Opt` 기준으로 왼쪽부터 배치를 선택합니다
 - `VDI` 단계는 항상 `Ctrl / Win / Alt` 기준으로 왼쪽부터 배치를 선택합니다
