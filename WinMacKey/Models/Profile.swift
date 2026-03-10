@@ -7,8 +7,8 @@ enum KeyboardLegendStyle: String, Codable, CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .mac: return "Mac 표기"
-        case .windows: return "Windows 표기"
+        case .mac: return "Mac 키보드"
+        case .windows: return "Windows 키보드"
         }
     }
 

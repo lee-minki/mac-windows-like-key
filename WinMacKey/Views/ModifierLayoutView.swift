@@ -53,6 +53,10 @@ struct ModifierLayoutView: View {
     @State private var localDesiredKeys: [Int64] = []
     @State private var vdiDesiredKeys: [Int64] = []
     @State private var auxiliaryFnKey: Int64? = nil
+    @State private var selectedLocalSlotIndex = 0
+    @State private var selectedVdiSlotIndex = 0
+    @State private var didCaptureSpaceBoundary = false
+    @State private var physicalCaptureNeedsMoreKeys = false
 
     @State private var verifyResults: [Int64: Bool] = [:]
     @State private var verifyLogs: [(keyCode: Int64, label: String, pass: Bool)] = []
@@ -67,8 +71,20 @@ struct ModifierLayoutView: View {
         Int64(kVK_Command),
         Int64(kVK_Option)
     ]
+    private let macTargetChoices: [Int64] = [
+        Int64(kVK_Function),
+        Int64(kVK_Control),
+        Int64(kVK_Command),
+        Int64(kVK_Option)
+    ]
+    private let vdiTargetChoices: [Int64] = [
+        Int64(kVK_Control),
+        Int64(kVK_Command),
+        Int64(kVK_Option)
+    ]
     private let minimumPhysicalKeyCount = 3
     private let maximumPhysicalKeyCount = 4
+    private let spaceKeyCode = Int64(kVK_Space)
     private let auxiliaryFnCandidates: [Int64] = [
         Int64(kVK_RightControl),
         Int64(kVK_CapsLock),
@@ -87,6 +103,14 @@ struct ModifierLayoutView: View {
         physicalKeys.count
     }
 
+    private var localSelectionCursor: Int {
+        max(0, min(selectedLocalSlotIndex, max(configuredSlotCount - 1, 0)))
+    }
+
+    private var vdiSelectionCursor: Int {
+        max(0, min(selectedVdiSlotIndex, max(configuredSlotCount - 1, 0)))
+    }
+
     private var shouldOfferAuxiliaryFnKey: Bool {
         configuredSlotCount == 3
             && !localDesiredKeys.contains(Int64(kVK_Function))
@@ -94,27 +118,39 @@ struct ModifierLayoutView: View {
     }
 
     private var physicalCaptureHint: String {
+        if didCaptureSpaceBoundary {
+            return "\(configuredSlotCount)키 감지가 끝났습니다. 다음 단계로 넘어가세요."
+        }
+        if physicalCaptureNeedsMoreKeys {
+            return "Space 전까지 3개 이상의 modifier를 눌러 주세요."
+        }
         switch physicalKeys.count {
         case ..<minimumPhysicalKeyCount:
-            return "스페이스바 왼쪽 modifier를 왼쪽부터 계속 눌러 주세요. 최소 3개가 필요합니다."
+            return "왼쪽부터 modifier를 누르고 마지막에 Space를 눌러 입력을 끝내세요."
         case minimumPhysicalKeyCount:
-            return "3키 감지가 끝났습니다. 여기서 다음으로 가거나, 4키 키보드라면 마지막 키를 한 번 더 눌러 주세요."
+            return "3개를 감지했습니다. 3키면 Space를, 4키면 마지막 키를 더 누른 뒤 Space를 누르세요."
         default:
-            return "4키 감지가 끝났습니다."
+            return "4개를 감지했습니다. 마지막에 Space를 눌러 입력을 끝내세요."
         }
     }
 
     private var legendGuideText: String {
         switch selectedLegendStyle {
         case .mac:
-            return "Mac 표기는 Ctrl / Opt / Cmd / Fn 기준으로 안내합니다."
+            return "Mac 키보드라면 Ctrl / Opt / Cmd / Fn 인쇄 기준으로 안내합니다."
         case .windows:
-            return "Windows 표기는 Ctrl / Win / Alt / Fn 기준으로 안내합니다. 내부적으로 Win=Cmd, Alt=Opt로 저장됩니다."
+            return "Windows 키보드라면 Ctrl / Win / Alt / Fn 인쇄 기준으로 안내합니다. 실제 입력은 macOS의 Cmd / Opt로 감지됩니다."
         }
     }
 
+    private var vdiGuideText: String {
+        configuredSlotCount == 4
+            ? "VDI 목표는 Windows 기준이라 Ctrl / Win / Alt만 고릅니다. 4키 키보드라면 같은 기능을 두 슬롯에 둘 수 있습니다."
+            : "VDI 목표는 Windows 기준이라 Ctrl / Win / Alt만 고릅니다."
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             switch currentStep {
             case 0: profileSelectorView
             case 1: shapeSetupView
@@ -137,7 +173,7 @@ struct ModifierLayoutView: View {
     }
 
     private var profileSelectorView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("키보드 레이아웃 프로필")
                 .font(.headline)
 
@@ -239,7 +275,7 @@ struct ModifierLayoutView: View {
     }
 
     private var stepIndicator: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             stepDot(step: 1, title: "표기")
             stepDot(step: 2, title: "현재 입력")
             stepDot(step: 3, title: "Mac 로컬")
@@ -254,40 +290,40 @@ struct ModifierLayoutView: View {
             ZStack {
                 Circle()
                     .fill(step <= currentStep ? Color.blue : Color.gray.opacity(0.3))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 24, height: 24)
                 Text("\(step)")
-                    .font(.system(.caption, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white)
             }
             Text(title)
-                .font(.system(size: 10))
+                .font(.system(size: 9.5))
                 .foregroundColor(step <= currentStep ? .primary : .secondary)
         }
     }
 
     private var shapeSetupView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             stepIndicator
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("키캡 표기 기준만 먼저 선택하세요")
+                Text("키보드 키캡 프린팅을 선택하세요")
                     .font(.subheadline)
-                Text("다음 단계에서 스페이스바 왼쪽 modifier를 실제로 눌러 현재 입력을 감지합니다. 3키/4키는 입력된 개수로 자동 판단합니다.")
+                Text("이 선택은 뒤 단계에서 키 이름과 부연 설명을 어떻게 보여줄지만 결정합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 legendStyleCard(
                     style: .mac,
-                    title: "Mac 키보드 표기",
-                    detail: "Ctrl · Opt · Cmd · Fn"
+                    title: "Mac 키보드",
+                    detail: "Ctrl · Opt · Cmd · Fn 키캡"
                 )
                 legendStyleCard(
                     style: .windows,
-                    title: "Windows / VDI 표기",
-                    detail: "Ctrl · Win · Alt · Fn"
+                    title: "Windows 키보드",
+                    detail: "Ctrl · Win · Alt · Fn 키캡"
                 )
             }
 
@@ -318,7 +354,7 @@ struct ModifierLayoutView: View {
         return Button {
             selectedLegendStyle = style
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(title)
                         .font(.system(.body, weight: .semibold))
@@ -327,15 +363,16 @@ struct ModifierLayoutView: View {
                         .foregroundColor(isSelected ? .blue : .secondary)
                 }
                 Text(detail)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(.blue)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(Color(nsColor: .windowBackgroundColor))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue : Color.gray.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? Color.blue.opacity(0.8) : Color.gray.opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
             )
             .cornerRadius(12)
         }
@@ -343,14 +380,14 @@ struct ModifierLayoutView: View {
     }
 
     private var physicalInputView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             stepIndicator
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("현재 키보드의 스페이스바 왼쪽 modifier를 실제로 눌러 주세요")
                     .font(.subheadline)
-                Text("왼쪽부터 순서대로 누르면 현재 입력 배열을 기록합니다. 3개를 누르면 다음으로 갈 수 있고, 4키 키보드라면 마지막 키를 한 번 더 누르세요.")
+                Text("왼쪽부터 키를 누르고 마지막에 `Space`를 누르면 3키/4키를 자동으로 감지합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(legendGuideText)
@@ -362,7 +399,10 @@ struct ModifierLayoutView: View {
                 title: "현재 입력 감지",
                 selections: physicalKeys,
                 total: maximumPhysicalKeyCount,
-                emptyTitle: "대기"
+                displayStyle: selectedLegendStyle,
+                emptyTitle: "대기",
+                showSecondaryLabels: selectedLegendStyle == .windows,
+                spaceCaptured: didCaptureSpaceBoundary
             )
             Text(physicalCaptureHint)
                 .font(.caption)
@@ -378,15 +418,17 @@ struct ModifierLayoutView: View {
 
                 Button("한 칸 지우기") {
                     _ = physicalKeys.popLast()
-                    if physicalKeys.count < maximumPhysicalKeyCount {
-                        auxiliaryFnKey = nil
-                    }
+                    didCaptureSpaceBoundary = false
+                    physicalCaptureNeedsMoreKeys = false
+                    auxiliaryFnKey = nil
                 }
                 .buttonStyle(.bordered)
                 .disabled(physicalKeys.isEmpty)
 
                 Button("초기화") {
                     physicalKeys = []
+                    didCaptureSpaceBoundary = false
+                    physicalCaptureNeedsMoreKeys = false
                     auxiliaryFnKey = nil
                 }
                 .buttonStyle(.bordered)
@@ -396,42 +438,51 @@ struct ModifierLayoutView: View {
                 Button("다음 →") {
                     syncSelectionBuffersWithPhysicalKeys()
                     appState.keyInterceptor.onVerifyKeyEvent = nil
+                    selectedLocalSlotIndex = nextCursorIndex(for: localDesiredKeys, total: configuredSlotCount)
+                    selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: configuredSlotCount)
                     currentStep = 3
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(physicalKeys.count < minimumPhysicalKeyCount)
+                .disabled(!didCaptureSpaceBoundary)
             }
         }
     }
 
     private var localMappingView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             stepIndicator
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("로컬 macOS에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
                     .font(.subheadline)
-                Text("현재 입력: \(formattedLabels(physicalKeys))")
+                Text("Mac 로컬 목표는 항상 `Fn / Ctrl / Cmd / Opt` 기준으로 선택합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            presetButtons(for: .local)
             slotSelectionCard(
                 title: "Mac 로컬 목표",
                 selections: localDesiredKeys,
-                total: configuredSlotCount
+                total: configuredSlotCount,
+                displayStyle: .mac,
+                selectedIndex: localSelectionCursor,
+                onSelectSlot: { selectedLocalSlotIndex = $0 }
             )
             mappingPreviewCard(
                 title: "Mac 로컬 미리보기",
                 source: physicalKeys,
-                target: localDesiredKeys
+                target: localDesiredKeys,
+                sourceStyle: selectedLegendStyle,
+                targetStyle: .mac
             )
             selectionPalette(
                 selections: localDesiredKeys,
-                choices: leftSideChoices,
-                onSelect: selectLocalDesiredKey
+                choices: macTargetChoices,
+                displayStyle: .mac,
+                selectedIndex: localSelectionCursor,
+                allowsDuplicates: false,
+                onSelect: { applyKeySelection($0, to: .local) }
             )
 
             HStack {
@@ -441,20 +492,22 @@ struct ModifierLayoutView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("한 칸 지우기") {
-                    _ = localDesiredKeys.popLast()
+                Button("선택 슬롯 지우기") {
+                    removeSelectedKey(from: .local)
                 }
                 .buttonStyle(.bordered)
                 .disabled(localDesiredKeys.isEmpty)
 
                 Button("초기화") {
                     localDesiredKeys = []
+                    selectedLocalSlotIndex = 0
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("다음 →") {
+                    selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: configuredSlotCount)
                     currentStep = 4
                 }
                 .buttonStyle(.borderedProminent)
@@ -464,45 +517,40 @@ struct ModifierLayoutView: View {
     }
 
     private var vdiMappingView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             stepIndicator
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Windows VDI 안에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
                     .font(.subheadline)
-                Text("현재 입력: \(formattedLabels(physicalKeys))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("VDI 단계는 비어 있는 상태로 시작합니다. 로컬 Mac과 같게 쓰고 싶을 때만 복사 버튼을 사용하세요.")
+                Text(vdiGuideText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            HStack {
-                Button("Mac 로컬 배치 복사") {
-                    vdiDesiredKeys = localDesiredKeys
-                }
-                .buttonStyle(ChipButtonStyle(tint: .blue))
-
-                Spacer()
-            }
-
-            presetButtons(for: .vdi)
             slotSelectionCard(
                 title: "VDI 목표",
                 selections: vdiDesiredKeys,
-                total: configuredSlotCount
+                total: configuredSlotCount,
+                displayStyle: .windows,
+                selectedIndex: vdiSelectionCursor,
+                onSelectSlot: { selectedVdiSlotIndex = $0 }
             )
             mappingPreviewCard(
                 title: "VDI 미리보기",
                 source: physicalKeys,
-                target: vdiDesiredKeys
+                target: vdiDesiredKeys,
+                sourceStyle: selectedLegendStyle,
+                targetStyle: .windows
             )
             selectionPalette(
                 selections: vdiDesiredKeys,
-                choices: leftSideChoices,
-                onSelect: selectVdiDesiredKey
+                choices: vdiTargetChoices,
+                displayStyle: .windows,
+                selectedIndex: vdiSelectionCursor,
+                allowsDuplicates: true,
+                onSelect: { applyKeySelection($0, to: .vdi) }
             )
 
             if vdiDesiredKeys.count == configuredSlotCount && shouldOfferAuxiliaryFnKey {
@@ -515,14 +563,15 @@ struct ModifierLayoutView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("한 칸 지우기") {
-                    _ = vdiDesiredKeys.popLast()
+                Button("선택 슬롯 지우기") {
+                    removeSelectedKey(from: .vdi)
                 }
                 .buttonStyle(.bordered)
                 .disabled(vdiDesiredKeys.isEmpty)
 
                 Button("초기화") {
                     vdiDesiredKeys = []
+                    selectedVdiSlotIndex = 0
                     auxiliaryFnKey = nil
                 }
                 .buttonStyle(.bordered)
@@ -555,12 +604,16 @@ struct ModifierLayoutView: View {
                 title: "Mac 로컬",
                 source: physicalKeys,
                 target: localDesiredKeys,
+                sourceStyle: selectedLegendStyle,
+                targetStyle: .mac,
                 highlight: currentVerificationContext == .localMac
             )
             mappingPreviewCard(
                 title: "VDI",
                 source: physicalKeys,
                 target: vdiDesiredKeys,
+                sourceStyle: selectedLegendStyle,
+                targetStyle: .windows,
                 highlight: currentVerificationContext == .vdi
             )
 
@@ -572,6 +625,7 @@ struct ModifierLayoutView: View {
                 ForEach(0..<configuredSlotCount, id: \.self) { index in
                     let physKey = physicalKeys[index]
                     let desiredKey = currentVerificationDesiredKeys[index]
+                    let targetStyle = targetDisplayStyle(for: currentVerificationContext)
 
                     HStack {
                         Text(ModifierSlot.label(for: physKey, style: selectedLegendStyle))
@@ -580,7 +634,7 @@ struct ModifierLayoutView: View {
                         Image(systemName: "arrow.right")
                             .font(.caption2)
                             .foregroundColor(.blue)
-                        Text(ModifierSlot.label(for: desiredKey, style: selectedLegendStyle))
+                        Text(ModifierSlot.label(for: desiredKey, style: targetStyle))
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.blue)
                             .frame(width: 48)
@@ -683,7 +737,7 @@ struct ModifierLayoutView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(auxiliaryFnCandidates, id: \.self) { keyCode in
                     let isSelected = auxiliaryFnKey == keyCode
                     Button {
@@ -691,9 +745,10 @@ struct ModifierLayoutView: View {
                     } label: {
                         keycapChoiceLabel(
                             keyCode: keyCode,
+                            displayStyle: selectedLegendStyle,
                             selected: isSelected,
-                            used: false,
-                            roleCaption: "보조 Fn"
+                            usedElsewhere: false,
+                            showsSecondaryLabel: selectedLegendStyle == .windows
                         )
                     }
                     .buttonStyle(.plain)
@@ -712,78 +767,70 @@ struct ModifierLayoutView: View {
         .cornerRadius(8)
     }
 
-    private func presetButtons(for mode: SelectionMode) -> some View {
-        HStack(spacing: 8) {
-            Button("기본 \(selectedLegendStyle == .windows ? "Windows" : "Mac") \(configuredSlotCount)키") {
-                applyDefaultPreset(for: mode)
-            }
-            .buttonStyle(ChipButtonStyle(tint: .blue))
-
-            Button("Windows 기준") {
-                assignPreset(
-                    configuredSlotCount == 4
-                        ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
-                        : [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)],
-                    to: mode
-                )
-            }
-            .buttonStyle(ChipButtonStyle())
-
-            Button("Mac 기준") {
-                assignPreset(
-                    configuredSlotCount == 4
-                        ? [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
-                        : [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)],
-                    to: mode
-                )
-            }
-            .buttonStyle(ChipButtonStyle())
-
-            Spacer()
-        }
-    }
-
-    private func slotSelectionCard(title: String, selections: [Int64], total: Int, emptyTitle: String = "선택") -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func slotSelectionCard(
+        title: String,
+        selections: [Int64],
+        total: Int,
+        displayStyle: KeyboardLegendStyle,
+        emptyTitle: String = "선택",
+        showSecondaryLabels: Bool = false,
+        selectedIndex: Int? = nil,
+        onSelectSlot: ((Int) -> Void)? = nil,
+        spaceCaptured: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            selectionSlotRow(selections: selections, total: total, emptyTitle: emptyTitle)
+            selectionSlotRow(
+                selections: selections,
+                total: total,
+                displayStyle: displayStyle,
+                emptyTitle: emptyTitle,
+                showSecondaryLabels: showSecondaryLabels,
+                selectedIndex: selectedIndex,
+                onSelectSlot: onSelectSlot,
+                spaceCaptured: spaceCaptured
+            )
         }
     }
 
-    private func selectionSlotRow(selections: [Int64], total: Int, emptyTitle: String) -> some View {
-        HStack(spacing: 8) {
+    private func selectionSlotRow(
+        selections: [Int64],
+        total: Int,
+        displayStyle: KeyboardLegendStyle,
+        emptyTitle: String,
+        showSecondaryLabels: Bool,
+        selectedIndex: Int?,
+        onSelectSlot: ((Int) -> Void)?,
+        spaceCaptured: Bool
+    ) -> some View {
+        HStack(spacing: 7) {
             ForEach(0..<total, id: \.self) { index in
                 let isFilled = index < selections.count
+                let isSelected = selectedIndex == index
+                let subtitle = showSecondaryLabels && isFilled
+                    ? ModifierSlot.secondaryLabel(for: selections[index], style: displayStyle)
+                    : nil
 
-                VStack(spacing: 4) {
+                Button {
+                    onSelectSlot?(index)
+                } label: {
                     slotKeycap(
-                        title: isFilled ? ModifierSlot.label(for: selections[index], style: selectedLegendStyle) : emptyTitle,
-                        subtitle: isFilled ? ModifierSlot.secondaryLabel(for: selections[index], style: selectedLegendStyle) : nil,
-                        filled: isFilled
+                        title: isFilled ? ModifierSlot.label(for: selections[index], style: displayStyle) : emptyTitle,
+                        subtitle: subtitle,
+                        filled: isFilled,
+                        selected: isSelected,
+                        slotNumber: index + 1
                     )
-
-                    Text("슬롯 \(index + 1)")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
                 }
+                .buttonStyle(.plain)
+                .disabled(onSelectSlot == nil)
             }
 
-            Text("Space")
-                .font(.system(.caption, weight: .bold))
-                .frame(width: 80, height: 46)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.06), radius: 3, x: 0, y: 2)
+            spaceKeycap(captured: spaceCaptured)
         }
-        .padding(12)
+        .padding(8)
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(12)
     }
@@ -791,31 +838,37 @@ struct ModifierLayoutView: View {
     private func selectionPalette(
         selections: [Int64],
         choices: [Int64],
+        displayStyle: KeyboardLegendStyle,
+        selectedIndex: Int,
+        allowsDuplicates: Bool,
         onSelect: @escaping (Int64) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("왼쪽부터 순서대로 선택")
+        VStack(alignment: .leading, spacing: 6) {
+            Text("선택 슬롯을 누른 뒤 기능 키를 고르세요")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(choices, id: \.self) { keyCode in
-                    let isUsed = selections.contains(keyCode)
+                    let isCurrentSelection = selectedIndex < selections.count && selections[selectedIndex] == keyCode
+                    let isUsedElsewhere = selections.enumerated().contains { offset, value in
+                        value == keyCode && offset != selectedIndex
+                    }
                     Button {
                         onSelect(keyCode)
                     } label: {
                         keycapChoiceLabel(
                             keyCode: keyCode,
-                            selected: false,
-                            used: isUsed,
-                            roleCaption: "선택 가능"
+                            displayStyle: displayStyle,
+                            selected: isCurrentSelection,
+                            usedElsewhere: isUsedElsewhere && !allowsDuplicates,
+                            showsSecondaryLabel: false
                         )
                     }
                     .buttonStyle(.plain)
-                    .disabled(isUsed)
                 }
             }
         }
-        .padding(8)
+        .padding(6)
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(8)
     }
@@ -824,9 +877,11 @@ struct ModifierLayoutView: View {
         title: String,
         source: [Int64],
         target: [Int64],
+        sourceStyle: KeyboardLegendStyle,
+        targetStyle: KeyboardLegendStyle,
         highlight: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title)
                     .font(.caption)
@@ -847,117 +902,120 @@ struct ModifierLayoutView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     ForEach(0..<min(source.count, target.count), id: \.self) { index in
                         HStack(spacing: 4) {
-                            Text(ModifierSlot.label(for: source[index], style: selectedLegendStyle))
-                                .font(.system(.caption, design: .monospaced))
+                            Text(ModifierSlot.label(for: source[index], style: sourceStyle))
+                                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.secondary)
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 8))
                                 .foregroundColor(.blue)
-                            Text(ModifierSlot.label(for: target[index], style: selectedLegendStyle))
-                                .font(.system(.caption, design: .monospaced))
+                            Text(ModifierSlot.label(for: target[index], style: targetStyle))
+                                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                                 .foregroundColor(.blue)
                         }
                     }
                 }
             }
         }
-        .padding(8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(8)
     }
 
-    private func slotKeycap(title: String, subtitle: String?, filled: Bool) -> some View {
-        VStack(spacing: subtitle == nil ? 0 : 2) {
-            Text(title)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundStyle(filled ? Color.primary : Color.secondary)
+    private func slotKeycap(
+        title: String,
+        subtitle: String?,
+        filled: Bool,
+        selected: Bool,
+        slotNumber: Int
+    ) -> some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 11)
+                .fill(filled ? Color.black.opacity(0.028) : Color.black.opacity(0.015))
 
-            if let subtitle {
-                Text(subtitle)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(filled ? Color.secondary : Color.secondary.opacity(0.8))
-                    .lineLimit(1)
+            RoundedRectangle(cornerRadius: 11)
+                .stroke(selected ? Color.blue.opacity(0.82) : Color.black.opacity(filled ? 0.12 : 0.08), lineWidth: selected ? 1.4 : 1)
+
+            Text("\(slotNumber)")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 6)
+                .padding(.top, 5)
+
+            VStack(spacing: subtitle == nil ? 1 : 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(filled ? Color.primary : Color.secondary)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 68, height: subtitle == nil ? 44 : 50)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(filled ? Color.blue.opacity(0.08) : Color.black.opacity(0.025))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(filled ? Color.blue.opacity(0.32) : Color.black.opacity(0.09), lineWidth: 1)
-        )
+        .frame(width: subtitle == nil ? 58 : 64, height: subtitle == nil ? 42 : 46)
+    }
+
+    private func spaceKeycap(captured: Bool) -> some View {
+        Text("Space")
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundStyle(captured ? Color.blue : Color.secondary)
+            .frame(width: 72, height: 42)
+            .background(
+                RoundedRectangle(cornerRadius: 11)
+                    .fill(captured ? Color.blue.opacity(0.08) : Color.black.opacity(0.018))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 11)
+                    .stroke(captured ? Color.blue.opacity(0.8) : Color.black.opacity(0.08), lineWidth: captured ? 1.4 : 1)
+            )
     }
 
     private func keycapChoiceLabel(
         keyCode: Int64,
+        displayStyle: KeyboardLegendStyle,
         selected: Bool,
-        used: Bool,
-        roleCaption: String
+        usedElsewhere: Bool,
+        showsSecondaryLabel: Bool
     ) -> some View {
-        let title = ModifierSlot.label(for: keyCode, style: selectedLegendStyle)
-        let subtitle = ModifierSlot.secondaryLabel(for: keyCode, style: selectedLegendStyle)
-        let borderColor = selected ? Color.blue.opacity(0.55) : Color.black.opacity(used ? 0.08 : 0.12)
-        let fillColor = selected ? Color.blue.opacity(0.07) : Color.black.opacity(used ? 0.025 : 0.015)
+        let title = ModifierSlot.label(for: keyCode, style: displayStyle)
+        let subtitle = showsSecondaryLabel ? ModifierSlot.secondaryLabel(for: keyCode, style: displayStyle) : nil
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(used ? Color.secondary : Color.primary)
+        return VStack(spacing: subtitle == nil ? 1 : 2) {
+            Text(title)
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.primary)
 
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 9.5, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer(minLength: 8)
-
-                if used {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.green)
-                } else if selected {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.blue)
-                }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 8.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-
-            Text(roleCaption)
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(used ? Color.secondary : (selected ? Color.blue : Color.secondary))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(
-                            used
-                                ? Color.black.opacity(0.04)
-                                : (selected ? Color.blue.opacity(0.1) : Color.black.opacity(0.035))
-                        )
-                )
         }
-        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 64 : 72, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 40 : 46)
+        .overlay(alignment: .topTrailing) {
+            if usedElsewhere {
+                Circle()
+                    .fill(Color.secondary.opacity(0.55))
+                    .frame(width: 6, height: 6)
+                    .padding(6)
+            }
+        }
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(fillColor)
+            RoundedRectangle(cornerRadius: 11)
+                .fill(selected ? Color.blue.opacity(0.08) : Color.black.opacity(0.018))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(borderColor, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 11)
+                .stroke(selected ? Color.blue.opacity(0.8) : Color.black.opacity(usedElsewhere ? 0.18 : 0.1), lineWidth: selected ? 1.4 : 1)
         )
-        .opacity(used ? 0.72 : 1.0)
     }
 
     private var saveProfileSheet: some View {
@@ -965,8 +1023,8 @@ struct ModifierLayoutView: View {
             Text("프로필 이름을 입력하세요")
                 .font(.headline)
 
-            mappingPreviewCard(title: "Mac 로컬", source: physicalKeys, target: localDesiredKeys)
-            mappingPreviewCard(title: "VDI", source: physicalKeys, target: vdiDesiredKeys)
+            mappingPreviewCard(title: "Mac 로컬", source: physicalKeys, target: localDesiredKeys, sourceStyle: selectedLegendStyle, targetStyle: .mac)
+            mappingPreviewCard(title: "VDI", source: physicalKeys, target: vdiDesiredKeys, sourceStyle: selectedLegendStyle, targetStyle: .windows)
 
             if let auxiliaryFnKey {
                 Text("\(ModifierSlot.label(for: auxiliaryFnKey, style: selectedLegendStyle)) -> Fn")
@@ -1010,6 +1068,10 @@ struct ModifierLayoutView: View {
         localDesiredKeys = []
         vdiDesiredKeys = []
         auxiliaryFnKey = nil
+        selectedLocalSlotIndex = 0
+        selectedVdiSlotIndex = 0
+        didCaptureSpaceBoundary = false
+        physicalCaptureNeedsMoreKeys = false
         verifyResults = [:]
         verifyLogs = []
         auxiliaryFnVerified = false
@@ -1025,12 +1087,32 @@ struct ModifierLayoutView: View {
 
     private func beginPhysicalKeyCapture() {
         appState.keyInterceptor.applyCustomMappingsSync([:])
+        didCaptureSpaceBoundary = (minimumPhysicalKeyCount...maximumPhysicalKeyCount).contains(physicalKeys.count) && didCaptureSpaceBoundary
+        physicalCaptureNeedsMoreKeys = false
         appState.keyInterceptor.onVerifyKeyEvent = { [self] originalKeyCode, _, _ in
             guard currentStep == 2 else { return }
+
+            if didCaptureSpaceBoundary {
+                return
+            }
+
+            if originalKeyCode == spaceKeyCode {
+                if (minimumPhysicalKeyCount...maximumPhysicalKeyCount).contains(physicalKeys.count) {
+                    didCaptureSpaceBoundary = true
+                    physicalCaptureNeedsMoreKeys = false
+                    syncSelectionBuffersWithPhysicalKeys()
+                } else {
+                    physicalCaptureNeedsMoreKeys = true
+                }
+                return
+            }
+
             guard physicalKeys.count < maximumPhysicalKeyCount else { return }
             guard leftSideChoices.contains(originalKeyCode) else { return }
             guard !physicalKeys.contains(originalKeyCode) else { return }
+
             physicalKeys.append(originalKeyCode)
+            physicalCaptureNeedsMoreKeys = false
         }
     }
 
@@ -1041,18 +1123,109 @@ struct ModifierLayoutView: View {
         if count == maximumPhysicalKeyCount {
             auxiliaryFnKey = nil
         }
+        selectedLocalSlotIndex = nextCursorIndex(for: localDesiredKeys, total: count)
+        selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: count)
     }
 
-    private func selectLocalDesiredKey(_ keyCode: Int64) {
-        guard localDesiredKeys.count < configuredSlotCount else { return }
-        guard !localDesiredKeys.contains(keyCode) else { return }
-        localDesiredKeys.append(keyCode)
+    private func nextCursorIndex(for selections: [Int64], total: Int) -> Int {
+        guard total > 0 else { return 0 }
+        return min(selections.count, total - 1)
     }
 
-    private func selectVdiDesiredKey(_ keyCode: Int64) {
-        guard vdiDesiredKeys.count < configuredSlotCount else { return }
-        guard !vdiDesiredKeys.contains(keyCode) else { return }
-        vdiDesiredKeys.append(keyCode)
+    private func targetDisplayStyle(for context: KeyboardUsageContext) -> KeyboardLegendStyle {
+        switch context {
+        case .localMac: return .mac
+        case .vdi: return .windows
+        }
+    }
+
+    private func applyKeySelection(_ keyCode: Int64, to mode: TargetSelectionMode) {
+        let allowsDuplicates = mode == .vdi
+        let total = configuredSlotCount
+        guard total > 0 else { return }
+
+        switch mode {
+        case .local:
+            localDesiredKeys = updatedSelections(
+                localDesiredKeys,
+                keyCode: keyCode,
+                selectedIndex: localSelectionCursor,
+                total: total,
+                allowsDuplicates: allowsDuplicates
+            )
+            selectedLocalSlotIndex = advancedCursorIndex(
+                afterApplyingAt: localSelectionCursor,
+                selections: localDesiredKeys,
+                total: total
+            )
+        case .vdi:
+            vdiDesiredKeys = updatedSelections(
+                vdiDesiredKeys,
+                keyCode: keyCode,
+                selectedIndex: vdiSelectionCursor,
+                total: total,
+                allowsDuplicates: allowsDuplicates
+            )
+            selectedVdiSlotIndex = advancedCursorIndex(
+                afterApplyingAt: vdiSelectionCursor,
+                selections: vdiDesiredKeys,
+                total: total
+            )
+        }
+    }
+
+    private func updatedSelections(
+        _ currentSelections: [Int64],
+        keyCode: Int64,
+        selectedIndex: Int,
+        total: Int,
+        allowsDuplicates: Bool
+    ) -> [Int64] {
+        guard total > 0 else { return currentSelections }
+
+        var result = Array(currentSelections.prefix(total))
+        let clampedIndex = max(0, min(selectedIndex, total - 1))
+
+        if clampedIndex < result.count {
+            if !allowsDuplicates,
+               let existingIndex = result.firstIndex(of: keyCode),
+               existingIndex != clampedIndex {
+                result.swapAt(existingIndex, clampedIndex)
+            } else {
+                result[clampedIndex] = keyCode
+            }
+            return result
+        }
+
+        if !allowsDuplicates, result.contains(keyCode) {
+            return result
+        }
+
+        if result.count < total {
+            result.append(keyCode)
+        }
+        return result
+    }
+
+    private func advancedCursorIndex(afterApplyingAt index: Int, selections: [Int64], total: Int) -> Int {
+        guard total > 0 else { return 0 }
+        if index >= selections.count - 1 && selections.count < total {
+            return selections.count
+        }
+        return min(index, total - 1)
+    }
+
+    private func removeSelectedKey(from mode: TargetSelectionMode) {
+        switch mode {
+        case .local:
+            guard localSelectionCursor < localDesiredKeys.count else { return }
+            localDesiredKeys.remove(at: localSelectionCursor)
+            selectedLocalSlotIndex = max(0, min(localSelectionCursor, max(localDesiredKeys.count - 1, 0)))
+        case .vdi:
+            guard vdiSelectionCursor < vdiDesiredKeys.count else { return }
+            vdiDesiredKeys.remove(at: vdiSelectionCursor)
+            selectedVdiSlotIndex = max(0, min(vdiSelectionCursor, max(vdiDesiredKeys.count - 1, 0)))
+        }
     }
 
     private func desiredKeys(for context: KeyboardUsageContext) -> [Int64] {
@@ -1127,38 +1300,9 @@ struct ModifierLayoutView: View {
         appState.applyProfile(profile)
     }
 
-    private func formattedLabels(_ keyCodes: [Int64]) -> String {
-        keyCodes.map { ModifierSlot.label(for: $0, style: selectedLegendStyle) }.joined(separator: " · ")
-    }
-
-    private enum SelectionMode {
+    private enum TargetSelectionMode {
         case local
         case vdi
-    }
-
-    private func applyDefaultPreset(for mode: SelectionMode) {
-        switch selectedLegendStyle {
-        case .mac:
-            if configuredSlotCount == 4 {
-                assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
-            } else {
-                assignPreset([Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)], to: mode)
-            }
-        case .windows:
-            if configuredSlotCount == 4 {
-                assignPreset([Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
-            } else {
-                assignPreset([Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)], to: mode)
-            }
-        }
-    }
-
-    private func assignPreset(_ values: [Int64], to mode: SelectionMode) {
-        let trimmed = Array(values.prefix(configuredSlotCount))
-        switch mode {
-        case .local: localDesiredKeys = trimmed
-        case .vdi: vdiDesiredKeys = trimmed
-        }
     }
 }
 
