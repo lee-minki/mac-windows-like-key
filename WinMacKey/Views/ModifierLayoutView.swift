@@ -35,10 +35,10 @@ struct ModifierSlot: Identifiable, Equatable {
         guard style == .windows else { return nil }
 
         switch Int(keyCode) {
-        case kVK_Command: return "macOS Cmd 입력"
-        case kVK_Option: return "macOS Opt 입력"
-        case kVK_RightCommand: return "macOS RCmd 입력"
-        case kVK_RightOption: return "macOS ROpt 입력"
+        case kVK_Command: return "Cmd 입력"
+        case kVK_Option: return "Opt 입력"
+        case kVK_RightCommand: return "RCmd 입력"
+        case kVK_RightOption: return "ROpt 입력"
         default: return nil
         }
     }
@@ -874,34 +874,25 @@ struct ModifierLayoutView: View {
     private func slotKeycap(title: String, subtitle: String?, filled: Bool) -> some View {
         VStack(spacing: subtitle == nil ? 0 : 2) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(filled ? Color.primary : Color.secondary)
 
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 8.5, weight: .medium))
+                    .font(.system(size: 8, weight: .medium))
                     .foregroundStyle(filled ? Color.secondary : Color.secondary.opacity(0.8))
                     .lineLimit(1)
             }
         }
-        .frame(width: 70, height: subtitle == nil ? 48 : 56)
+        .frame(width: 68, height: subtitle == nil ? 44 : 50)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: filled
-                            ? [Color.white, Color.green.opacity(0.12)]
-                            : [Color.white.opacity(0.78), Color.gray.opacity(0.08)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .fill(filled ? Color.blue.opacity(0.08) : Color.black.opacity(0.025))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(filled ? Color.green.opacity(0.45) : Color.white.opacity(0.7), lineWidth: 1)
+                .stroke(filled ? Color.blue.opacity(0.32) : Color.black.opacity(0.09), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(filled ? 0.08 : 0.04), radius: 4, x: 0, y: 2)
     }
 
     private func keycapChoiceLabel(
@@ -912,17 +903,19 @@ struct ModifierLayoutView: View {
     ) -> some View {
         let title = ModifierSlot.label(for: keyCode, style: selectedLegendStyle)
         let subtitle = ModifierSlot.secondaryLabel(for: keyCode, style: selectedLegendStyle)
+        let borderColor = selected ? Color.blue.opacity(0.55) : Color.black.opacity(used ? 0.08 : 0.12)
+        let fillColor = selected ? Color.blue.opacity(0.07) : Color.black.opacity(used ? 0.025 : 0.015)
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(used ? Color.secondary : Color.primary)
 
                     if let subtitle {
                         Text(subtitle)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 9.5, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -942,47 +935,31 @@ struct ModifierLayoutView: View {
             }
 
             Text(roleCaption)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(used ? Color.secondary : (selected ? Color.blue : Color.secondary))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
                 .background(
                     Capsule()
                         .fill(
                             used
-                                ? Color.gray.opacity(0.12)
-                                : (selected ? Color.blue.opacity(0.12) : Color.gray.opacity(0.08))
+                                ? Color.black.opacity(0.04)
+                                : (selected ? Color.blue.opacity(0.1) : Color.black.opacity(0.035))
                         )
                 )
         }
-        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 76 : 84, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 64 : 72, alignment: .leading)
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(
-                    LinearGradient(
-                        colors: used
-                            ? [Color.gray.opacity(0.1), Color.gray.opacity(0.04)]
-                            : (selected
-                                ? [Color.blue.opacity(0.16), Color.white]
-                                : [Color.white, Color(nsColor: .windowBackgroundColor)]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .fill(fillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(
-                    used
-                        ? Color.green.opacity(0.35)
-                        : (selected ? Color.blue.opacity(0.45) : Color.white.opacity(0.75)),
-                    lineWidth: 1
-                )
+                .stroke(borderColor, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(used ? 0.04 : 0.06), radius: 5, x: 0, y: 3)
-        .opacity(used ? 0.7 : 1.0)
+        .opacity(used ? 0.72 : 1.0)
     }
 
     private var saveProfileSheet: some View {
@@ -1195,19 +1172,19 @@ private struct ChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(configuration.isPressed ? tint.opacity(0.9) : tint)
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(tint.opacity(configuration.isPressed ? 0.16 : 0.1))
+                    .fill(configuration.isPressed ? tint.opacity(0.08) : Color.clear)
             )
             .overlay(
                 Capsule()
-                    .stroke(tint.opacity(0.18), lineWidth: 1)
+                    .stroke(tint.opacity(0.32), lineWidth: 1)
             )
-            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
