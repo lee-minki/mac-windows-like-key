@@ -179,7 +179,7 @@ struct HelpView: View {
                             Text("2. Step 1: 키보드 표기(`Mac` 또는 `Windows / VDI`)와 3키/4키 형상 선택")
                             Text("3. Step 2: 현재 입력 순서를 목록에서 선택 (`Win (Cmd)`, `Alt (Opt)` 같이 표시)")
                             Text("4. Step 3: 로컬 macOS에서 원하는 배치 선택")
-                            Text("5. Step 4: VDI에서 원하는 배치 선택")
+                            Text("5. Step 4: VDI에서 원하는 배치 선택 (기본은 비어 있음, 필요하면 Mac 로컬 배치 복사)")
                             Text("6. 3키 키보드라면 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
                             Text("7. Step 5: 현재 컨텍스트를 검증한 뒤 프로필 저장")
                             Text("8. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환하며, 앱 할당은 현재 앱 기준으로 동작")

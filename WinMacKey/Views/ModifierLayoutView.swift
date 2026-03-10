@@ -431,9 +431,6 @@ struct ModifierLayoutView: View {
                 Spacer()
 
                 Button("다음 →") {
-                    if vdiDesiredKeys.isEmpty {
-                        vdiDesiredKeys = localDesiredKeys
-                    }
                     currentStep = 4
                 }
                 .buttonStyle(.borderedProminent)

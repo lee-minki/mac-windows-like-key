@@ -78,6 +78,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 - 프로필 위저드에서 먼저 키보드 형상과 표기 기준을 `Mac` 또는 `Windows / VDI`로 선택할 수 있습니다
 - 현재 입력 순서, `Mac 로컬`에서 원하는 배치, `VDI`에서 원하는 배치를 각각 따로 저장합니다
+- `VDI` 단계는 비어 있는 상태로 시작하며, 같은 배열을 원할 때만 `Mac 로컬 배치 복사`를 사용합니다
 - 실제 키를 누르는 대신 목록에서 `Win (Cmd)`, `Alt (Opt)`처럼 직접 선택할 수 있습니다
 - 프로필 위저드는 스페이스바 왼쪽 modifier가 3개인 키보드와 4개인 키보드를 모두 지원합니다
 - 3키 키보드에서는 `RCtrl`, `Caps`, `RShift` 중 하나를 보조 `Fn` 키로 지정할 수 있습니다
