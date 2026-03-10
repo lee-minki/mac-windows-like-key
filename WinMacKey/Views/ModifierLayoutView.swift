@@ -30,6 +30,18 @@ struct ModifierSlot: Identifiable, Equatable {
         }
         return primary
     }
+
+    static func secondaryLabel(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String? {
+        guard style == .windows else { return nil }
+
+        switch Int(keyCode) {
+        case kVK_Command: return "macOS Cmd 입력"
+        case kVK_Option: return "macOS Opt 입력"
+        case kVK_RightCommand: return "macOS RCmd 입력"
+        case kVK_RightOption: return "macOS ROpt 입력"
+        default: return nil
+        }
+    }
 }
 
 struct ModifierLayoutView: View {
@@ -459,8 +471,7 @@ struct ModifierLayoutView: View {
                 Button("Mac 로컬 배치 복사") {
                     vdiDesiredKeys = localDesiredKeys
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(ChipButtonStyle(tint: .blue))
 
                 Spacer()
             }
@@ -660,22 +671,27 @@ struct ModifierLayoutView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ForEach(auxiliaryFnCandidates, id: \.self) { keyCode in
                     let isSelected = auxiliaryFnKey == keyCode
-                    Button(isSelected
-                           ? "\(ModifierSlot.detailedLabel(for: keyCode, style: selectedLegendStyle)) ✓"
-                           : ModifierSlot.detailedLabel(for: keyCode, style: selectedLegendStyle)) {
+                    Button {
                         auxiliaryFnKey = keyCode
+                    } label: {
+                        keycapChoiceLabel(
+                            keyCode: keyCode,
+                            selected: isSelected,
+                            used: false,
+                            roleCaption: "보조 Fn"
+                        )
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                 }
 
                 if auxiliaryFnKey != nil {
                     Button("선택 해제") {
                         auxiliaryFnKey = nil
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(ChipButtonStyle())
                 }
             }
         }
@@ -689,23 +705,20 @@ struct ModifierLayoutView: View {
             Button("기본 \(selectedLegendStyle == .windows ? "Windows" : "Mac") \(slotCount)키") {
                 applyDefaultPreset(for: mode)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(ChipButtonStyle(tint: .blue))
 
             if mode == .physical {
                 Button("Windows 3키") {
                     slotCount = 3
                     applyWindowsThreeKeyPreset(for: mode)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(ChipButtonStyle())
 
                 Button("Mac 4키") {
                     slotCount = 4
                     applyMacFourKeyPreset(for: mode)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(ChipButtonStyle())
             } else {
                 Button("Windows 기준") {
                     assignPreset(
@@ -715,8 +728,7 @@ struct ModifierLayoutView: View {
                         to: mode
                     )
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(ChipButtonStyle())
 
                 Button("Mac 기준") {
                     assignPreset(
@@ -726,8 +738,7 @@ struct ModifierLayoutView: View {
                         to: mode
                     )
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(ChipButtonStyle())
             }
 
             Spacer()
@@ -749,15 +760,11 @@ struct ModifierLayoutView: View {
                 let isFilled = index < selections.count
 
                 VStack(spacing: 4) {
-                    Text(isFilled ? ModifierSlot.label(for: selections[index], style: selectedLegendStyle) : "선택")
-                        .font(.system(.body, weight: .semibold))
-                        .frame(width: 62, height: 46)
-                        .background(isFilled ? Color.green.opacity(0.15) : Color.gray.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(isFilled ? Color.green.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
-                        )
-                        .cornerRadius(8)
+                    slotKeycap(
+                        title: isFilled ? ModifierSlot.label(for: selections[index], style: selectedLegendStyle) : "선택",
+                        subtitle: isFilled ? ModifierSlot.secondaryLabel(for: selections[index], style: selectedLegendStyle) : nil,
+                        filled: isFilled
+                    )
 
                     Text("슬롯 \(index + 1)")
                         .font(.system(size: 9))
@@ -768,8 +775,15 @@ struct ModifierLayoutView: View {
             Text("Space")
                 .font(.system(.caption, weight: .bold))
                 .frame(width: 80, height: 46)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.06), radius: 3, x: 0, y: 2)
         }
         .padding(12)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -785,13 +799,20 @@ struct ModifierLayoutView: View {
             Text("목록에서 선택")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
                 ForEach(choices, id: \.self) { keyCode in
                     let isUsed = selections.contains(keyCode)
-                    Button(ModifierSlot.detailedLabel(for: keyCode, style: selectedLegendStyle)) {
+                    Button {
                         onSelect(keyCode)
+                    } label: {
+                        keycapChoiceLabel(
+                            keyCode: keyCode,
+                            selected: false,
+                            used: isUsed,
+                            roleCaption: "선택 가능"
+                        )
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .disabled(isUsed)
                 }
             }
@@ -848,6 +869,120 @@ struct ModifierLayoutView: View {
         .padding(8)
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(8)
+    }
+
+    private func slotKeycap(title: String, subtitle: String?, filled: Bool) -> some View {
+        VStack(spacing: subtitle == nil ? 0 : 2) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(filled ? Color.primary : Color.secondary)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 8.5, weight: .medium))
+                    .foregroundStyle(filled ? Color.secondary : Color.secondary.opacity(0.8))
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: 70, height: subtitle == nil ? 48 : 56)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: filled
+                            ? [Color.white, Color.green.opacity(0.12)]
+                            : [Color.white.opacity(0.78), Color.gray.opacity(0.08)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(filled ? Color.green.opacity(0.45) : Color.white.opacity(0.7), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(filled ? 0.08 : 0.04), radius: 4, x: 0, y: 2)
+    }
+
+    private func keycapChoiceLabel(
+        keyCode: Int64,
+        selected: Bool,
+        used: Bool,
+        roleCaption: String
+    ) -> some View {
+        let title = ModifierSlot.label(for: keyCode, style: selectedLegendStyle)
+        let subtitle = ModifierSlot.secondaryLabel(for: keyCode, style: selectedLegendStyle)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(used ? Color.secondary : Color.primary)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if used {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.green)
+                } else if selected {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.blue)
+                }
+            }
+
+            Text(roleCaption)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(used ? Color.secondary : (selected ? Color.blue : Color.secondary))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(
+                            used
+                                ? Color.gray.opacity(0.12)
+                                : (selected ? Color.blue.opacity(0.12) : Color.gray.opacity(0.08))
+                        )
+                )
+        }
+        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 76 : 84, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: used
+                            ? [Color.gray.opacity(0.1), Color.gray.opacity(0.04)]
+                            : (selected
+                                ? [Color.blue.opacity(0.16), Color.white]
+                                : [Color.white, Color(nsColor: .windowBackgroundColor)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    used
+                        ? Color.green.opacity(0.35)
+                        : (selected ? Color.blue.opacity(0.45) : Color.white.opacity(0.75)),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: .black.opacity(used ? 0.04 : 0.06), radius: 5, x: 0, y: 3)
+        .opacity(used ? 0.7 : 1.0)
     }
 
     private var saveProfileSheet: some View {
@@ -1052,5 +1187,27 @@ struct ModifierLayoutView: View {
         case .local: localDesiredKeys = trimmed
         case .vdi: vdiDesiredKeys = trimmed
         }
+    }
+}
+
+private struct ChipButtonStyle: ButtonStyle {
+    var tint: Color = .secondary
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(configuration.isPressed ? tint.opacity(0.9) : tint)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(tint.opacity(configuration.isPressed ? 0.16 : 0.1))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(tint.opacity(0.18), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
