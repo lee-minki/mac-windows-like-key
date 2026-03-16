@@ -21,6 +21,9 @@ class StateManager: ObservableObject {
     private var inputSourceObserver: NSObjectProtocol?
     private var inputSourcePollTask: Task<Void, Never>?
     private let toggleRetryLimit = 1
+    /// 입력 소스 변경이 이미 확인되어 commitWindow가 완료된 경우 true
+    /// 폴링과 DistributedNotification의 이중 호출을 방지합니다.
+    private var commitWindowCompleted = false
     
     init() {
         refreshCurrentSource()
@@ -43,6 +46,7 @@ class StateManager: ObservableObject {
         let beforeIndex = inputSourceManager.currentSourceIndex()
 
         switchCount += 1
+        commitWindowCompleted = false  // 새 토글 시작 시 리셋
 
         if isVdiMode {
             inputSourceManager.emitVDIRelayKey()
@@ -72,10 +76,14 @@ class StateManager: ObservableObject {
             queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.inputSourcePollTask?.cancel()
-                self?.inputSourcePollTask = nil
-                self?.refreshCurrentSource()
-                self?.onSystemInputSourceChanged?()
+                guard let self = self else { return }
+                self.inputSourcePollTask?.cancel()
+                self.inputSourcePollTask = nil
+                self.refreshCurrentSource()
+                if !self.commitWindowCompleted {
+                    self.commitWindowCompleted = true
+                    self.onSystemInputSourceChanged?()
+                }
             }
         }
     }
@@ -93,7 +101,10 @@ class StateManager: ObservableObject {
                 let currentIndex = self.inputSourceManager.currentSourceIndex()
                 if currentIndex != 0 && currentIndex != previousIndex {
                     self.refreshCurrentSource()
-                    self.onSystemInputSourceChanged?()
+                    if !self.commitWindowCompleted {
+                        self.commitWindowCompleted = true
+                        self.onSystemInputSourceChanged?()
+                    }
                     self.inputSourcePollTask = nil
                     return
                 }

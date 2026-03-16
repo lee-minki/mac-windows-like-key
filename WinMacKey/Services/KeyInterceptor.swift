@@ -27,7 +27,7 @@ class KeyInterceptor: ObservableObject {
     private var bufferedKeyEvents: [CGEvent] = []
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
-    private let inputSourceCommitTimeout: TimeInterval = 0.040
+    private let inputSourceCommitTimeout: TimeInterval = 0.070
     private let maxBufferedEventCount = 8
 
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
@@ -421,9 +421,13 @@ class KeyInterceptor: ObservableObject {
         let events = bufferedKeyEvents
         bufferedKeyEvents.removeAll()
 
-        for event in events {
+        for (i, event) in events.enumerated() {
             event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
             event.post(tap: .cgSessionEventTap)
+            // IME가 각 이벤트를 안정적으로 처리할 수 있도록 키 사이에 짧은 딜레이 삽입
+            if i < events.count - 1 {
+                usleep(500)  // 0.5ms
+            }
         }
 
         logger.info("Replayed \(events.count) buffered key events (\(reason))")
