@@ -133,8 +133,6 @@ class AppState: ObservableObject {
     private static let vdiInternalKeyboardMappings: [Int64: Int64] = [
         Int64(kVK_Function): Int64(kVK_Control),   // Fn → Ctrl
         Int64(kVK_Control): Int64(kVK_Function),   // Control → Fn
-        Int64(kVK_Option): Int64(kVK_Command),     // Option → Windows key
-        Int64(kVK_Command): Int64(kVK_Option),     // Command → Alt
     ]
     
     init() {
