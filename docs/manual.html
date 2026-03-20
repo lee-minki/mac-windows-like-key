@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinMac Key - 사용 매뉴얼</title>
+<meta name="description" content="WinMac Key macOS 키보드 매핑 앱 사용 매뉴얼. 설치부터 설정, VDI 환경까지.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2333;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#d29922;--purple:#bc8cff;--red:#f85149;--pink:#f778ba;--sidebar-w:260px;--radius:12px}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px}
+code,.code{font-family:'JetBrains Mono',monospace;font-size:13px}
+
+/* Sidebar */
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:var(--surface);border-right:1px solid var(--border);padding:24px 0;overflow-y:auto;z-index:100;transition:transform .3s}
+.sidebar-logo{padding:0 20px 20px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.sidebar-logo h1{font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sidebar-logo p{font-size:11px;color:var(--text2);margin-top:4px}
+.sidebar nav a{display:flex;align-items:center;gap:10px;padding:10px 20px;color:var(--text2);text-decoration:none;font-size:13px;font-weight:500;transition:all .2s;border-left:3px solid transparent}
+.sidebar nav a:hover{color:var(--text);background:rgba(88,166,255,.06)}
+.sidebar nav a.active{color:var(--accent);border-left-color:var(--accent);background:rgba(88,166,255,.08)}
+.sidebar nav a .icon{width:20px;text-align:center;font-size:15px}
+
+/* Main */
+.main{margin-left:var(--sidebar-w);min-height:100vh}
+.content{max-width:820px;margin:0 auto;padding:40px 32px 80px}
+
+/* Sections */
+section{margin-bottom:64px}
+section h2{font-size:26px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+section h2 .emoji{font-size:28px}
+.section-desc{color:var(--text2);margin-bottom:28px;font-size:14px}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px;transition:border-color .2s}
+.card:hover{border-color:var(--accent)}
+.card h3{font-size:16px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+
+/* Step Cards */
+.step{display:flex;gap:16px;margin-bottom:20px}
+.step-num{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;margin-top:2px}
+.step-body{flex:1}
+.step-body h3{font-size:16px;font-weight:600;margin-bottom:6px}
+.step-body p{color:var(--text2);font-size:13px;margin-bottom:10px}
+.step-list{list-style:none;counter-reset:s}
+.step-list li{counter-increment:s;padding:6px 0 6px 28px;position:relative;font-size:13px;color:var(--text)}
+.step-list li::before{content:counter(s)".";position:absolute;left:0;color:var(--accent);font-weight:600;font-size:12px}
+
+/* Warning */
+.warn{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.25);border-radius:8px;padding:12px 16px;margin-top:12px;font-size:12px;color:var(--orange);display:flex;gap:8px;align-items:flex-start}
+.info-box{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:8px;padding:12px 16px;margin-top:12px;font-size:12px;color:var(--accent2)}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin:16px 0}
+.tbl th{background:var(--surface2);text-align:left;padding:10px 14px;font-weight:600;font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.tbl td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.tbl tr:hover td{background:rgba(88,166,255,.04)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.b-blue{background:rgba(88,166,255,.15);color:var(--accent)}
+.b-green{background:rgba(63,185,80,.15);color:var(--green)}
+.b-purple{background:rgba(188,140,255,.15);color:var(--purple)}
+.b-orange{background:rgba(210,153,34,.15);color:var(--orange)}
+.b-red{background:rgba(248,81,73,.15);color:var(--red)}
+
+/* Keyboard Diagram */
+.kbd-container{margin:20px 0}
+.kbd-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.kbd-label.after{color:var(--accent)}
+.kbd-row{display:flex;gap:6px;flex-wrap:wrap}
+.key{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:68px;height:44px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid;transition:all .3s}
+.key.space{min-width:140px}
+.key-sub{font-size:9px;font-weight:400;opacity:.7;margin-top:1px}
+.k-gray{background:rgba(139,148,158,.1);border-color:rgba(139,148,158,.25);color:var(--text2)}
+.k-blue{background:rgba(88,166,255,.12);border-color:rgba(88,166,255,.3);color:var(--accent)}
+.k-purple{background:rgba(188,140,255,.12);border-color:rgba(188,140,255,.3);color:var(--purple)}
+.k-orange{background:rgba(210,153,34,.12);border-color:rgba(210,153,34,.3);color:var(--orange)}
+.k-green{background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.3);color:var(--green)}
+
+/* Code Block */
+.code-block{position:relative;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin:12px 0;font-family:'JetBrains Mono',monospace;font-size:12px;overflow-x:auto;line-height:1.6}
+.copy-btn{position:absolute;top:8px;right:8px;background:var(--border);border:none;color:var(--text2);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif}
+.copy-btn:hover{background:var(--accent);color:#fff}
+
+/* FAQ Accordion */
+.faq-item{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden}
+.faq-q{padding:16px 20px;cursor:pointer;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;background:var(--surface);transition:background .2s}
+.faq-q:hover{background:var(--surface2)}
+.faq-q::after{content:"▸";transition:transform .2s;font-size:12px;color:var(--text2)}
+.faq-item.open .faq-q::after{transform:rotate(90deg)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .3s;padding:0 20px}
+.faq-item.open .faq-a{max-height:600px;padding:0 20px 16px}
+.faq-a p{color:var(--text2);font-size:13px;line-height:1.8;margin-top:8px}
+
+/* Mobile */
+.hamburger{display:none;position:fixed;top:16px;left:16px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;width:40px;height:40px;cursor:pointer;align-items:center;justify-content:center;font-size:20px;color:var(--text)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .content{padding:60px 20px 60px}
+  .hamburger{display:flex}
+  .overlay.show{display:block}
+  .key{min-width:56px;height:38px;font-size:11px}
+  .key.space{min-width:100px}
+}
+
+/* Scroll progress */
+.progress{position:fixed;top:0;left:var(--sidebar-w);right:0;height:3px;z-index:50;background:transparent}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--purple));transition:width .1s}
+@media(max-width:768px){.progress{left:0}}
+
+/* Tooltip for arrow */
+.arrow{color:var(--text2);margin:0 4px}
+</style>
+</head>
+<body>
+
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+<button class="hamburger" id="hamburger" aria-label="메뉴">☰</button>
+<div class="overlay" id="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <h1>⌨️ WinMac Key</h1>
+    <p>v1.2 사용 매뉴얼</p>
+  </div>
+  <nav id="nav">
+    <a href="#intro" class="active"><span class="icon">👋</span>소개</a>
+    <a href="#install"><span class="icon">📦</span>설치하기</a>
+    <a href="#setup"><span class="icon">⚙️</span>초기 설정</a>
+    <a href="#keymapping"><span class="icon">🎹</span>키 매핑</a>
+    <a href="#vdi"><span class="icon">🖥️</span>VDI 환경 설정</a>
+    <a href="#migration"><span class="icon">🔄</span>기존 도구 전환</a>
+    <a href="#profiles"><span class="icon">📋</span>외장 키보드</a>
+    <a href="#faq"><span class="icon">❓</span>FAQ</a>
+    <a href="#emergency"><span class="icon">🛟</span>비상 초기화</a>
+  </nav>
+</aside>
+
+<main class="main">
+<div class="content">
+
+<!-- INTRO -->
+<section id="intro">
+  <h2><span class="emoji">👋</span> WinMac Key란?</h2>
+  <p class="section-desc">Windows에서 Mac으로 넘어온 분들을 위한 키보드 매핑 앱입니다.</p>
+  <div class="card">
+    <p>Windows에서 오래 사용하던 키보드 습관 — <strong>우측 Alt로 한/영 전환</strong>, <strong>Ctrl+C/V 복사/붙여넣기</strong> — 이 Mac에서 그대로 동작하지 않아 불편하셨죠?</p>
+    <br>
+    <p><strong>WinMac Key</strong>는 Mac 키보드의 하단 modifier 키 배치를 Windows와 유사하게 자동 변환해주고, <strong>Right Command 키 하나로 한/영 전환</strong>을 가능하게 합니다.</p>
+    <br>
+    <p style="color:var(--green)">✅ 별도 드라이버 불필요 · 관리자 비밀번호 불필요 · 재부팅하면 원상복구</p>
+  </div>
+  <div class="card">
+    <h3>📊 핵심 스펙</h3>
+    <table class="tbl">
+      <tr><td style="width:140px;color:var(--text2)">평균 지연 시간</td><td><span class="badge b-green">&lt; 0.5ms</span></td></tr>
+      <tr><td style="color:var(--text2)">CPU 사용률</td><td><span class="badge b-green">&lt; 0.5%</span></td></tr>
+      <tr><td style="color:var(--text2)">메모리</td><td><span class="badge b-green">&lt; 20MB</span></td></tr>
+      <tr><td style="color:var(--text2)">지원 OS</td><td>macOS 13.0 (Ventura) 이상</td></tr>
+      <tr><td style="color:var(--text2)">아키텍처</td><td>Apple Silicon &amp; Intel 유니버설</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <h2><span class="emoji">📦</span> 설치하기</h2>
+  <p class="section-desc">3분이면 끝나는 간단한 설치 과정입니다.</p>
+  <div class="card">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h3>DMG 파일 다운로드</h3>
+      <p>GitHub Releases 페이지에서 최신 <code>.dmg</code> 파일을 다운로드합니다.</p>
+    </div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h3>Applications 폴더로 이동</h3>
+      <p>DMG를 열면 <strong>WinMac Key 아이콘</strong>과 <strong>Applications 폴더 바로가기</strong>가 보입니다. 아이콘을 Applications로 드래그합니다.</p>
+      <div class="warn">⚠️ Downloads 폴더에서 직접 실행하면 Spotlight에 중복 표시될 수 있습니다. 반드시 Applications로 이동하세요.</div>
+    </div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h3>앱 실행</h3>
+      <p>Launchpad 또는 Spotlight(⌘+Space)에서 <strong>"WinMac Key"</strong>를 검색하여 실행합니다. 메뉴바(화면 우측 상단)에 <code style="color:var(--text2)">wm</code> 아이콘이 나타나면 성공입니다.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- SETUP -->
+<section id="setup">
+  <h2><span class="emoji">⚙️</span> 초기 설정 (필수)</h2>
+  <p class="section-desc">앱이 정상 동작하려면 아래 4단계를 반드시 완료해야 합니다.</p>
+
+  <div class="card">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h3>🔐 손쉬운 사용 권한 허용</h3>
+      <p>WinMac Key는 키보드 입력을 가로채기 위해 macOS의 <strong>"손쉬운 사용(Accessibility)"</strong> 권한이 필요합니다.</p>
+      <ol class="step-list">
+        <li>앱을 처음 실행하면 권한 요청 팝업이 표시됩니다.</li>
+        <li><strong>"시스템 설정 열기"</strong>를 클릭합니다.</li>
+        <li><strong>시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용</strong>으로 이동합니다.</li>
+        <li>목록에서 <strong>"WinMac Key"</strong>를 찾아 토글을 켭니다.</li>
+        <li>Mac 비밀번호를 입력하여 확인합니다.</li>
+      </ol>
+      <div class="warn">⚠️ 권한 허용 후 앱을 한 번 재시작해야 적용될 수 있습니다.</div>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h3>🔤 CapsLock 한/영 전환 끄기</h3>
+      <p>macOS 기본 CapsLock 한영전환이 WinMac Key와 충돌하지 않도록 비활성화합니다.</p>
+      <ol class="step-list">
+        <li><strong>시스템 설정 → 키보드</strong>로 이동합니다.</li>
+        <li><strong>"입력 소스"</strong> 섹션에서 <strong>"모든 입력 소스"</strong>를 클릭합니다.</li>
+        <li><strong>"Caps Lock 키로 ABC 입력 소스 전환"</strong> 체크를 해제합니다.</li>
+      </ol>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h3>⌨️ 입력 소스 단축키 확인 (가장 중요!)</h3>
+      <p>WinMac Key는 내부적으로 <strong>"이전 입력 소스 선택"</strong> 단축키(<code>Control+Space</code>)를 합성합니다. 이 항목이 반드시 올바르게 설정되어 있어야 합니다.</p>
+      <ol class="step-list">
+        <li><strong>시스템 설정 → 키보드 → 키보드 단축키...</strong>를 클릭합니다.</li>
+        <li>좌측 목록에서 <strong>"입력 소스"</strong>를 선택합니다.</li>
+        <li><strong>"이전 입력 소스 선택"</strong>의 체크박스가 켜져 있는지 확인합니다.</li>
+        <li>단축키가 <strong>"^ Space" (Control + Space)</strong>인지 확인합니다.</li>
+        <li>다른 키로 되어 있다면 더블클릭 후 <code>Control + Space</code>로 변경합니다.</li>
+        <li><strong>"완료"</strong>를 클릭합니다.</li>
+      </ol>
+      <div class="warn">⚠️ 이 항목이 꺼져 있거나 다른 키로 바뀌어 있으면 WinMac Key의 한/영 전환이 동작하지 않습니다!</div>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="step"><div class="step-num">4</div><div class="step-body">
+      <h3>🚀 엔진 활성화</h3>
+      <p>설정이 끝나면 WinMac Key 엔진을 켭니다.</p>
+      <ol class="step-list">
+        <li>메뉴바(화면 우측 상단)에서 <code style="color:var(--text2)">wm</code> 아이콘을 클릭합니다.</li>
+        <li><strong>"엔진 상태"</strong> 토글을 켭니다.</li>
+        <li>아이콘이 <code style="color:var(--green);font-weight:700">WM</code>으로 바뀌면 활성화 완료!</li>
+        <li>Right Command 키를 눌러 한/영 전환이 되는지 테스트합니다.</li>
+      </ol>
+    </div></div>
+  </div>
+</section>
+
+<!-- KEY MAPPING -->
+<section id="keymapping">
+  <h2><span class="emoji">🎹</span> 키 매핑 이해하기</h2>
+  <p class="section-desc">WinMac Key가 어떤 키를 어떻게 바꿔주는지 한눈에 확인하세요.</p>
+
+  <div class="card">
+    <h3>📌 기본 매핑 (항상 활성)</h3>
+    <table class="tbl">
+      <thead><tr><th>원본 키</th><th></th><th>변환 키</th><th>설명</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge b-orange">fn (🌐)</span></td><td class="arrow">→</td><td><span class="badge b-blue">Left ⌘</span></td><td>Windows Ctrl 위치에 Command 배치</td></tr>
+        <tr><td><span class="badge b-blue">Left ⌘</span></td><td class="arrow">→</td><td><span class="badge b-green">Left ⌃</span></td><td>Command 위치에 Control 배치</td></tr>
+        <tr><td><span class="badge b-green">Left ⌃</span></td><td class="arrow">→</td><td><span class="badge b-orange">fn (🌐)</span></td><td>Control 위치에 fn 배치</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>🌏 한/영 전환</h3>
+    <table class="tbl">
+      <thead><tr><th>원본 키</th><th></th><th>동작</th><th>설명</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge b-purple">Right ⌘</span></td><td class="arrow">→</td><td><span class="badge b-purple">한/영 전환</span></td><td>탭(짧게 누르기)으로 입력 소스 전환</td></tr>
+        <tr><td><span class="badge b-purple">Right ⌥</span></td><td class="arrow">→</td><td><span class="badge b-purple">한/영 전환</span></td><td>설정에서 변경 가능</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>🖥️ 키보드 배치 비교</h3>
+    <div class="kbd-container">
+      <div class="kbd-label">변환 전 (Mac 기본 배치)</div>
+      <div class="kbd-row">
+        <div class="key k-gray">⌃<span class="key-sub">Control</span></div>
+        <div class="key k-gray">⌥<span class="key-sub">Option</span></div>
+        <div class="key k-gray">⌘<span class="key-sub">Command</span></div>
+        <div class="key k-gray space">Space</div>
+        <div class="key k-gray">⌘<span class="key-sub">Command</span></div>
+        <div class="key k-gray">⌥<span class="key-sub">Option</span></div>
+      </div>
+    </div>
+    <div class="kbd-container">
+      <div class="kbd-label after">변환 후 (WinMac Key 적용) ✨</div>
+      <div class="kbd-row">
+        <div class="key k-orange">fn<span class="key-sub">🌐</span></div>
+        <div class="key k-gray">⌥<span class="key-sub">Option</span></div>
+        <div class="key k-blue">⌘<span class="key-sub">Command</span></div>
+        <div class="key k-gray space">Space</div>
+        <div class="key k-purple">한/영<span class="key-sub">Toggle</span></div>
+        <div class="key k-gray">⌥<span class="key-sub">Option</span></div>
+      </div>
+    </div>
+    <div class="info-box">ℹ️ Windows의 <strong>Ctrl+C/V</strong>가 Mac에서 <strong>⌘+C/V</strong>로 동작하므로, fn 위치에 ⌘를 배치하면 Windows와 동일한 손가락 위치로 복사/붙여넣기가 가능합니다.</div>
+  </div>
+</section>
+
+<!-- VDI -->
+<section id="vdi">
+  <h2><span class="emoji">🖥️</span> VDI 환경 설정</h2>
+  <p class="section-desc">VMware Horizon 등 가상 데스크톱에서도 한/영 전환을 사용하는 방법입니다.</p>
+
+  <div class="card">
+    <h3>🔄 동작 원리</h3>
+    <div class="code-block">
+[Mac 로컬 / 원격 Mac]
+  Right Cmd → Control+Space 주입 → macOS 입력소스 전환
+
+[VDI 앱 포커스] (자동 전환)
+  Right Cmd → F16 주입 → VDI가 수신
+  VDI 내부:  F16 → Right Alt → Windows 한영전환
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">VDI 앱이 포커스되면 WinMac Key가 자동으로 감지하여 경로를 전환합니다.</p>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ Omnissa Horizon 클라이언트 설정</h3>
+    <ol class="step-list">
+      <li>Omnissa Horizon Client를 실행합니다.</li>
+      <li>상단 메뉴 → <strong>설정(Preferences)</strong> 또는 <code>⌘+,</code></li>
+      <li><strong>키보드 및 마우스 (Keyboard &amp; Mouse)</strong> 탭으로 이동합니다.</li>
+      <li><strong>키 매핑 (Key Mapping)</strong> 탭을 선택합니다.</li>
+      <li><strong>[+] 버튼</strong>을 눌러 새 매핑을 추가합니다.</li>
+      <li>Mac 단축키(From): <span class="badge b-blue">F16</span></li>
+      <li>Windows 키(To): <span class="badge b-purple">Right Alt</span></li>
+      <li>체크박스를 켜서 활성화 상태로 만듭니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>📋 자동 감지 앱 목록</h3>
+    <table class="tbl">
+      <thead><tr><th>앱 이름</th><th>Bundle ID</th></tr></thead>
+      <tbody>
+        <tr><td>Omnissa Horizon Client</td><td><code>com.omnissa.horizon.client.mac</code></td></tr>
+        <tr><td>Omnissa Horizon Protocol</td><td><code>com.omnissa.horizon.protocol</code></td></tr>
+        <tr><td>VMware Horizon (Legacy)</td><td><code>com.vmware.horizon</code></td></tr>
+        <tr><td>VMware Fusion</td><td><code>com.vmware.fusion</code></td></tr>
+        <tr><td>Parallels Desktop</td><td><code>com.parallels.desktop.console</code></td></tr>
+        <tr><td>Microsoft RDP</td><td><code>com.microsoft.rdc.macos</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- MIGRATION -->
+<section id="migration">
+  <h2><span class="emoji">🔄</span> 기존 도구에서 전환하기</h2>
+  <p class="section-desc">Karabiner-Elements, Hammerspoon을 사용 중이라면 아래 단계를 따라주세요.</p>
+
+  <div class="card">
+    <div class="step"><div class="step-num">1</div><div class="step-body">
+      <h3>Karabiner-Elements 비활성화</h3>
+      <p>Karabiner는 WinMac Key와 동일한 레벨(CGEventTap)에서 키 입력을 가로채므로 충돌합니다.</p>
+      <ol class="step-list">
+        <li>Karabiner-Elements 앱을 엽니다.</li>
+        <li>"Profiles" 탭에서 빈 프로필(예: "Empty")을 만듭니다.</li>
+        <li>새 프로필을 "Select" 합니다.</li>
+        <li>또는 Karabiner-Elements 앱 자체를 종료합니다.</li>
+      </ol>
+      <div class="info-box">ℹ️ 완전히 제거하지 않아도 됩니다. 빈 프로필을 선택하면 모든 매핑이 비활성화되며, WinMac Key를 끄면 언제든 기존 프로필로 돌아갈 수 있습니다.</div>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <div class="step"><div class="step-num">2</div><div class="step-body">
+      <h3>Hammerspoon 비활성화</h3>
+      <p>Hammerspoon의 F18/F19 한영전환 핫키는 WinMac Key가 직접 처리하므로 불필요합니다.</p>
+      <ol class="step-list">
+        <li>메뉴바에서 Hammerspoon 아이콘(🔨)을 클릭합니다.</li>
+        <li>"Quit Hammerspoon"을 선택합니다.</li>
+        <li>또는 <code>~/.hammerspoon/init.lua</code> 파일 전체를 주석 처리합니다.</li>
+      </ol>
+    </div></div>
+  </div>
+</section>
+
+<!-- PROFILES -->
+<section id="profiles">
+  <h2><span class="emoji">📋</span> 외장 키보드 프로필</h2>
+  <p class="section-desc">외장 키보드나 특수 배치를 사용한다면 위저드로 프로필을 만들 수 있습니다.</p>
+  <div class="card">
+    <ol class="step-list">
+      <li>설정 → General Settings → <strong>"새 프로필 만들기"</strong> 클릭</li>
+      <li>Step 1: 키캡 프린팅이 <span class="badge b-blue">Mac 키보드</span>인지 <span class="badge b-purple">Windows 키보드</span>인지 선택</li>
+      <li>Step 2: 스페이스바 왼쪽 modifier를 순서대로 누르고 마지막에 <code>Space</code>를 눌러 현재 입력 감지</li>
+      <li><code>Space</code> 앞에 감지된 키 개수로 <strong>3키/4키가 자동 판단</strong>됩니다</li>
+      <li>Step 3: 로컬 Mac에서 <code>Fn / Ctrl / Cmd / Opt</code> 배치를 왼쪽부터 선택</li>
+      <li>Step 4: VDI에서 <code>Ctrl / Win / Alt</code> 배치를 왼쪽부터 선택</li>
+      <li>슬롯을 직접 눌러 선택한 뒤 원하는 기능 키로 즉시 교체 가능</li>
+      <li>3키 키보드라면 <code>RCtrl</code>/<code>Caps</code>/<code>RShift</code>를 보조 Fn 키로 지정 가능</li>
+      <li>Step 5: 프로필을 검증한 뒤 저장</li>
+    </ol>
+    <div class="info-box">ℹ️ 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환합니다.</div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <h2><span class="emoji">❓</span> FAQ &amp; 문제해결</h2>
+  <p class="section-desc">자주 묻는 질문과 해결 방법입니다.</p>
+
+  <div class="faq-item open"><div class="faq-q">앱을 실행했는데 키 매핑이 동작하지 않아요</div><div class="faq-a"><p>1. 메뉴바에서 엔진이 <strong>"WM"</strong>인지 확인하세요.<br>2. 손쉬운 사용 권한이 허용되어 있는지 확인하세요.<br>&nbsp;&nbsp;&nbsp;(시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용)<br>3. Karabiner-Elements가 실행 중이면 반드시 비활성화하세요.<br>4. 앱을 종료 후 다시 실행해보세요.</p></div></div>
+
+  <div class="faq-item"><div class="faq-q">한/영 전환이 안 돼요</div><div class="faq-a"><p>Right Command 키를 짧게 <strong>"탭"</strong>해야 합니다. 길게 누르거나 다른 키와 함께 누르면 단축키 조합으로 인식됩니다.<br><br>또한 macOS의 <strong>"이전 입력 소스 선택"</strong>이 반드시 <code>Control + Space</code>로 켜져 있어야 합니다:<br>시스템 설정 → 키보드 → 키보드 단축키... → 입력 소스<br><br>한글 입력 소스가 등록되어 있는지도 확인하세요:<br>시스템 설정 → 키보드 → 입력 소스 → 편집... → + → "한국어 - 2벌식" 추가</p></div></div>
+
+  <div class="faq-item"><div class="faq-q">입력 소스 전환창이 뜨거나 두세 번 눌러야 바뀌어요</div><div class="faq-a"><p>다른 앱이 같은 전환 키를 함께 처리할 때 발생합니다.<br><br>1. Karabiner에서 <code>right_command</code>, <code>Control+Space</code> 관련 규칙을 끄세요.<br>2. Hammerspoon/BetterTouchTool에 한영 전환 핫키가 있으면 해제하세요.<br>3. 특히 Karabiner의 Right Command 규칙이 켜져 있으면 중복 실행되어 전환창이 뜰 수 있습니다.</p></div></div>
+
+  <div class="faq-item"><div class="faq-q">VMware에서 한/영 전환이 안 되나요?</div><div class="faq-a"><p>VDI 환경에서는 <strong>F16 → Right Alt</strong> 매핑이 필요합니다.<br>최신 버전은 여기에 더해 <strong>첫 키 15ms 정렬 + 잔여 Alt 플래그 정리</strong>로 단축키 오발도 줄입니다.<br>위의 <a href="#vdi" style="color:var(--accent)">VDI 환경 설정</a> 섹션을 참조하세요.</p></div></div>
+  <div class="faq-item"><div class="faq-q">로컬 Mac에서 첫 글자가 영어로 들어가요. 예: xㅓ미널</div><div class="faq-a"><p>입력소스 전환이 실제로 확인되기 전에 첫 글자가 먼저 풀리면 생길 수 있습니다.<br><br>최신 버전은 <strong>입력소스 변경 검증 + 최소 홀드</strong> 뒤에 버퍼를 풀도록 보강했습니다.<br>그래도 재현되면 <code>Control+Space</code> 설정, Caps Lock 한영전환, Karabiner/Hammerspoon 중복 핫키를 먼저 확인하세요.</p></div></div>
+
+  <div class="faq-item"><div class="faq-q">Karabiner-Elements와 동시에 쓸 수 있나요?</div><div class="faq-a"><p>권장하지 않습니다. 두 프로그램 모두 CGEventTap을 사용하여 같은 레벨에서 키 입력을 가로채므로 충돌합니다.<br><br>Karabiner에서 fn/Cmd/Ctrl/Right Cmd 관련 매핑을 제거하면 공존할 수 있지만, WinMac Key만 사용하는 것을 권장합니다.</p></div></div>
+
+  <div class="faq-item"><div class="faq-q">손쉬운 사용 권한을 허용했는데 동작하지 않아요</div><div class="faq-a"><p>macOS에서는 권한 변경 후 앱을 재시작해야 적용됩니다.<br>WinMac Key를 완전히 종료(메뉴바 → "WinMac Key 종료") 후 다시 실행하세요.<br><br>그래도 안 되면 손쉬운 사용 목록에서 WinMac Key를 <strong>제거한 뒤 다시 추가</strong>해보세요.</p></div></div>
+
+  <div class="faq-item"><div class="faq-q">외장 키보드에서도 동작하나요?</div><div class="faq-a"><p>네! WinMac Key는 모든 키보드 입력을 시스템 레벨에서 인터셉트하므로 내장, USB, Bluetooth 키보드 모두에서 동작합니다.<br><br>위의 <a href="#profiles" style="color:var(--accent)">외장 키보드 프로필</a> 섹션에서 커스텀 프로필을 설정할 수 있습니다.</p></div></div>
+</section>
+
+<!-- EMERGENCY -->
+<section id="emergency">
+  <h2><span class="emoji">🛟</span> 비상 초기화</h2>
+  <p class="section-desc">설정이 꼬였거나 앱이 비정상 종료된 경우 사용하세요.</p>
+
+  <div class="card">
+    <h3>🔧 방법 1: 앱 내 초기화</h3>
+    <p style="font-size:13px;color:var(--text2)">메뉴바 WM 아이콘 → "설정 초기화..." 클릭</p>
+  </div>
+
+  <div class="card">
+    <h3>💻 방법 2: 터미널 수동 초기화</h3>
+    <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">복사</button># 모든 HID 매핑 즉시 해제
+hidutil property --set '{"UserKeyMapping":[]}'
+
+# 내장 키보드 매핑도 해제
+hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --set '{"UserKeyMapping":[]}'</div>
+  </div>
+
+  <div class="card">
+    <h3>🔄 방법 3: 재부팅</h3>
+    <p style="font-size:13px;color:var(--text2)">모든 hidutil 매핑은 재부팅하면 자동 해제됩니다. 가장 확실한 방법입니다.</p>
+  </div>
+
+  <div class="card">
+    <h3>🔍 현재 매핑 상태 확인</h3>
+    <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">복사</button># 글로벌 매핑 확인
+hidutil property --get UserKeyMapping
+
+# 내장 키보드 매핑 확인
+hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --get UserKeyMapping</div>
+  </div>
+</section>
+
+<footer style="text-align:center;padding:40px 0 20px;color:var(--text2);font-size:12px;border-top:1px solid var(--border)">
+  <p>WinMac Key v1.2 · Made with ❤️ for Windows → Mac 전환 사용자</p>
+  <p style="margin-top:4px"><a href="https://github.com/lee-minki/mac-windows-like-key" style="color:var(--accent);text-decoration:none">GitHub</a></p>
+</footer>
+
+</div>
+</main>
+
+<script>
+// Scroll spy
+const sections=document.querySelectorAll('section');
+const navLinks=document.querySelectorAll('#nav a');
+const progressBar=document.getElementById('progressBar');
+window.addEventListener('scroll',()=>{
+  const st=window.scrollY;
+  const h=document.documentElement.scrollHeight-window.innerHeight;
+  progressBar.style.width=(st/h*100)+'%';
+  let cur='';
+  sections.forEach(s=>{if(st>=s.offsetTop-120)cur=s.id});
+  navLinks.forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+cur)});
+});
+
+// FAQ accordion
+document.querySelectorAll('.faq-q').forEach(q=>{
+  q.addEventListener('click',()=>q.parentElement.classList.toggle('open'));
+});
+
+// Copy code
+function copyCode(btn){
+  const code=btn.parentElement.textContent.replace('복사','').trim();
+  navigator.clipboard.writeText(code).then(()=>{btn.textContent='✓ 복사됨';setTimeout(()=>btn.textContent='복사',1500)});
+}
+
+// Mobile menu
+const hamburger=document.getElementById('hamburger');
+const sidebar=document.getElementById('sidebar');
+const overlay=document.getElementById('overlay');
+hamburger.addEventListener('click',()=>{sidebar.classList.toggle('open');overlay.classList.toggle('show')});
+overlay.addEventListener('click',()=>{sidebar.classList.remove('open');overlay.classList.remove('show')});
+navLinks.forEach(a=>a.addEventListener('click',()=>{if(window.innerWidth<=768){sidebar.classList.remove('open');overlay.classList.remove('show')}}));
+</script>
+</body>
+</html>

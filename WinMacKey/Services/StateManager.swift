@@ -8,6 +8,7 @@ class StateManager: ObservableObject {
     
     let inputSourceManager = InputSourceManager()
     var onSystemInputSourceChanged: (() -> Void)?
+    var onInputSourceToggleVerificationFailed: (() -> Void)?
     
     /// 현재 입력 소스 표시 이름 (UI 바인딩용)
     @Published var currentSourceName: String = ""
@@ -118,7 +119,7 @@ class StateManager: ObservableObject {
             }
 
             self.logger.warning("Toggle verification timeout after retry")
-            self.onSystemInputSourceChanged?()
+            self.onInputSourceToggleVerificationFailed?()
             self.inputSourcePollTask = nil
         }
     }

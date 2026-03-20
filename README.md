@@ -22,6 +22,9 @@
 
 - **⌨️ Right Command / Right Option 전환**: macOS 입력 소스를 즉시 토글
 - **🖥️ Native VDI Support**: 로컬 macOS/원격 Mac은 `Control+Space`, Windows VDI는 `F16 → Right Alt` 매핑으로 동작
+- **🔌 Per-Device Auto Profile**: IOKit 기반 외장 키보드 자동 감지 — 키보드별 프로필 자동 전환
+- **🛡️ VDI First-Key Guard**: 트리거 직후 첫 키를 15ms만 정렬해 Windows 단축키 오발 방지
+- **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
 - **🧩 Keyboard Profiles**: 현재 입력을 실키로 감지하고 `Mac 로컬` / `VDI` 목표 배치를 따로 저장
 - **📍 Menu Bar Utility**: 상태 확인, 로그, Doctor, 업데이트 창에 빠르게 접근
@@ -86,7 +89,9 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 - 3키 키보드에서는 `RCtrl`, `Caps`, `RShift` 중 하나를 보조 `Fn` 키로 지정할 수 있습니다
 - 프로필 이름은 구분용 라벨입니다
 - 저장된 프로필은 현재 앱 컨텍스트에 따라 `Mac 로컬` 목표와 `VDI` 목표 사이를 자동으로 전환합니다
-- 프로필 자동 할당은 키보드 장치명이 아니라 현재 앱의 Bundle ID 기준으로 동작합니다
+- 프로필 자동 할당은 키보드 디바이스(VendorID/ProductID) 또는 앱의 Bundle ID 기준으로 동작합니다
+- 외장 키보드를 연결하면 Profiles 탭에서 "Assign current keyboard" 버튼으로 해당 키보드 전용 프로필을 지정할 수 있습니다
+- 키보드 전환 시 프로필이 자동으로 따라갑니다 (디바이스 프로필 > 앱 프로필 > 기본 프로필)
 
 ### 6. 권장 추가 설정
 
@@ -134,6 +139,7 @@ VDI 클라이언트(Omnissa 등)가 이를 윈도우의 `Right Alt`로 변환하
 ### 사용 기술
 
 - **CGEventTap**: 키보드 이벤트 인터셉트 및 키코드 리매핑
+- **IOHIDManager**: 키보드 디바이스 열거, 연결/해제 감지, 활성 키보드 추적
 - **hidutil**: HID 레벨 modifier 키 리매핑 (Fn/Ctrl/Cmd/Option)
 - **SwiftUI + MenuBarExtra**: 네이티브 메뉴바 유틸리티
 

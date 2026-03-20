@@ -163,7 +163,7 @@ struct HelpView: View {
                         mappingRow("VDI Client", "Right Alt", "Omnissa Horizon 등에서 F16을 Right Alt로 매핑", .orange)
                     }
                     
-                    Text("※ 로컬 macOS/원격 Mac은 Control+Space, Windows VDI는 F16 릴레이 키를 사용합니다.")
+                    Text("※ 로컬 macOS/원격 Mac은 Control+Space, Windows VDI는 F16 릴레이 키를 사용합니다. VDI에서는 첫 키를 짧게 정렬해 단축키 오발을 줄입니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -173,7 +173,7 @@ struct HelpView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("외장 키보드나 특수 배치를 사용한다면, 위저드로 직접 키 매핑을 설정할 수 있습니다.")
                             .font(.caption)
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("1. 설정 → General Settings → \"새 프로필 만들기\"")
                             Text("2. Step 1: 키캡 프린팅이 `Mac 키보드`인지 `Windows 키보드`인지 선택")
@@ -185,10 +185,38 @@ struct HelpView: View {
                             Text("8. 슬롯을 직접 눌러 선택한 뒤 원하는 기능 키로 즉시 교체 가능")
                             Text("9. 3키 키보드라면 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
                             Text("10. Step 5: 현재 컨텍스트를 검증한 뒤 프로필 저장")
-                            Text("11. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환하며, 앱 할당은 현재 앱 기준으로 동작")
+                            Text("11. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    }
+                }
+
+                GroupBox("키보드 디바이스별 자동 전환") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("외장 키보드마다 다른 프로필을 자동 적용할 수 있습니다.")
+                            .font(.caption)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("1. 위저드로 프로필을 만들고 저장합니다.")
+                            Text("2. Settings → Profiles 탭에서 해당 프로필 옆 \"Assign current keyboard\" 를 클릭합니다.")
+                            Text("3. 현재 타이핑 중인 키보드(VendorID/ProductID)가 프로필에 할당됩니다.")
+                            Text("4. 이후 해당 키보드에서 키를 누르면 자동으로 프로필이 전환됩니다.")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundStyle(.blue)
+                                .font(.caption)
+                            Text("프로필 우선순위: 키보드 디바이스 > 앱(Bundle ID) > 기본 프로필. 내장 키보드는 항상 기본/앱 프로필을 사용합니다.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(8)
+                        .background(.blue.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
                 
@@ -423,13 +451,36 @@ struct HelpView: View {
                 faqItem(
                     question: "외장 키보드에서도 동작하나요?",
                     answer: """
-                    네, 동작합니다. WinMac Key는 모든 키보드 입력을 시스템 레벨에서 인터셉트하므로 \
+                    네, 동작합니다. WinMac Key는 IOKit(IOHIDManager)으로 연결된 키보드를 자동 감지하며, \
                     내장 키보드, USB 키보드, Bluetooth 키보드 모두에서 동작합니다.\n\n\
-                    외장 키보드의 경우 스페이스바 왼쪽 modifier를 실제로 눌러 3키/4키를 자동으로 감지합니다.\n\n\
-                    위저드에서는 먼저 키캡 프린팅이 Mac 키보드인지 Windows 키보드인지 고르고, 현재 입력은 실키로 감지한 뒤 로컬 Mac과 VDI 목표 배치를 각각 따로 잡을 수 있습니다.\n\n\
-                    로컬 Mac 단계는 `Fn / Ctrl / Cmd / Opt`, VDI 단계는 `Ctrl / Win / Alt`만 보여주며, 슬롯을 직접 눌러 수정할 수 있습니다.\n\n\
-                    3키 키보드라면 `RCtrl`, `Caps`, `RShift` 중 하나를 보조 Fn 키로 지정할 수 있습니다.\n\n\
-                    다만 프로필 이름은 장치 식별자가 아니라 표시용이며, 앱 할당은 현재 앱 기준으로 동작합니다.
+                    외장 키보드 전용 프로필을 만들 수 있습니다:\n\
+                    1. 위저드에서 키캡 프린팅(Mac/Windows)을 선택하고 실키 감지 후 프로필을 저장합니다.\n\
+                    2. Settings → Profiles 탭에서 "Assign current keyboard" 버튼을 누르면 현재 사용 중인 키보드에 프로필이 할당됩니다.\n\
+                    3. 이후 해당 키보드에서 타이핑하면 프로필이 자동으로 전환됩니다.\n\n\
+                    프로필 우선순위: 키보드 디바이스 프로필 > 앱 프로필 > 기본 프로필.\n\
+                    내장 키보드는 항상 기본/앱 프로필을 사용합니다.
+                    """
+                )
+
+                faqItem(
+                    question: "VDI에서 한영전환 후 Shift+영문을 치면 화면녹화가 켜져요.",
+                    answer: """
+                    최신 버전은 두 단계로 대응합니다.\n\n\
+                    1. 트리거 직후 첫 키를 약 15ms만 버퍼링해 VDI의 `F16 → Right Alt` 변환이 먼저 끝나게 합니다.\n\
+                    2. 이어서 50ms 동안 잔여 modifier 플래그를 정리해 `Alt+key` 오발을 막습니다.\n\n\
+                    첫 키에만 매우 짧은 정렬이 들어가고, 그 뒤 타이핑은 정상 속도로 통과합니다.
+                    """
+                )
+
+                faqItem(
+                    question: "로컬 Mac에서 첫 글자가 영어로 들어가요. 예: xㅓ미널",
+                    answer: """
+                    입력소스 전환이 실제로 확인되기 전에 첫 글자가 풀리면 이런 현상이 납니다.\n\n\
+                    최신 버전은 `Control+Space` 전환 후 입력소스 변경을 검증하고, 짧은 최소 홀드 시간을 둔 뒤 버퍼를 풉니다.\n\n\
+                    그래도 재현되면 다음을 같이 확인하세요.\n\
+                    1. 시스템 설정에서 \"이전 입력 소스 선택\"이 정확히 `Control + Space`인지\n\
+                    2. Caps Lock 한영전환, Karabiner, Hammerspoon 같은 중복 전환 도구가 꺼져 있는지\n\
+                    3. Event Viewer에서 전환 직후 첫 키가 어느 앱에서 어떻게 들어오는지
                     """
                 )
                 

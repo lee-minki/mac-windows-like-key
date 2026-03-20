@@ -8,6 +8,12 @@ import os.log
 class KeyInterceptor: ObservableObject {
     static weak var shared: KeyInterceptor?
 
+    private enum BufferedReplayWindow: String {
+        case none
+        case inputSourceCommit
+        case vdiRelayCooldown
+    }
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isRunning = false
@@ -23,11 +29,21 @@ class KeyInterceptor: ObservableObject {
     // Right Cmd/Opt toggle 상태 (연속 토글 방지용)
     private var triggerKeyPressed = false
     private var previousFlags: CGEventFlags = []
-    private var awaitingInputSourceCommit = false
+    private var bufferedReplayWindow: BufferedReplayWindow = .none
+    private var bufferedReplayStartedAt: UInt64 = 0
+
+    /// 트리거 키 릴리즈 후 플래그 스트리핑 쿨다운
+    /// 트리거를 놓은 직후 빠르게 타이핑하면 OS가 modifier flag를 아직 포함시켜 보내는 경우가 있음.
+    /// 이 쿨다운 동안 트리거 modifier flag를 계속 제거하여 Alt+key 조합 오발을 방지.
+    /// 이벤트 자체는 지연 없이 즉시 전달됨 — 플래그만 클리닝.
+    private var triggerReleasedAt: UInt64 = 0
+    private static let triggerCooldownNanos: UInt64 = 50_000_000  // 50ms
     private var bufferedKeyEvents: [CGEvent] = []
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
-    private let inputSourceCommitTimeout: TimeInterval = 0.070
+    private static let inputSourceCommitMinimumHoldNanos: UInt64 = 12_000_000  // 12ms
+    private let inputSourceCommitTimeout: TimeInterval = 0.180
+    private let vdiRelayCooldownTimeout: TimeInterval = 0.015
     private let maxBufferedEventCount = 8
 
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
@@ -212,7 +228,7 @@ class KeyInterceptor: ObservableObject {
         eventTap = nil
         runLoopSource = nil
         isRunning = false
-        cancelPendingInputSourceCommit(dropBufferedEvents: true)
+        cancelPendingBufferedReplay(dropBufferedEvents: true)
         
         // HID 매핑도 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearMappingsSync()
@@ -222,22 +238,34 @@ class KeyInterceptor: ObservableObject {
 
     func beginInputSourceCommitWindow() {
         guard !isVdiAppFocused else { return }
+        startBufferedReplayWindow(.inputSourceCommit, timeout: inputSourceCommitTimeout, timeoutReason: "timeout")
+    }
 
-        if awaitingInputSourceCommit {
-            flushBufferedKeyEvents(reason: "superseded")
-        }
-        cancelPendingInputSourceCommit(dropBufferedEvents: true)
-        awaitingInputSourceCommit = true
-
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.flushBufferedKeyEvents(reason: "timeout")
-        }
-        bufferedFlushWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + inputSourceCommitTimeout, execute: workItem)
+    func beginVdiRelayCooldownWindow() {
+        guard isVdiAppFocused else { return }
+        startBufferedReplayWindow(.vdiRelayCooldown, timeout: vdiRelayCooldownTimeout, timeoutReason: "vdi-relay-settle")
     }
 
     func completeInputSourceCommitWindow() {
-        flushBufferedKeyEvents(reason: "input-source-changed")
+        guard bufferedReplayWindow == .inputSourceCommit else { return }
+
+        let now = DispatchTime.now().uptimeNanoseconds
+        let elapsed = now - bufferedReplayStartedAt
+        if elapsed >= Self.inputSourceCommitMinimumHoldNanos {
+            flushBufferedKeyEvents(reason: "input-source-changed")
+            return
+        }
+
+        let remainingNanos = Self.inputSourceCommitMinimumHoldNanos - elapsed
+        scheduleBufferedReplayFlush(
+            after: TimeInterval(remainingNanos) / 1_000_000_000,
+            reason: "input-source-min-hold"
+        )
+    }
+
+    func failInputSourceCommitWindow() {
+        guard bufferedReplayWindow == .inputSourceCommit else { return }
+        flushBufferedKeyEvents(reason: "verification-failed")
     }
     
     // MARK: - EventTap Reactivation
@@ -290,17 +318,29 @@ class KeyInterceptor: ObservableObject {
         
         let triggerKey = interceptor.triggerKeyCode
         
-        // ====== 트리거 키가 눌린 상태에서의 후속 이벤트 처리 ======
-        if interceptor.triggerKeyPressed && keyCode != triggerKey {
-            // (1) 핵심 수정: flags에서 트리거 modifier를 제거
-            // 이유: Right Cmd는 suppress되어 시스템에 전달되지 않지만,
-            //       하드웨어 modifier 상태가 후속 이벤트의 event.flags에 그대로 남음.
-            //       제거하지 않으면 앱이 "b keyDown"을 "Cmd+b" 로 해석 → 씹힘 발생.
-            let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
-            if event.flags.contains(triggerFlag) {
-                var strippedFlags = event.flags
-                strippedFlags.remove(triggerFlag)
-                event.flags = strippedFlags
+        // ====== 트리거 modifier 플래그 스트리핑 ======
+        // (1) 트리거 키가 눌린 상태: 후속 이벤트에서 트리거 modifier 제거
+        // (2) 트리거 릴리즈 후 쿨다운(50ms): 빠른 타이핑 시 잔여 modifier flag 제거
+        //     → VDI에서 Alt+key 조합 오발 방지 (화면녹화, 앱실행 등)
+        //     → 이벤트 전달 지연 없음 — 플래그만 클리닝
+        if keyCode != triggerKey {
+            let shouldStrip: Bool
+            if interceptor.triggerKeyPressed {
+                shouldStrip = true
+            } else if interceptor.triggerReleasedAt > 0 {
+                let elapsed = startTime.uptimeNanoseconds - interceptor.triggerReleasedAt
+                shouldStrip = elapsed < Self.triggerCooldownNanos
+            } else {
+                shouldStrip = false
+            }
+
+            if shouldStrip {
+                let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
+                if event.flags.contains(triggerFlag) {
+                    var strippedFlags = event.flags
+                    strippedFlags.remove(triggerFlag)
+                    event.flags = strippedFlags
+                }
             }
         }
         
@@ -322,6 +362,11 @@ class KeyInterceptor: ObservableObject {
 
             // 상태 갱신 (반복 토글 방지)
             interceptor.triggerKeyPressed = isDown
+
+            // 트리거 릴리즈 시 쿨다운 타임스탬프 기록
+            if !isDown && wasDown {
+                interceptor.triggerReleasedAt = startTime.uptimeNanoseconds
+            }
 
             if isDown && !wasDown {
                 interceptor.logger.info("⚡️ Trigger key detected (VDI=\(interceptor.isVdiAppFocused))")
@@ -373,7 +418,7 @@ class KeyInterceptor: ObservableObject {
         // 로깅
         interceptor.logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
 
-        if interceptor.awaitingInputSourceCommit && keyCode != triggerKey {
+        if interceptor.bufferedReplayWindow != .none && keyCode != triggerKey {
             interceptor.bufferKeyEvent(finalEvent)
             return nil
         }
@@ -410,12 +455,38 @@ class KeyInterceptor: ObservableObject {
         }
     }
 
+    private func startBufferedReplayWindow(
+        _ window: BufferedReplayWindow,
+        timeout: TimeInterval,
+        timeoutReason: String
+    ) {
+        if bufferedReplayWindow != .none {
+            flushBufferedKeyEvents(reason: "superseded")
+        }
+        cancelPendingBufferedReplay(dropBufferedEvents: true)
+        bufferedReplayWindow = window
+        bufferedReplayStartedAt = DispatchTime.now().uptimeNanoseconds
+        scheduleBufferedReplayFlush(after: timeout, reason: timeoutReason)
+    }
+
+    private func scheduleBufferedReplayFlush(after timeout: TimeInterval, reason: String) {
+        bufferedFlushWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.flushBufferedKeyEvents(reason: reason)
+        }
+        bufferedFlushWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: workItem)
+    }
+
     private func flushBufferedKeyEvents(reason: String) {
         bufferedFlushWorkItem?.cancel()
         bufferedFlushWorkItem = nil
 
-        guard awaitingInputSourceCommit else { return }
-        awaitingInputSourceCommit = false
+        let activeWindow = bufferedReplayWindow
+        guard activeWindow != .none else { return }
+        bufferedReplayWindow = .none
+        bufferedReplayStartedAt = 0
 
         guard !bufferedKeyEvents.isEmpty else { return }
         let events = bufferedKeyEvents
@@ -430,13 +501,14 @@ class KeyInterceptor: ObservableObject {
             }
         }
 
-        logger.info("Replayed \(events.count) buffered key events (\(reason))")
+        logger.info("Replayed \(events.count) buffered key events (\(activeWindow.rawValue), \(reason))")
     }
 
-    private func cancelPendingInputSourceCommit(dropBufferedEvents: Bool = false) {
+    private func cancelPendingBufferedReplay(dropBufferedEvents: Bool = false) {
         bufferedFlushWorkItem?.cancel()
         bufferedFlushWorkItem = nil
-        awaitingInputSourceCommit = false
+        bufferedReplayWindow = .none
+        bufferedReplayStartedAt = 0
         if dropBufferedEvents {
             bufferedKeyEvents.removeAll()
         }

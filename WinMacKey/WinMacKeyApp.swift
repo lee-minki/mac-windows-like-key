@@ -117,8 +117,10 @@ class AppState: ObservableObject {
     let stateManager = StateManager()
     let resetService = ResetService()
     let profileStore = KeyboardProfileStore()
+    let keyboardDeviceManager = KeyboardDeviceManager()
 
     @Published var showResetConfirmation: Bool = false
+    @Published var lastActiveKeyboard: KeyboardDeviceIdentifier?
 
     private var permissionObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
@@ -148,9 +150,15 @@ class AppState: ObservableObject {
         updateService.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        keyboardDeviceManager.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
 
         stateManager.onSystemInputSourceChanged = { [weak self] in
             self?.keyInterceptor.completeInputSourceCommitWindow()
+        }
+        stateManager.onInputSourceToggleVerificationFailed = { [weak self] in
+            self?.keyInterceptor.failInputSourceCommitWindow()
         }
 
         // Right Cmd/Opt 즉시 전환 → 한영전환 연결
@@ -158,7 +166,9 @@ class AppState: ObservableObject {
         keyInterceptor.onInputSourceToggle = { [weak self] in
             MainActor.assumeIsolated {
                 let isVdiMode = self?.isVdiMode == true
-                if !isVdiMode {
+                if isVdiMode {
+                    self?.keyInterceptor.beginVdiRelayCooldownWindow()
+                } else {
                     self?.keyInterceptor.beginInputSourceCommitWindow()
                 }
                 self?.stateManager.handleTrigger(isVdiMode: isVdiMode)
@@ -201,23 +211,22 @@ class AppState: ObservableObject {
                 LogService.shared.info("Mac mode: internal keyboard override cleared (\(appName))", category: "VDI")
             }
 
-            // Auto-switch profile if a matching per-app profile exists
-            if let appProfile = self.profileStore.profile(forBundleId: bundleId) {
-                if self.defaultMappingProfileId == nil {
-                    self.defaultMappingProfileId = self.activeMappingProfileId
-                }
-                self.applyProfile(appProfile)
-            } else if let defaultId = self.defaultMappingProfileId {
-                self.defaultMappingProfileId = nil
-                self.activeMappingProfileId = defaultId
-            }
-            self.refreshActiveProfileForCurrentContext()
+            self.resolveActiveProfile()
+        }
+
+        // 키보드 디바이스 전환 시 프로필 자동 전환
+        keyboardDeviceManager.onActiveDeviceChanged = { [weak self] device in
+            guard let self = self else { return }
+            self.lastActiveKeyboard = device
+            self.resolveActiveProfile()
+            LogService.shared.info("Active keyboard: \(device.displayName)", category: "Device")
         }
 
         checkPermissions()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
+        keyboardDeviceManager.startMonitoring()
 
         LogService.shared.info("AppState initialized (accessibility: \(hasAccessibilityPermission))", category: "App")
     }
@@ -250,6 +259,42 @@ class AppState: ObservableObject {
         if let data = try? JSONEncoder().encode(stringKeyDict) {
             UserDefaults.standard.set(data, forKey: "visualCustomMappings")
         }
+    }
+
+    // MARK: - Unified Profile Resolution
+    // 내장 키보드: 항상 기본 프로필 (디바이스 프로필 검색 안 함)
+    // 외장 키보드: 디바이스 프로필 > 앱 프로필 > 기본 프로필
+
+    private func resolveActiveProfile() {
+        // 1. 외장 키보드의 디바이스 기반 프로필 (최우선)
+        //    내장 키보드는 항상 기본/앱 프로필을 사용
+        if let device = lastActiveKeyboard, !device.isInternal,
+           let deviceProfile = profileStore.profile(forDevice: device) {
+            if defaultMappingProfileId == nil {
+                defaultMappingProfileId = activeMappingProfileId
+            }
+            applyProfile(deviceProfile)
+            refreshActiveProfileForCurrentContext()
+            return
+        }
+
+        // 2. 앱 기반 프로필
+        let bundleId = contextManager.currentBundleId
+        if let appProfile = profileStore.profile(forBundleId: bundleId) {
+            if defaultMappingProfileId == nil {
+                defaultMappingProfileId = activeMappingProfileId
+            }
+            applyProfile(appProfile)
+            refreshActiveProfileForCurrentContext()
+            return
+        }
+
+        // 3. 기본 프로필 복원 (내장 키보드로 돌아왔거나 매칭 없음)
+        if let defaultId = defaultMappingProfileId {
+            defaultMappingProfileId = nil
+            activeMappingProfileId = defaultId
+        }
+        refreshActiveProfileForCurrentContext()
     }
 
     func refreshActiveProfileForCurrentContext() {
@@ -298,7 +343,7 @@ class AppState: ObservableObject {
     /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.
     func resetAll() {
         LogService.shared.warning("Reset all triggered", category: "App")
-        resetService.resetAll(keyInterceptor: keyInterceptor) { [weak self] in
+        resetService.resetAll(keyInterceptor: keyInterceptor, keyboardDeviceManager: keyboardDeviceManager) { [weak self] in
             DispatchQueue.main.async {
                 self?.isEngineRunning = false
                 self?.currentLatencyMs = 0.0
@@ -319,6 +364,7 @@ class AppState: ObservableObject {
     
     deinit {
         contextManager.stopMonitoring()
+        keyboardDeviceManager.stopMonitoring()
         if let observer = permissionObserver {
             NotificationCenter.default.removeObserver(observer)
         }
