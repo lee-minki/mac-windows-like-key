@@ -21,7 +21,7 @@ class StateManager: ObservableObject {
     private let logger = Logger(subsystem: "com.winmackey.app", category: "StateManager")
     private var inputSourceObserver: NSObjectProtocol?
     private var inputSourcePollTask: Task<Void, Never>?
-    private let toggleRetryLimit = 1
+    private let toggleRetryLimit = 2
     /// 입력 소스 변경이 이미 확인되어 commitWindow가 완료된 경우 true
     /// 폴링과 DistributedNotification의 이중 호출을 방지합니다.
     private var commitWindowCompleted = false

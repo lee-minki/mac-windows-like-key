@@ -41,9 +41,9 @@ class KeyInterceptor: ObservableObject {
     private var bufferedKeyEvents: [CGEvent] = []
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
-    private static let inputSourceCommitMinimumHoldNanos: UInt64 = 12_000_000  // 12ms
-    private let inputSourceCommitTimeout: TimeInterval = 0.180
-    private let vdiRelayCooldownTimeout: TimeInterval = 0.015
+    private static let inputSourceCommitMinimumHoldNanos: UInt64 = 20_000_000  // 20ms
+    private let inputSourceCommitTimeout: TimeInterval = 0.220
+    private let vdiRelayCooldownTimeout: TimeInterval = 0.030
     private let maxBufferedEventCount = 8
 
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
@@ -181,8 +181,10 @@ class KeyInterceptor: ObservableObject {
                                       (1 << CGEventType.keyUp.rawValue) |
                                       (1 << CGEventType.flagsChanged.rawValue)
         
+        // VDI 클라이언트가 세션 단계보다 낮은 레벨에서 modifier 상태를 읽는 경우가 있어
+        // 트리거 키를 더 이른 시점에 가로채기 위해 HID tap을 사용합니다.
         guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: eventMask,
@@ -265,7 +267,7 @@ class KeyInterceptor: ObservableObject {
 
     func failInputSourceCommitWindow() {
         guard bufferedReplayWindow == .inputSourceCommit else { return }
-        flushBufferedKeyEvents(reason: "verification-failed")
+        scheduleBufferedReplayFlush(after: 0.100, reason: "verification-failed-grace")
     }
     
     // MARK: - EventTap Reactivation
