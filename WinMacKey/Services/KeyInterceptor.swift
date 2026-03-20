@@ -43,9 +43,10 @@ class KeyInterceptor: ObservableObject {
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
 
-    // 한영 전환 트리거 키 (HID remap 후 CGEventTap에 도달하는 키: F18)
-    // 물리 키(Right Cmd/Opt)는 hidutil이 F18로 변환하므로 EventTap에서는 항상 F18을 감지
-    var triggerKeyCode: Int64 = Int64(kVK_F18)
+    // 한영 전환 트리거 키 (HID remap 후 CGEventTap에 도달하는 키: F16)
+    // 물리 키(Right Cmd/Opt)는 hidutil이 F16으로 변환하므로 EventTap에서는 항상 F16을 감지
+    // VDI에서는 F16이 패스스루되어 Horizon이 Right Alt로 직접 변환
+    var triggerKeyCode: Int64 = Int64(kVK_F16)
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
@@ -324,17 +325,19 @@ class KeyInterceptor: ObservableObject {
         
         let triggerKey = interceptor.triggerKeyCode
 
-        // ====== 트리거 키 처리 (F18 기반 한영 전환 / VDI 릴레이) ======
-        // HID remap으로 Right Cmd/Opt → F18 변환됨.
-        // F18은 modifier가 아니므로 keyDown/keyUp으로 도달.
+        // ====== 트리거 키 처리 (F16 기반 한영 전환 / VDI 패스스루) ======
+        // HID remap으로 Right Cmd/Opt → F16 변환됨.
+        // F16은 modifier가 아니므로 keyDown/keyUp으로 도달.
         // → modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
+        // VDI 모드: F16 패스스루 → Horizon이 Right Alt로 직접 변환
+        // 로컬 Mac: F16 suppress → Control+Space 합성
 
         if keyCode == triggerKey && (type == .keyDown || type == .keyUp) {
             if type == .keyDown {
                 let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
                 if !isRepeat && !interceptor.triggerKeyPressed {
                     interceptor.triggerKeyPressed = true
-                    interceptor.logger.info("⚡️ Trigger key (F18) detected (VDI=\(interceptor.isVdiAppFocused))")
+                    interceptor.logger.info("⚡️ Trigger key (F16) detected (VDI=\(interceptor.isVdiAppFocused))")
                     interceptor.onInputSourceToggle?()
                 }
             } else {
@@ -343,7 +346,14 @@ class KeyInterceptor: ObservableObject {
             }
 
             interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-            return nil  // suppress: F18 이벤트를 시스템에 전달하지 않음
+
+            if interceptor.isVdiAppFocused {
+                // VDI: F16 패스스루 — Horizon이 F16 → Right Alt로 직접 변환
+                return Unmanaged.passUnretained(event)
+            } else {
+                // 로컬 Mac: suppress — Control+Space를 합성하여 입력소스 전환
+                return nil
+            }
         }
         
         // ====== 일반 매핑 처리 ======

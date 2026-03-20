@@ -29,7 +29,8 @@ class HIDRemapper {
         0x39: 0x700000039, // kVK_CapsLock        → Caps Lock
         
         // Function keys (IME relay용)
-        0x4F: 0x70000006D, // kVK_F18             → F18 (IME toggle relay)
+        0x6A: 0x70000006B, // kVK_F16             → F16 (IME toggle / VDI relay)
+        0x4F: 0x70000006D, // kVK_F18             → F18
         
         // Fn/Globe key (Apple 전용)
         0x3F: 0xFF00000003 // kVK_Function        → Fn (Apple vendor-specific)
@@ -46,6 +47,7 @@ class HIDRemapper {
         0x7000000E1: "Shift",
         0x7000000E5: "Right Shift",
         0x700000039: "Caps Lock",
+        0x70000006B: "F16",
         0x70000006D: "F18",
         0xFF00000003: "Fn/Globe"
     ]

@@ -7,15 +7,13 @@
 - Windows VDI: `F16 릴레이 키 주입`
 
 ### 개선된 점
-- 빠른 한영전환 시 글자 누락/유령 입력 해결
+- **F16 HID remap 아키텍처**: `hidutil`로 Right Cmd/Opt를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
+- VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
+- 빠른 영문 대문자 입력 시 Windows 키 조합 오발 해결
 - 메뉴바 아이콘이 macOS 네이티브 입력소스 표시기로 동기화
-- Windows VDI(Omnissa Horizon 등)에서도 F16 → Right Alt 변환으로 동작
+- Windows VDI(Omnissa Horizon 등)에서 F16 패스스루 → Right Alt 변환으로 동작
 - Karabiner DriverKit 완전 불필요
-- HID-CGEventTap 이중 매핑 버그 수정
-- VDI 포커스 시 내장 키보드 자동 매핑 전환 (Fn→Ctrl)
 - IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 자동 전환
-- VDI 한영전환 직후 첫 키를 15ms 정렬해 Windows 단축키 오발 방지
-- 로컬 macOS 입력소스 전환 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 
 ---
 
@@ -111,12 +109,11 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 ```
 [Mac 로컬 / 원격 Mac 포커스]
-  Right Cmd → Control+Space 주입 → macOS 입력소스 전환
+  Right Cmd → hidutil HID remap → F16 → CGEventTap suppress → Control+Space 합성 → macOS 입력소스 전환
   내장 키보드: Fn→Cmd, Cmd→Ctrl, Ctrl→Fn (Mac 프로필)
 
 [VDI 앱 포커스] (자동 전환)
-  Right Cmd → F16 주입 → VDI가 수신
-  VDI 내부 설정: F16 → Right Alt → Windows 한영전환
+  Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon이 F16 → Right Alt 변환
   내장 키보드: Fn→Ctrl, Ctrl→Fn (VDI 프로필 - 자동 적용)
 ```
 

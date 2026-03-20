@@ -127,7 +127,7 @@ section h2 .emoji{font-size:28px}
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <h1>⌨️ WinMac Key</h1>
-    <p>v1.2 사용 매뉴얼</p>
+    <p>v1.3 사용 매뉴얼</p>
   </div>
   <nav id="nav">
     <a href="#intro" class="active"><span class="icon">👋</span>소개</a>
@@ -315,14 +315,13 @@ section h2 .emoji{font-size:28px}
   <div class="card">
     <h3>🔄 동작 원리</h3>
     <div class="code-block">
-[Mac 로컬 / 원격 Mac]
-  Right Cmd → Control+Space 주입 → macOS 입력소스 전환
+[로컬 Mac / 원격 Mac]
+  Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → 입력소스 전환
 
 [VDI 앱 포커스] (자동 전환)
-  Right Cmd → F16 주입 → VDI가 수신
-  VDI 내부:  F16 → Right Alt → Windows 한영전환
+  Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon: F16 → Right Alt
     </div>
-    <p style="font-size:13px;color:var(--text2);margin-top:8px">VDI 앱이 포커스되면 WinMac Key가 자동으로 감지하여 경로를 전환합니다.</p>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">hidutil로 Right Cmd를 F16(<ub2c8씨 modifier가 아닌 일반 키)로 변환하여 modifier flag 오염을 원천 차단합니다. VDI 앱이 포커스되면 F16이 Horizon에 그대로 전달됩니다.</p>
   </div>
 
   <div class="card">
@@ -418,7 +417,7 @@ section h2 .emoji{font-size:28px}
 
   <div class="faq-item"><div class="faq-q">입력 소스 전환창이 뜨거나 두세 번 눌러야 바뀌어요</div><div class="faq-a"><p>다른 앱이 같은 전환 키를 함께 처리할 때 발생합니다.<br><br>1. Karabiner에서 <code>right_command</code>, <code>Control+Space</code> 관련 규칙을 끄세요.<br>2. Hammerspoon/BetterTouchTool에 한영 전환 핫키가 있으면 해제하세요.<br>3. 특히 Karabiner의 Right Command 규칙이 켜져 있으면 중복 실행되어 전환창이 뜰 수 있습니다.</p></div></div>
 
-  <div class="faq-item"><div class="faq-q">VMware에서 한/영 전환이 안 되나요?</div><div class="faq-a"><p>VDI 환경에서는 <strong>F16 → Right Alt</strong> 매핑이 필요합니다.<br>최신 버전은 여기에 더해 <strong>첫 키 15ms 정렬 + 잔여 Alt 플래그 정리</strong>로 단축키 오발도 줄입니다.<br>위의 <a href="#vdi" style="color:var(--accent)">VDI 환경 설정</a> 섹션을 참조하세요.</p></div></div>
+  <div class="faq-item"><div class="faq-q">VMware에서 한/영 전환이 안 되나요?</div><div class="faq-a"><p>VDI 환경에서는 <strong>F16 → Right Alt</strong> 매핑이 필요합니다.<br>v1.3.0부터 F16 HID remap 아키텍처로 modifier flag 오염이 원천 차단되어 Win+P, Shift+영문 등의 오발이 해결되었습니다.<br>위의 <a href="#vdi" style="color:var(--accent)">VDI 환경 설정</a> 섹션을 참조하세요.</p></div></div>
   <div class="faq-item"><div class="faq-q">로컬 Mac에서 첫 글자가 영어로 들어가요. 예: xㅓ미널</div><div class="faq-a"><p>입력소스 전환이 실제로 확인되기 전에 첫 글자가 먼저 풀리면 생길 수 있습니다.<br><br>최신 버전은 <strong>입력소스 변경 검증 + 최소 홀드</strong> 뒤에 버퍼를 풀도록 보강했습니다.<br>그래도 재현되면 <code>Control+Space</code> 설정, Caps Lock 한영전환, Karabiner/Hammerspoon 중복 핫키를 먼저 확인하세요.</p></div></div>
 
   <div class="faq-item"><div class="faq-q">Karabiner-Elements와 동시에 쓸 수 있나요?</div><div class="faq-a"><p>권장하지 않습니다. 두 프로그램 모두 CGEventTap을 사용하여 같은 레벨에서 키 입력을 가로채므로 충돌합니다.<br><br>Karabiner에서 fn/Cmd/Ctrl/Right Cmd 관련 매핑을 제거하면 공존할 수 있지만, WinMac Key만 사용하는 것을 권장합니다.</p></div></div>
@@ -463,7 +462,7 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 </section>
 
 <footer style="text-align:center;padding:40px 0 20px;color:var(--text2);font-size:12px;border-top:1px solid var(--border)">
-  <p>WinMac Key v1.2 · Made with ❤️ for Windows → Mac 전환 사용자</p>
+  <p>WinMac Key v1.3 · Made with ❤️ for Windows → Mac 전환 사용자</p>
   <p style="margin-top:4px"><a href="https://github.com/lee-minki/mac-windows-like-key" style="color:var(--accent);text-decoration:none">GitHub</a></p>
 </footer>
 

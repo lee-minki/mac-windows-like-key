@@ -164,11 +164,15 @@ class AppState: ObservableObject {
             MainActor.assumeIsolated {
                 let isVdiMode = self?.isVdiMode == true
                 if isVdiMode {
+                    // VDI: F16이 패스스루되어 Horizon이 직접 처리
+                    // 릴레이 키 발행 불필요, 버퍼링만 시작
                     self?.keyInterceptor.beginVdiRelayCooldownWindow()
+                    self?.stateManager.switchCount += 1
                 } else {
+                    // 로컬 Mac: F16 suppress 후 Control+Space 합성
                     self?.keyInterceptor.beginInputSourceCommitWindow()
+                    self?.stateManager.handleTrigger(isVdiMode: false)
                 }
-                self?.stateManager.handleTrigger(isVdiMode: isVdiMode)
             }
         }
 
@@ -308,15 +312,16 @@ class AppState: ObservableObject {
 
     // MARK: - IME Trigger HID Remap
 
-    /// 물리 트리거 키(Right Cmd 또는 Right Opt)를 F18로 HID remap하도록 설정합니다.
+    /// 물리 트리거 키(Right Cmd 또는 Right Opt)를 F16으로 HID remap하도록 설정합니다.
+    /// F16은 VDI에서 패스스루되어 Horizon이 Right Alt로 직접 변환합니다.
     /// HIDRemapper에 imeTriggerMapping을 등록하면 다음 applyMappings 호출 시 자동 포함됩니다.
     private func updateIMETriggerRemap() {
         let physicalKeyCode = (toggleTriggerKey == "rightOpt")
             ? Int64(kVK_RightOption)
             : Int64(kVK_RightCommand)
-        HIDRemapper.shared.imeTriggerMapping = (src: physicalKeyCode, dst: Int64(kVK_F18))
+        HIDRemapper.shared.imeTriggerMapping = (src: physicalKeyCode, dst: Int64(kVK_F16))
         LogService.shared.info(
-            "IME trigger remap: \(toggleTriggerKey) (0x\(String(physicalKeyCode, radix: 16))) → F18",
+            "IME trigger remap: \(toggleTriggerKey) (0x\(String(physicalKeyCode, radix: 16))) → F16",
             category: "HID"
         )
     }

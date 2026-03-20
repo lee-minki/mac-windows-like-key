@@ -20,10 +20,10 @@
 
 ## ✨ Features
 
-- **⌨️ Right Command / Right Option 전환**: macOS 입력 소스를 즉시 토글
-- **🖥️ Native VDI Support**: 로컬 macOS/원격 Mac은 `Control+Space`, Windows VDI는 `F16 → Right Alt` 매핑으로 동작
+- **⌨️ Right Command / Right Option 전환**: `hidutil` HID remap으로 Right Cmd/Opt를 F16으로 변환, modifier flag 오염 원천 차단
+- **🖥️ Native VDI Support**: VDI에서는 F16 패스스루로 Horizon이 Right Alt로 직접 변환, 로컬 Mac에서는 `Control+Space` 합성
 - **🔌 Per-Device Auto Profile**: IOKit 기반 외장 키보드 자동 감지 — 키보드별 프로필 자동 전환
-- **🛡️ VDI First-Key Guard**: 트리거 직후 첫 키를 15ms만 정렬해 Windows 단축키 오발 방지
+- **🛡️ VDI Ghost Key Prevention**: F16 HID remap으로 modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
 - **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
 - **🧩 Keyboard Profiles**: 현재 입력을 실키로 감지하고 `Mac 로컬` / `VDI` 목표 배치를 따로 저장
@@ -102,10 +102,10 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 ## 💎 VDI 지원
 
-별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는
-- 로컬 macOS 및 원격 Mac 세션에서는 `Control+Space`
-- Windows VDI 앱 포커스에서는 `F16`
-를 상황에 맞게 전송합니다.
+별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Cmd/Opt를 F16으로 HID 레벨 remap하여:
+- 로컬 macOS 및 원격 Mac 세션에서는 F16을 suppress하고 `Control+Space` 합성
+- Windows VDI 앱 포커스에서는 F16을 **패스스루** — Horizon이 Right Alt로 직접 변환
+을 상황에 맞게 처리합니다.
 
 ### 검증된 환경
 
@@ -122,8 +122,8 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 VMware Horizon 등 가상화 앱에서 한/영 전환이 안 되는 문제를 기본적으로 해결합니다.
 **가상 키보드 드라이버 등 별도의 시스템 확장프로그램이 전혀 필요 없는 완전한 네이티브 방식**을 사용합니다.
 
-WinMac Key가 Windows VDI 앱에 포커스된 것을 자동 감지하면 `F16` 릴레이 키를 발생시키고,
-VDI 클라이언트(Omnissa 등)가 이를 윈도우의 `Right Alt`로 변환하도록 구성할 수 있습니다.
+WinMac Key가 Windows VDI 앱에 포커스된 것을 자동 감지하면 F16을 패스스루하여
+Horizon 등 VDI 클라이언트가 이를 윈도우의 `Right Alt`로 변환하도록 구성할 수 있습니다.
 
 **→ [VDI 매핑 및 설정 가이드](docs/VDI_SETUP.md)**
 

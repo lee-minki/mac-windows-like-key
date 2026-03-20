@@ -17,11 +17,10 @@ WinMac Key는 VDI (가상 데스크톱) 환경에서도 Windows와 동일한 감
 
 WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안전한 방식으로 단축키를 중계합니다.
 
-1. 사용자가 **Right Command** (우측 커맨드)를 누름
-2. WinMac Key가 이를 가로채서 **F16** 릴레이 키를 전송
-3. **Omnissa Horizon Client** 등 VDI 클라이언트가 해당 키를 감지
-4. VDI 내장 매핑을 통해 윈도우의 **Right Alt** (한/영 전환)로 변환되어 전달됨
-5. 윈도우 OS에서 자연스럽게 한영이 전환됨!
+1. `hidutil`이 **Right Command**를 **F16**으로 HID 레벨에서 변환 (modifier flag 없음)
+2. F16 이벤트가 **Omnissa Horizon Client**에 그대로 전달 (패스스루)
+3. VDI 내장 매핑을 통해 윈도우의 **Right Alt** (한/영 전환)로 변환되어 전달됨
+4. 윈도우 OS에서 자연스럽게 한영이 전환됨!
 
 ---
 

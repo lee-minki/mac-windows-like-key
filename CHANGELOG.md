@@ -9,23 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased] — v1.3.0
 
 ### Added
+- **F16 HID remap 아키텍처**: `hidutil`로 Right Cmd/Opt를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
+- **VDI F16 패스스루**: VDI 모드에서 F16이 Horizon에 직접 전달되어 suppress+재발행 불필요
 - **IOKit 기반 외장 키보드 자동 감지**: `IOHIDManager`로 연결된 키보드를 VendorID/ProductID로 식별
 - **디바이스별 프로필 자동 전환**: 외장 키보드 입력 시 할당된 프로필로 즉시 전환 (디바이스 > 앱 > 기본 우선순위)
-- **VDI 고스트 키 방지**: 트리거 릴리즈 후 50ms 쿨다운으로 Alt+key 조합 오발 차단 (딜레이 0ms)
-- **VDI first-key settle buffer**: 트리거 직후 15ms 동안 첫 키를 정렬해 `F16 → Right Alt` 변환 레이스 완화
-- **Profiles 탭**: "Assign current keyboard" 버튼으로 키보드 디바이스별 프로필 할당
-- **Debug 탭**: 연결된 키보드 디바이스 목록 및 활성 키보드 표시
+- **Profiles 탭**: "키보드 할당" 버튼으로 키보드 디바이스별 프로필 할당
 - **CHANGELOG.md**: 프로젝트 변경 이력 문서화
 
 ### Fixed
-- VDI 환경에서 한영전환 후 Shift+영문 입력 시 Windows 화면녹화(Win+Shift+R) 등 단축키 오발
-- VDI 환경에서 한영전환 후 영문 대문자 입력 시 의도치 않은 앱 실행
+- **VDI에서 한/영+Shift+P 시 "다른 화면에 표시" 팔업 (Win+P)**: modifier flag 오염 원천 차단
+- **VDI에서 빠른 영문 대문자 입력 시 Windows 키 조합 오발**: F16 non-modifier remap으로 해결
 - 로컬 macOS에서 한영전환 직후 첫 글자가 영어로 들어가던 문제 완화
 - 입력소스 전환 검증 실패를 성공으로 처리해 버퍼를 조기 해제하던 레이스 수정
 
 ### Changed
+- **트리거 감지**: CGEventTap `flagsChanged` → `keyDown/keyUp` (F16은 modifier가 아니므로)
+- **modifier flag 스트리핑/쿨다운 제거**: F16은 modifier flag를 생성하지 않으므로 불필요
 - HelpView 매뉴얼 전면 재작성 — 디바이스 프로필, VDI 고스트 키 방지 등 신기능 반영
-- UpdateView 릴리스 노트 마크다운 렌더링 개선
 - README, VDI_SETUP, SETUP_GUIDE 문서 업데이트
 
 ---
