@@ -86,11 +86,10 @@ class AppState: ObservableObject {
     @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부
     
     // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
+    // HID remap으로 물리 키를 F18으로 변환, CGEventTap에서는 항상 F18을 감지
     @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
         didSet {
-            keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")
-                ? Int64(kVK_RightOption)
-                : Int64(kVK_RightCommand)
+            updateIMETriggerRemap()
         }
     }
     
@@ -182,10 +181,8 @@ class AppState: ObservableObject {
         }
         stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2)
 
-        // 트리거 키 설정
-        keyInterceptor.triggerKeyCode = (toggleTriggerKey == "rightOpt")
-            ? Int64(kVK_RightOption)
-            : Int64(kVK_RightCommand)
+        // IME 트리거 HID remap 설정 (Right Cmd/Opt → F18)
+        updateIMETriggerRemap()
         keyInterceptor.activeProfileID = activeMappingProfileId
         refreshActiveProfileForCurrentContext()
 
@@ -309,6 +306,21 @@ class AppState: ObservableObject {
         keyInterceptor.setupDefaultMappings()
     }
 
+    // MARK: - IME Trigger HID Remap
+
+    /// 물리 트리거 키(Right Cmd 또는 Right Opt)를 F18로 HID remap하도록 설정합니다.
+    /// HIDRemapper에 imeTriggerMapping을 등록하면 다음 applyMappings 호출 시 자동 포함됩니다.
+    private func updateIMETriggerRemap() {
+        let physicalKeyCode = (toggleTriggerKey == "rightOpt")
+            ? Int64(kVK_RightOption)
+            : Int64(kVK_RightCommand)
+        HIDRemapper.shared.imeTriggerMapping = (src: physicalKeyCode, dst: Int64(kVK_F18))
+        LogService.shared.info(
+            "IME trigger remap: \(toggleTriggerKey) (0x\(String(physicalKeyCode, radix: 16))) → F18",
+            category: "HID"
+        )
+    }
+
     // MARK: - VDI / Mac Mapping Switch
 
     /// VDI 모드: 내장 키보드는 Windows 감각 레이아웃으로 교체하고, 외장 프로필도 VDI 컨텍스트로 재적용
@@ -331,6 +343,8 @@ class AppState: ObservableObject {
             let started = keyInterceptor.start()
             isEngineRunning = started
             if started {
+                // HID 매핑 재적용 (stop 시 clearMappingsSync로 해제되므로)
+                refreshActiveProfileForCurrentContext()
                 LogService.shared.info("Engine started", category: "Engine")
             } else {
                 LogService.shared.error("Engine failed to start", category: "Engine")

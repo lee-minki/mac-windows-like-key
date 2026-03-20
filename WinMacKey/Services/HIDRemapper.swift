@@ -28,6 +28,9 @@ class HIDRemapper {
         0x3C: 0x7000000E5, // kVK_RightShift      → Right Shift
         0x39: 0x700000039, // kVK_CapsLock        → Caps Lock
         
+        // Function keys (IME relay용)
+        0x4F: 0x70000006D, // kVK_F18             → F18 (IME toggle relay)
+        
         // Fn/Globe key (Apple 전용)
         0x3F: 0xFF00000003 // kVK_Function        → Fn (Apple vendor-specific)
     ]
@@ -43,8 +46,13 @@ class HIDRemapper {
         0x7000000E1: "Shift",
         0x7000000E5: "Right Shift",
         0x700000039: "Caps Lock",
+        0x70000006D: "F18",
         0xFF00000003: "Fn/Globe"
     ]
+
+    /// IME 전환 트리거 HID 리맵 (예: Right Cmd → F18)
+    /// 모든 hidutil 호출 시 자동으로 포함됩니다.
+    var imeTriggerMapping: (src: Int64, dst: Int64)? = nil
     
     // MARK: - Device Matching
 
@@ -55,15 +63,20 @@ class HIDRemapper {
     // MARK: - Device-Specific Mappings
 
     /// 내장 키보드에만 매핑 적용 (동기)
+    /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     func applyMappingsForInternalKeyboardSync(_ mappings: [Int64: Int64]) {
-        let json = buildUserKeyMappingJSON(mappings)
+        var combined = mappings
+        if let trigger = imeTriggerMapping, trigger.src != trigger.dst {
+            combined[trigger.src] = trigger.dst
+        }
+        let json = buildUserKeyMappingJSON(combined)
         guard let json = json else {
             clearMappingsForInternalKeyboardSync()
             return
         }
         let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", json])
         if result {
-            logger.info("Internal keyboard mappings applied (sync, \(mappings.count) mappings)")
+            logger.info("Internal keyboard mappings applied (sync, \(combined.count) mappings)")
         } else {
             logger.error("Failed to apply internal keyboard mappings")
         }
@@ -91,17 +104,16 @@ class HIDRemapper {
     // MARK: - Apply Mappings (Global)
 
     /// keycode 기반 매핑 딕셔너리를 hidutil로 적용 (전체 디바이스)
+    /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     /// - Parameter mappings: [sourceKeyCode: destinationKeyCode] (macOS virtual keycode 사용)
     func applyMappings(_ mappings: [Int64: Int64]) {
         var userKeyMapping: [[String: UInt64]] = []
         
         for (src, dst) in mappings {
-            // 자기 자신으로의 매핑은 무의미하므로 스킵
             guard src != dst else { continue }
             
             guard let srcHID = Self.keycodeToHIDUsage[src],
                   let dstHID = Self.keycodeToHIDUsage[dst] else {
-                // HID 테이블에 없는 키코드는 스킵 (일반 키는 CGEventTap이 처리)
                 continue
             }
             
@@ -114,6 +126,9 @@ class HIDRemapper {
             let dstName = Self.hidUsageToName[dstHID] ?? "\(dstHID)"
             logger.info("HID mapping: \(srcName) → \(dstName)")
         }
+        
+        // IME 트리거 리맵 자동 주입 (Right Cmd/Opt → F18)
+        injectIMETriggerMapping(into: &userKeyMapping)
         
         if userKeyMapping.isEmpty {
             clearMappings()
@@ -152,6 +167,9 @@ class HIDRemapper {
                 "HIDKeyboardModifierMappingDst": dstHID
             ])
         }
+        
+        // IME 트리거 리맵 자동 주입
+        injectIMETriggerMapping(into: &userKeyMapping)
         
         if userKeyMapping.isEmpty {
             clearMappingsSync()
@@ -216,6 +234,26 @@ class HIDRemapper {
     
     // MARK: - Private
 
+    /// IME 트리거 매핑을 HID 매핑 배열에 주입 (중복 방지)
+    private func injectIMETriggerMapping(into userKeyMapping: inout [[String: UInt64]]) {
+        guard let trigger = imeTriggerMapping, trigger.src != trigger.dst,
+              let srcHID = Self.keycodeToHIDUsage[trigger.src],
+              let dstHID = Self.keycodeToHIDUsage[trigger.dst] else { return }
+        let entry: [String: UInt64] = [
+            "HIDKeyboardModifierMappingSrc": srcHID,
+            "HIDKeyboardModifierMappingDst": dstHID
+        ]
+        // 이미 동일한 소스의 매핑이 있으면 교체, 없으면 추가
+        if let idx = userKeyMapping.firstIndex(where: { $0["HIDKeyboardModifierMappingSrc"] == srcHID }) {
+            userKeyMapping[idx] = entry
+        } else {
+            userKeyMapping.append(entry)
+        }
+        let srcName = Self.hidUsageToName[srcHID] ?? "\(srcHID)"
+        let dstName = Self.hidUsageToName[dstHID] ?? "\(dstHID)"
+        logger.info("IME trigger HID mapping: \(srcName) → \(dstName)")
+    }
+
     /// 매핑 딕셔너리를 hidutil JSON 문자열로 변환. 유효한 매핑이 없으면 nil 반환.
     private func buildUserKeyMappingJSON(_ mappings: [Int64: Int64]) -> String? {
         var userKeyMapping: [[String: UInt64]] = []
@@ -228,6 +266,8 @@ class HIDRemapper {
                 "HIDKeyboardModifierMappingDst": dstHID
             ])
         }
+        // IME 트리거 매핑도 포함
+        injectIMETriggerMapping(into: &userKeyMapping)
         guard !userKeyMapping.isEmpty else { return nil }
         let config: [String: Any] = ["UserKeyMapping": userKeyMapping]
         guard let jsonData = try? JSONSerialization.data(withJSONObject: config),

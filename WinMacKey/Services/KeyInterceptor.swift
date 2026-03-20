@@ -26,18 +26,12 @@ class KeyInterceptor: ObservableObject {
     // 키 매핑 테이블 (fn↔Cmd↔Ctrl 등 기존 매핑)
     private(set) var keyMappings: [Int64: Int64] = [:]
 
-    // Right Cmd/Opt toggle 상태 (연속 토글 방지용)
+    // Right Cmd/Opt toggle 상태
     private var triggerKeyPressed = false
-    private var previousFlags: CGEventFlags = []
     private var bufferedReplayWindow: BufferedReplayWindow = .none
     private var bufferedReplayStartedAt: UInt64 = 0
 
-    /// 트리거 키 릴리즈 후 플래그 스트리핑 쿨다운
-    /// 트리거를 놓은 직후 빠르게 타이핑하면 OS가 modifier flag를 아직 포함시켜 보내는 경우가 있음.
-    /// 이 쿨다운 동안 트리거 modifier flag를 계속 제거하여 Alt+key 조합 오발을 방지.
-    /// 이벤트 자체는 지연 없이 즉시 전달됨 — 플래그만 클리닝.
-    private var triggerReleasedAt: UInt64 = 0
-    private static let triggerCooldownNanos: UInt64 = 50_000_000  // 50ms
+    /// 트리거 키 릴리즈 후 VDI 쇀틀 을다운
     private var bufferedKeyEvents: [CGEvent] = []
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
@@ -49,8 +43,9 @@ class KeyInterceptor: ObservableObject {
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
 
-    // 한영 전환 트리거 키 (기본: Right Command)
-    var triggerKeyCode: Int64 = Int64(kVK_RightCommand)
+    // 한영 전환 트리거 키 (HID remap 후 CGEventTap에 도달하는 키: F18)
+    // 물리 키(Right Cmd/Opt)는 hidutil이 F18로 변환하므로 EventTap에서는 항상 F18을 감지
+    var triggerKeyCode: Int64 = Int64(kVK_F18)
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
@@ -181,19 +176,29 @@ class KeyInterceptor: ObservableObject {
                                       (1 << CGEventType.keyUp.rawValue) |
                                       (1 << CGEventType.flagsChanged.rawValue)
         
-        // VDI 클라이언트가 세션 단계보다 낮은 레벨에서 modifier 상태를 읽는 경우가 있어
-        // 트리거 키를 더 이른 시점에 가로채기 위해 HID tap을 사용합니다.
-        guard let tap = CGEvent.tapCreate(
+        let callback: CGEventTapCallBack = { proxy, type, event, refcon in
+            KeyInterceptor.handleEvent(proxy: proxy, type: type, event: event, refcon: refcon)
+        }
+
+        // HID tap이 실패하는 환경이 있어 세션 tap으로 자동 폴백합니다.
+        let tap = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: eventMask,
-            callback: { proxy, type, event, refcon -> Unmanaged<CGEvent>? in
-                return KeyInterceptor.handleEvent(proxy: proxy, type: type, event: event, refcon: refcon)
-            },
+            callback: callback,
             userInfo: nil
-        ) else {
-            logger.error("Failed to create event tap. Check Accessibility permissions.")
+        ) ?? CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: callback,
+            userInfo: nil
+        )
+
+        guard let tap else {
+            logger.error("Failed to create HID and session event taps. Check Accessibility permissions.")
             return false
         }
         
@@ -314,68 +319,31 @@ class KeyInterceptor: ObservableObject {
         }
         
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let rightCmdKeyCode = Int64(kVK_RightCommand)
         var mappedKeyCode = keyCode
         var finalEvent = event
         
         let triggerKey = interceptor.triggerKeyCode
-        
-        // ====== 트리거 modifier 플래그 스트리핑 ======
-        // (1) 트리거 키가 눌린 상태: 후속 이벤트에서 트리거 modifier 제거
-        // (2) 트리거 릴리즈 후 쿨다운(50ms): 빠른 타이핑 시 잔여 modifier flag 제거
-        //     → VDI에서 Alt+key 조합 오발 방지 (화면녹화, 앱실행 등)
-        //     → 이벤트 전달 지연 없음 — 플래그만 클리닝
-        if keyCode != triggerKey {
-            let shouldStrip: Bool
-            if interceptor.triggerKeyPressed {
-                shouldStrip = true
-            } else if interceptor.triggerReleasedAt > 0 {
-                let elapsed = startTime.uptimeNanoseconds - interceptor.triggerReleasedAt
-                shouldStrip = elapsed < Self.triggerCooldownNanos
-            } else {
-                shouldStrip = false
-            }
 
-            if shouldStrip {
-                let triggerFlag: CGEventFlags = triggerKey == rightCmdKeyCode ? .maskCommand : .maskAlternate
-                if event.flags.contains(triggerFlag) {
-                    var strippedFlags = event.flags
-                    strippedFlags.remove(triggerFlag)
-                    event.flags = strippedFlags
+        // ====== 트리거 키 처리 (F18 기반 한영 전환 / VDI 릴레이) ======
+        // HID remap으로 Right Cmd/Opt → F18 변환됨.
+        // F18은 modifier가 아니므로 keyDown/keyUp으로 도달.
+        // → modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
+
+        if keyCode == triggerKey && (type == .keyDown || type == .keyUp) {
+            if type == .keyDown {
+                let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                if !isRepeat && !interceptor.triggerKeyPressed {
+                    interceptor.triggerKeyPressed = true
+                    interceptor.logger.info("⚡️ Trigger key (F18) detected (VDI=\(interceptor.isVdiAppFocused))")
+                    interceptor.onInputSourceToggle?()
                 }
-            }
-        }
-        
-        // ====== 트리거 키 처리 (한영 전환 / VDI 릴레이) ======
-        // 핵심 원칙: 트리거 키 이벤트를 시스템에 그대로 전달하지 않음 (suppress).
-        // → 우발적인 Cmd+Space(Spotlight) 등 단축키 발동 원천 차단.
-        // → AppState/StateManager가 현재 컨텍스트에 따라
-        //    macOS 입력소스 전환(Control+Space) 또는 VDI 릴레이 키(F16)를 선택.
-
-        if keyCode == triggerKey && type == .flagsChanged {
-
-            // ── isDown 판별: device-specific 플래그 (L+R 동시 홀드 엣지케이스 완전 해결) ──
-            // .maskCommand/.maskAlternate는 Left/Right 구분 불가 → NX device 비트 사용
-            // NX_DEVICERCMDKEYMASK=0x10, NX_DEVICERALTKEYMASK=0x40 (CGEventFlags.rawValue 하위 비트)
-            let deviceRightFlag: UInt64 = triggerKey == rightCmdKeyCode ? 0x10 : 0x40
-            let isDown = event.flags.rawValue & deviceRightFlag != 0
-            let wasDown = interceptor.previousFlags.rawValue & deviceRightFlag != 0
-            interceptor.previousFlags = event.flags
-
-            // 상태 갱신 (반복 토글 방지)
-            interceptor.triggerKeyPressed = isDown
-
-            // 트리거 릴리즈 시 쿨다운 타임스탬프 기록
-            if !isDown && wasDown {
-                interceptor.triggerReleasedAt = startTime.uptimeNanoseconds
+            } else {
+                // keyUp
+                interceptor.triggerKeyPressed = false
             }
 
-            if isDown && !wasDown {
-                interceptor.logger.info("⚡️ Trigger key detected (VDI=\(interceptor.isVdiAppFocused))")
-                interceptor.onInputSourceToggle?()
-            }
             interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-            return nil  // suppress: 트리거 키 이벤트를 시스템에 전달하지 않음
+            return nil  // suppress: F18 이벤트를 시스템에 전달하지 않음
         }
         
         // ====== 일반 매핑 처리 ======
