@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+requires_docs=0
+
+while IFS= read -r file; do
+  case "$file" in
+    WinMacKey/Services/*|WinMacKey/Views/*|WinMacKey/WinMacKeyApp.swift|.githooks/*|scripts/*|.github/workflows/*)
+      requires_docs=1
+      ;;
+  esac
+done <<EOF
+$staged_files
+EOF
+
+if [ "$requires_docs" -eq 1 ]; then
+  if ! printf '%s\n' "$staged_files" | grep -Eq '^(README\.md|AGENTS\.md|CHANGELOG\.md|docs/)'; then
+    printf '%s\n' 'pre-commit: behavior/workflow-sensitive changes require a docs update in the same commit.' >&2
+    exit 1
+  fi
+fi
+
+if printf '%s\n' "$staged_files" | grep -Eq '^(README\.md|docs/)'; then
+  if grep -n -E 'Right Command / Right Option|Right Command/Option|Right Cmd/Opt|Caps Lock -> F19|F16/F19 릴레이|F19 → Caps Lock' \
+    README.md \
+    docs/SETUP_GUIDE.md \
+    docs/VDI_SETUP.md \
+    docs/manual.html 2>/dev/null; then
+    printf '%s\n' 'pre-commit: stale Right Option or F19 relay text detected in docs.' >&2
+    exit 1
+  fi
+fi

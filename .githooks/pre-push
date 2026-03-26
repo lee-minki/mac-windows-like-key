@@ -1,0 +1,17 @@
+#!/bin/bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -derivedDataPath build/DerivedData build >/tmp/winmackey-pre-push-build.log
+
+if [ -x scripts/run-tests.sh ]; then
+  scripts/run-tests.sh >/tmp/winmackey-pre-push-test.log
+elif grep -q 'WinMacKeyTests' WinMacKey.xcodeproj/project.pbxproj; then
+  xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS' test >/tmp/winmackey-pre-push-test.log
+fi
+
+if [ -x scripts/filter-logs.sh ]; then
+  scripts/filter-logs.sh --mode verify /tmp/winmackey-pre-push-build.log >/dev/null || true
+fi

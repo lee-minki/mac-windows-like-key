@@ -27,6 +27,12 @@ chmod +x .githooks/pre-commit .githooks/pre-push
 
 ## Minimum Workflow Gates
 
+Tracked scripts in the repo:
+
+- `.githooks/pre-commit`
+- `.githooks/pre-push`
+- `scripts/setup-hooks.sh`
+
 ### Before commit
 
 - required docs updated if behavior/workflow changed
