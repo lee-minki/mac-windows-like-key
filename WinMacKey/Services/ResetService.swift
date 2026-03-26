@@ -17,7 +17,6 @@ class ResetService {
         "visualCustomMappings",
         "eventViewerAlwaysOnTop",
         "savedKeyboardProfiles",
-        "toggleTriggerKey",
         "languagePairSource1",
         "languagePairSource2"
     ]
@@ -28,6 +27,7 @@ class ResetService {
     ///   - completion: 초기화 완료 후 콜백
     func resetAll(
         keyInterceptor: KeyInterceptor,
+        keyboardDeviceManager: KeyboardDeviceManager? = nil,
         completion: (() -> Void)? = nil
     ) {
         logger.info("Starting full reset...")
@@ -35,6 +35,10 @@ class ResetService {
         // 1. 엔진 정지
         keyInterceptor.stop()
         logger.info("Engine stopped")
+
+        // 1b. 키보드 디바이스 모니터링 정지
+        keyboardDeviceManager?.stopMonitoring()
+        logger.info("Keyboard device monitoring stopped")
 
         // 2. 이벤트 로그 클리어
         keyInterceptor.events.removeAll()

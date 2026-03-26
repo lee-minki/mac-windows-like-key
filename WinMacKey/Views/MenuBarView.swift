@@ -8,8 +8,7 @@ struct MenuBarView: View {
     @Environment(\.openSettings) private var openSettings
 
     private var triggerShortcutDescription: String {
-        let trigger = appState.toggleTriggerKey == "rightOpt" ? "Right Option" : "Right Command"
-        return "\(trigger) → Control+Space (Mac) / F16 (VDI)"
+        "Right Command → Control+Space (Mac) / F16 (VDI)"
     }
     
     var body: some View {
@@ -109,15 +108,17 @@ struct MenuBarView: View {
                 .font(.subheadline)
                 .foregroundStyle(.orange)
             
-            Text("손쉬운 사용 권한을 허용해주세요")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            
-            Button("설정 열기") {
-                appState.permissionService.openAccessibilitySettings()
+            if !appState.hasAccessibilityPermission {
+                Text("손쉬운 사용 권한을 허용해주세요")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button("손쉬운 사용 설정 열기") {
+                    appState.permissionService.openAccessibilitySettings()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
         }
         .padding(12)
     }

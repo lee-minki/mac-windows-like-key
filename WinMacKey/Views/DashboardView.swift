@@ -9,8 +9,7 @@ struct DashboardView: View {
     @AppStorage("eventViewerAlwaysOnTop") private var eventViewerAlwaysOnTop: Bool = false
 
     private var triggerShortcutDescription: String {
-        let trigger = appState.toggleTriggerKey == "rightOpt" ? "Right Option" : "Right Command"
-        return "\(trigger) → Ctrl+Space (Mac) / F16 (VDI)"
+        "Right Command → Ctrl+Space (Mac) / F16 (VDI)"
     }
     
     var body: some View {
@@ -56,12 +55,8 @@ struct DashboardView: View {
                             Text("트리거 키")
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Picker("", selection: $appState.toggleTriggerKey) {
-                                Text("Right Command").tag("rightCmd")
-                                Text("Right Option").tag("rightOpt")
-                            }
-                            .pickerStyle(.menu)
-                            .frame(width: 180)
+                            Text("Right Command")
+                                .font(.system(.body, design: .monospaced))
                         }
 
                         HStack {
@@ -71,6 +66,7 @@ struct DashboardView: View {
                             Text("\(appState.stateManager.switchCount)")
                                 .font(.system(.body, design: .monospaced))
                         }
+
                     }
                 }
                 
@@ -153,8 +149,8 @@ struct DashboardView: View {
                         VStack(spacing: 12) {
                             Text("손쉬운 사용 권한이 필요합니다")
                                 .foregroundStyle(.orange)
-                            
-                            Button("시스템 설정 열기") {
+                             
+                            Button("손쉬운 사용 설정 열기") {
                                 appState.permissionService.openAccessibilitySettings()
                             }
                             .buttonStyle(.borderedProminent)
@@ -222,6 +218,26 @@ struct DashboardView: View {
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
                     .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(Color(nsColor: .controlBackgroundColor))
+
+            // Current keyboard device context
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Current Keyboard")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(appState.lastActiveKeyboard?.displayName ?? "-")
+                        .font(.subheadline)
+                }
+                Spacer()
+                if let device = appState.lastActiveKeyboard {
+                    Text(device.matchingKey)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor))
@@ -338,6 +354,42 @@ struct DashboardView: View {
                     .disabled(appState.contextManager.currentBundleId.isEmpty)
                 }
             }
+
+            // Keyboard device assignment for per-device auto-switching
+            HStack(spacing: 8) {
+                Image(systemName: "keyboard")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let device = profile.deviceIdentifier {
+                    Text(device.displayName)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.purple)
+
+                    Button {
+                        var updated = profile
+                        updated.deviceIdentifier = nil
+                        appState.profileStore.update(updated)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.mini)
+                } else {
+                    Button {
+                        var updated = profile
+                        updated.deviceIdentifier = appState.lastActiveKeyboard
+                        appState.profileStore.update(updated)
+                    } label: {
+                        Label("Assign current keyboard", systemImage: "plus.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .disabled(appState.lastActiveKeyboard == nil)
+                }
+            }
         }
         .padding(.vertical, 4)
     }
@@ -356,8 +408,42 @@ struct DashboardView: View {
                     debugRow("총 이벤트 수", value: "\(appState.keyInterceptor.totalEventCount)")
                     debugRow("평균 지연 시간", value: String(format: "%.3f ms", appState.keyInterceptor.averageLatencyMs))
                     debugRow("현재 앱", value: appState.contextManager.currentBundleId)
+                    debugRow("활성 키보드", value: appState.lastActiveKeyboard?.displayName ?? "-")
+                    debugRow("연결된 키보드", value: "\(appState.keyboardDeviceManager.connectedKeyboards.count)개")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            GroupBox("연결된 키보드 디바이스") {
+                if appState.keyboardDeviceManager.connectedKeyboards.isEmpty {
+                    Text("감지된 키보드 없음")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(appState.keyboardDeviceManager.connectedKeyboards, id: \.matchingKey) { device in
+                            HStack {
+                                Image(systemName: device.isInternal ? "laptopcomputer" : "keyboard")
+                                    .foregroundStyle(.secondary)
+                                Text(device.displayName)
+                                    .font(.system(.caption, design: .monospaced))
+                                Spacer()
+                                Text(device.matchingKey)
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                if appState.lastActiveKeyboard == device {
+                                    Text("Active")
+                                        .font(.caption2)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(.green.opacity(0.2))
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             
             Spacer()

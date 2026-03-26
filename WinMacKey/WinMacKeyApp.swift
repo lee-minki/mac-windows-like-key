@@ -84,14 +84,7 @@ class AppState: ObservableObject {
     @Published var currentProfileId: String?
     @Published var hasAccessibilityPermission: Bool = false
     @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부
-    
-    // 한영 전환 트리거 키 선택: "rightCmd" 또는 "rightOpt"
-    // HID remap으로 물리 키를 F18으로 변환, CGEventTap에서는 항상 F18을 감지
-    @AppStorage("toggleTriggerKey") var toggleTriggerKey: String = "rightCmd" {
-        didSet {
-            updateIMETriggerRemap()
-        }
-    }
+    @Published var isTerminalMode: Bool = false
     
     // 언어 페어 설정 (Source 1 ↔ Source 2 토글)
     @AppStorage("languagePairSource1") var languagePairSource1: String = "" {
@@ -122,6 +115,7 @@ class AppState: ObservableObject {
     @Published var lastActiveKeyboard: KeyboardDeviceIdentifier?
 
     private var permissionObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     /// The user's default profile ID (before auto-switching overrides)
     private var defaultMappingProfileId: String?
@@ -158,16 +152,18 @@ class AppState: ObservableObject {
             self?.keyInterceptor.failInputSourceCommitWindow()
         }
 
-        // Right Cmd/Opt 즉시 전환 → 한영전환 연결
         // EventTap은 메인 RunLoop에서 실행되므로 assumeIsolated 안전
         keyInterceptor.onInputSourceToggle = { [weak self] in
             MainActor.assumeIsolated {
                 let isVdiMode = self?.isVdiMode == true
+                let isTerminalMode = self?.isTerminalMode == true
                 if isVdiMode {
                     // VDI: F16이 패스스루되어 Horizon이 직접 처리
                     // 릴레이 키 발행 불필요, 버퍼링만 시작
                     self?.keyInterceptor.beginVdiRelayCooldownWindow()
                     self?.stateManager.switchCount += 1
+                } else if isTerminalMode {
+                    self?.stateManager.handleTerminalTrigger()
                 } else {
                     // 로컬 Mac: F16 suppress 후 Control+Space 합성
                     self?.keyInterceptor.beginInputSourceCommitWindow()
@@ -185,7 +181,6 @@ class AppState: ObservableObject {
         }
         stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2)
 
-        // IME 트리거 HID remap 설정 (Right Cmd/Opt → F18)
         updateIMETriggerRemap()
         keyInterceptor.activeProfileID = activeMappingProfileId
         refreshActiveProfileForCurrentContext()
@@ -198,8 +193,15 @@ class AppState: ObservableObject {
 
             let wasVdi = self.isVdiMode
             let isNowVdi = self.contextManager.isVirtualizationApp
+            let wasTerminal = self.isTerminalMode
+            let isNowTerminal = self.contextManager.isTerminalApp
             self.keyInterceptor.isVdiAppFocused = isNowVdi
             self.isVdiMode = isNowVdi
+            self.isTerminalMode = isNowTerminal
+
+            if wasTerminal != isNowTerminal {
+                LogService.shared.info("Terminal mode: \(isNowTerminal ? "enabled" : "disabled") (\(appName))", category: "Terminal")
+            }
 
             // VDI 모드 전환: 내장 키보드 매핑 교체
             if isNowVdi && !wasVdi {
@@ -222,16 +224,29 @@ class AppState: ObservableObject {
         }
 
         checkPermissions()
+        bootstrapPermissionPromptsIfNeeded()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
         keyboardDeviceManager.startMonitoring()
 
-        LogService.shared.info("AppState initialized (accessibility: \(hasAccessibilityPermission))", category: "App")
+        setupActivationObserver()
+
+        LogService.shared.info(
+            "AppState initialized (accessibility: \(hasAccessibilityPermission))",
+            category: "App"
+        )
     }
     
     func checkPermissions() {
         hasAccessibilityPermission = permissionService.checkAccessibilityPermission()
+    }
+
+    private func bootstrapPermissionPromptsIfNeeded() {
+        if !hasAccessibilityPermission {
+            permissionService.requestAccessibilityPermission()
+            LogService.shared.warning("Bootstrap: requested Accessibility permission", category: "App")
+        }
     }
     
     private func setupPermissionObserver() {
@@ -241,10 +256,20 @@ class AppState: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             guard let self = self else { return }
-            self.hasAccessibilityPermission = true
-            if !self.isEngineRunning {
+            self.checkPermissions()
+            if self.hasAccessibilityPermission && !self.isEngineRunning {
                 self.toggleEngine()
             }
+        }
+    }
+
+    private func setupActivationObserver() {
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.checkPermissions()
         }
     }
     
@@ -261,13 +286,11 @@ class AppState: ObservableObject {
     }
 
     // MARK: - Unified Profile Resolution
-    // 내장 키보드: 항상 기본 프로필 (디바이스 프로필 검색 안 함)
-    // 외장 키보드: 디바이스 프로필 > 앱 프로필 > 기본 프로필
+    // 모든 키보드: 디바이스 프로필 > 앱 프로필 > 기본 프로필
 
     private func resolveActiveProfile() {
-        // 1. 외장 키보드의 디바이스 기반 프로필 (최우선)
-        //    내장 키보드는 항상 기본/앱 프로필을 사용
-        if let device = lastActiveKeyboard, !device.isInternal,
+        // 1. 키보드 디바이스 기반 프로필 (최우선)
+        if let device = lastActiveKeyboard,
            let deviceProfile = profileStore.profile(forDevice: device) {
             if defaultMappingProfileId == nil {
                 defaultMappingProfileId = activeMappingProfileId
@@ -297,7 +320,12 @@ class AppState: ObservableObject {
     }
 
     func refreshActiveProfileForCurrentContext() {
+        // Caps Lock은 앱이 건드리지 않음 — VDI/로컬 모두 시스템에 위임
         keyInterceptor.activeProfileID = activeMappingProfileId
+
+        guard isEngineRunning else {
+            return
+        }
 
         if let activeProfile = profileStore.profile(idString: activeMappingProfileId) {
             let context: KeyboardUsageContext = isVdiMode ? .vdi : .localMac
@@ -312,16 +340,13 @@ class AppState: ObservableObject {
 
     // MARK: - IME Trigger HID Remap
 
-    /// 물리 트리거 키(Right Cmd 또는 Right Opt)를 F16으로 HID remap하도록 설정합니다.
     /// F16은 VDI에서 패스스루되어 Horizon이 Right Alt로 직접 변환합니다.
     /// HIDRemapper에 imeTriggerMapping을 등록하면 다음 applyMappings 호출 시 자동 포함됩니다.
     private func updateIMETriggerRemap() {
-        let physicalKeyCode = (toggleTriggerKey == "rightOpt")
-            ? Int64(kVK_RightOption)
-            : Int64(kVK_RightCommand)
+        let physicalKeyCode = Int64(kVK_RightCommand)
         HIDRemapper.shared.imeTriggerMapping = (src: physicalKeyCode, dst: Int64(kVK_F16))
         LogService.shared.info(
-            "IME trigger remap: \(toggleTriggerKey) (0x\(String(physicalKeyCode, radix: 16))) → F16",
+            "IME trigger remap: rightCmd (0x\(String(physicalKeyCode, radix: 16))) → F16",
             category: "HID"
         )
     }
@@ -330,11 +355,14 @@ class AppState: ObservableObject {
 
     /// VDI 모드: 내장 키보드는 Windows 감각 레이아웃으로 교체하고, 외장 프로필도 VDI 컨텍스트로 재적용
     func switchToVdiMapping() {
+        guard isEngineRunning else { return }
         HIDRemapper.shared.applyMappingsForInternalKeyboardSync(Self.vdiInternalKeyboardMappings)
+        refreshActiveProfileForCurrentContext()
     }
 
     /// Mac 모드: 내장 키보드의 VDI 오버라이드를 해제하고 글로벌 매핑을 재적용
     func switchToMacMapping() {
+        guard isEngineRunning else { return }
         HIDRemapper.shared.clearMappingsForInternalKeyboardSync()
         refreshActiveProfileForCurrentContext()
     }
@@ -345,6 +373,14 @@ class AppState: ObservableObject {
             isEngineRunning = false
             LogService.shared.info("Engine stopped", category: "Engine")
         } else {
+            checkPermissions()
+            guard hasAccessibilityPermission else {
+                permissionService.requestAccessibilityPermission()
+                LogService.shared.warning("Engine start blocked: Accessibility permission missing", category: "Engine")
+                return
+            }
+
+
             let started = keyInterceptor.start()
             isEngineRunning = started
             if started {
@@ -383,6 +419,9 @@ class AppState: ObservableObject {
         contextManager.stopMonitoring()
         keyboardDeviceManager.stopMonitoring()
         if let observer = permissionObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = activationObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
