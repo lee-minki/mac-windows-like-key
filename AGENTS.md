@@ -1,8 +1,46 @@
-# Repository Instructions
+# mac-windows-like-key
 
-- Treat user-visible behavior changes, UI changes, settings changes, installation changes, and workflow changes as major changes by default.
-- For major changes, do the full workflow without waiting for a separate request:
-- Update all related documentation in the same change set. This includes README, setup guides, help text, and any user-facing docs affected by the change.
-- Verify the change, then commit and push the branch unless the user explicitly says not to or pushing is blocked by a concrete safety issue.
-- If pushing cannot be done safely, explain the blocker clearly before finishing.
-- If the worktree contains unrelated changes, avoid reverting them and isolate only the relevant changes in your commit.
+Repo-specific instructions. Use `/Users/mk/CLAUDE.md` for global safety and environment rules.
+
+## Overview
+- Native macOS menu bar utility for Korean/English input switching.
+- Core stack: SwiftUI + MenuBarExtra + CGEventTap + IOHIDManager + `hidutil`.
+- Main risk area: keyboard remapping changes can affect live system behavior.
+
+## Read First
+1. `README.md` — product behavior and build entrypoint
+2. `docs/SETUP_GUIDE.md` — local setup and troubleshooting
+3. `docs/VDI_SETUP.md` — Horizon/VDI behavior and relay-key model
+
+## Working Areas
+- `WinMacKey/Services/` — event tap, remap, device/profile logic
+- `WinMacKey/Views/` — UI and menu bar surfaces
+- `WinMacKey/Models/` — state/data models
+- `docs/` — setup and VDI user docs
+
+## Commands
+```bash
+# build debug app
+xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -derivedDataPath build/DerivedData build
+
+# open built app
+open build/DerivedData/Build/Products/Debug/WinMacKey.app
+```
+
+## Source-of-Truth Rules
+- Keep local Mac behavior and VDI behavior distinct.
+- `docs/SETUP_GUIDE.md` and `docs/VDI_SETUP.md` are the user-facing source of truth for setup.
+- Preserve the F16/F18 relay model unless there is a clear reason to change it.
+- Treat device/profile auto switching as behavior-critical.
+
+## Agent Rules
+- Any user-visible behavior, setup change, permission change, or workflow change must update docs in the same change.
+- Never auto-commit, auto-push, change git config, or force git operations.
+- Never automate macOS privacy/security setting changes without user approval.
+- Before touching remap logic, understand whether the change affects local macOS, VDI, or both.
+- Prefer minimal fixes; this repo is sensitive to regression in live keyboard handling.
+
+## Gotchas
+- The app depends on Accessibility/Input-style permissions and real device context; code-only reasoning is not enough for final verification.
+- `hidutil` remaps are safety-sensitive. Document rollback/reset steps when changing related behavior.
+- VDI behavior depends on external client mapping (`F16 -> Right Alt`) and should not be assumed purely from local code.

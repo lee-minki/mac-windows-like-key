@@ -80,7 +80,7 @@ struct HelpView: View {
                     number: 3,
                     title: "입력 소스 단축키 확인",
                     description: """
-                    WinMac Key는 Right Command/Option 입력을 내부적으로 \
+                    WinMac Key는 Right Command 입력을 내부적으로 \
                     "이전 입력 소스 선택" 단축키(⌃Space)로 합성합니다. \
                     이 항목이 켜져 있고 Control+Space로 설정되어 있어야 합니다.
                     """,
@@ -149,8 +149,6 @@ struct HelpView: View {
                         mappingHeader
                         Divider()
                         mappingRow("Right Command (⌘)", "한/영 전환", "탭(짧게 누르기)으로 입력 소스 전환 (기본)", .purple)
-                        Divider()
-                        mappingRow("Right Option (⌥)", "한/영 전환", "탭으로 입력 소스 전환 (설정에서 변경 가능)", .purple)
                     }
                 }
                 
@@ -163,7 +161,7 @@ struct HelpView: View {
                         mappingRow("VDI Client", "Right Alt", "Omnissa Horizon 등에서 F16을 Right Alt로 매핑", .orange)
                     }
                     
-                    Text("※ 로컬 macOS/원격 Mac은 Control+Space, Windows VDI는 F16 릴레이 키를 사용합니다. VDI에서는 첫 키를 짧게 정렬해 단축키 오발을 줄입니다.")
+                    Text("※ 로컬 macOS는 Control+Space를 사용합니다. Windows VDI에서는 Right Command가 F16 릴레이를 사용합니다. Caps Lock은 앱이 직접 처리하지 않습니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -194,7 +192,7 @@ struct HelpView: View {
 
                 GroupBox("키보드 디바이스별 자동 전환") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("외장 키보드마다 다른 프로필을 자동 적용할 수 있습니다.")
+                        Text("내장/외장 키보드마다 다른 프로필을 자동 적용할 수 있습니다.")
                             .font(.caption)
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -202,6 +200,7 @@ struct HelpView: View {
                             Text("2. Settings → Profiles 탭에서 해당 프로필 옆 \"Assign current keyboard\" 를 클릭합니다.")
                             Text("3. 현재 타이핑 중인 키보드(VendorID/ProductID)가 프로필에 할당됩니다.")
                             Text("4. 이후 해당 키보드에서 키를 누르면 자동으로 프로필이 전환됩니다.")
+                            Text("5. 내장 MacBook 키보드도 현재 활성 키보드일 때 할당하면 고정 프로필처럼 동작합니다.")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -210,7 +209,7 @@ struct HelpView: View {
                             Image(systemName: "info.circle.fill")
                                 .foregroundStyle(.blue)
                                 .font(.caption)
-                            Text("프로필 우선순위: 키보드 디바이스 > 앱(Bundle ID) > 기본 프로필. 내장 키보드는 항상 기본/앱 프로필을 사용합니다.")
+                            Text("프로필 우선순위: 키보드 디바이스 > 앱(Bundle ID) > 기본 프로필. 내장 키보드도 디바이스 프로필을 지정하면 그 프로필이 우선 적용됩니다.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -300,8 +299,8 @@ struct HelpView: View {
                     number: 2,
                     title: "Hammerspoon 비활성화",
                     description: """
-                    Hammerspoon의 F18/F19 한영전환 핫키는 WinMac Key가 \
-                    Right Command로 직접 한영전환을 처리하므로 더 이상 필요하지 않습니다.
+                    Hammerspoon의 한영전환 핫키는 WinMac Key의 Right Command 전환과 \
+                    충돌할 수 있으므로 더 이상 필요하지 않습니다.
                     """,
                     steps: [
                         "메뉴바에서 Hammerspoon 아이콘(🔨)을 클릭합니다.",
@@ -418,7 +417,7 @@ struct HelpView: View {
                     question: "입력 소스 전환창이 뜨거나 두세 번 눌러야 바뀌어요.",
                     answer: """
                     대부분 WinMac Key 외의 다른 앱이 같은 전환 키를 함께 처리할 때 생깁니다.\n\n\
-                    1. Karabiner-Elements에서 `right_command`, `right_option`, `Control+Space`, `F18/F19` 관련 규칙을 끄세요.\n\
+                    1. Karabiner-Elements에서 `right_command`, `Control+Space`, `F16/F18/F19` 관련 규칙을 끄세요.\n\
                     2. Leader Key 류 앱에서 `Control+Space`를 쓰고 있지 않은지 확인하세요.\n\
                     3. Hammerspoon/BetterTouchTool/Keyboard Maestro에 한영 전환 핫키가 있으면 해제하세요.\n\n\
                     특히 Karabiner의 Right Command 규칙이 켜져 있으면 한 번 눌렀을 때 전환이 중복 실행되어, 즉시 토글되지 않거나 입력 소스 전환창이 뜰 수 있습니다.
@@ -430,7 +429,7 @@ struct HelpView: View {
                     answer: """
                     VMware Horizon, Parallels Desktop, Microsoft Remote Desktop 같은 \
                     원격 데스크톱 앱에서는 Right Command 키가 Windows에 전달되지 않을 수 있습니다.\n\n\
-                    현재 버전은 별도 드라이버 없이 동작합니다. 로컬 macOS/원격 Mac에서는 \
+                    현재 버전은 별도 드라이버 없이 동작합니다. 로컬 macOS에서는 \
                     \"이전 입력 소스 선택\"이 `Control + Space`로 켜져 있어야 하고, \
                     Windows VDI 클라이언트에서는 `F16 → Right Alt` 매핑을 추가해야 합니다.\n\n\
                     설정 방법은 GitHub 레포의 docs/VDI_SETUP.md를 참조하세요.
@@ -453,12 +452,12 @@ struct HelpView: View {
                     answer: """
                     네, 동작합니다. WinMac Key는 IOKit(IOHIDManager)으로 연결된 키보드를 자동 감지하며, \
                     내장 키보드, USB 키보드, Bluetooth 키보드 모두에서 동작합니다.\n\n\
-                    외장 키보드 전용 프로필을 만들 수 있습니다:\n\
+                    내장/외장 키보드 전용 프로필을 만들 수 있습니다:\n\
                     1. 위저드에서 키캡 프린팅(Mac/Windows)을 선택하고 실키 감지 후 프로필을 저장합니다.\n\
                     2. Settings → Profiles 탭에서 "Assign current keyboard" 버튼을 누르면 현재 사용 중인 키보드에 프로필이 할당됩니다.\n\
                     3. 이후 해당 키보드에서 타이핑하면 프로필이 자동으로 전환됩니다.\n\n\
                     프로필 우선순위: 키보드 디바이스 프로필 > 앱 프로필 > 기본 프로필.\n\
-                    내장 키보드는 항상 기본/앱 프로필을 사용합니다.
+                    내장 키보드도 "Assign current keyboard"로 디바이스 프로필을 지정하면 항상 그 프로필이 우선 적용됩니다.
                     """
                 )
 
@@ -481,6 +480,19 @@ struct HelpView: View {
                     1. 시스템 설정에서 \"이전 입력 소스 선택\"이 정확히 `Control + Space`인지\n\
                     2. Caps Lock 한영전환, Karabiner, Hammerspoon 같은 중복 전환 도구가 꺼져 있는지\n\
                     3. Event Viewer에서 전환 직후 첫 키가 어느 앱에서 어떻게 들어오는지
+                    """
+                )
+
+                faqItem(
+                    question: "Ghostty / Claude Code에서 `[57379u]` 같은 문자열이 떠요.",
+                    answer: """
+                    이 문자열은 Ghostty가 F16 키를 raw terminal sequence로 출력할 때 보일 수 있습니다.\n\n\
+                    최근 터미널 전용 direct tap 실험은 Ghostty에서 실제 Command 단축키 누출 회귀를 만들 수 있어 현재 최종 해법으로 간주하지 않습니다.\n\n\
+                    재설계 전까지는 다음을 확인하세요.\n\
+                    1. WinMac Key 엔진을 껐다가 다시 켰는지\n\
+                    2. 다른 도구가 `Right Command`나 `F16`을 함께 가로채지 않는지\n\
+                    3. Event Viewer / 로그에서 실제로 어떤 경로가 사용되는지\n\
+                    4. 검색 UI, `Cmd+N`, `Cmd+D` 같은 Command shortcut 누출이 함께 있는지
                     """
                 )
                 
