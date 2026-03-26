@@ -7,6 +7,7 @@ class ContextManager: ObservableObject {
     @Published var currentAppName: String = ""
     @Published var currentBundleId: String = ""
     @Published var isVirtualizationApp: Bool = false
+    @Published var isTerminalApp: Bool = false
     
     // 알려진 가상화 앱 Bundle ID 목록
     private let virtualizationApps: Set<String> = [
@@ -17,6 +18,17 @@ class ContextManager: ObservableObject {
         "com.parallels.desktop.console", // Parallels Desktop
         "com.microsoft.rdc.macos",      // Microsoft Remote Desktop
         "org.virtualbox.app.VirtualBoxVM" // VirtualBox
+    ]
+
+    private let terminalApps: Set<String> = [
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "com.anthropic.claudefordesktop",
+        "com.mitchellh.ghostty",
+        "ai.warp.Warp-Stable",
+        "dev.warp.Warp-Stable",
+        "io.alacritty",
+        "net.kovidgoyal.kitty"
     ]
     
     private var workspaceObserver: NSObjectProtocol?
@@ -63,6 +75,7 @@ class ContextManager: ObservableObject {
         currentBundleId = bundleId
         currentAppName = appName
         isVirtualizationApp = allVirtualizationApps.contains(bundleId)
+        isTerminalApp = allTerminalApps.contains(bundleId)
 
         onAppChanged?(bundleId, appName)
     }
@@ -75,9 +88,18 @@ class ContextManager: ObservableObject {
         return virtualizationApps.union(customApps)
     }
 
+    private var allTerminalApps: Set<String> {
+        let customApps = UserDefaults.standard.stringArray(forKey: "CustomTerminalApps") ?? []
+        return terminalApps.union(customApps)
+    }
+
     /// 현재 앱이 가상화 앱인지 확인
     func isCurrentAppVirtualization() -> Bool {
         return allVirtualizationApps.contains(currentBundleId)
+    }
+
+    func isCurrentAppTerminal() -> Bool {
+        return allTerminalApps.contains(currentBundleId)
     }
     
     /// 가상화 앱 목록에 새 앱 추가
@@ -87,6 +109,14 @@ class ContextManager: ObservableObject {
         if !customApps.contains(bundleId) {
             customApps.append(bundleId)
             UserDefaults.standard.set(customApps, forKey: "CustomVirtualizationApps")
+        }
+    }
+
+    func addTerminalApp(_ bundleId: String) {
+        var customApps = UserDefaults.standard.stringArray(forKey: "CustomTerminalApps") ?? []
+        if !customApps.contains(bundleId) {
+            customApps.append(bundleId)
+            UserDefaults.standard.set(customApps, forKey: "CustomTerminalApps")
         }
     }
     

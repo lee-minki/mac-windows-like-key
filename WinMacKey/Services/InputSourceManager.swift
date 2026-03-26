@@ -153,6 +153,23 @@ class InputSourceManager {
         logger.info("Toggle: posted Control down + Space down/up + Control up")
     }
 
+    @discardableResult
+    func toggleDirectly() -> Bool {
+        guard let target = targetSourceForDirectToggle() else {
+            logger.error("Toggle fallback: failed to resolve target input source")
+            return false
+        }
+
+        let status = TISSelectInputSource(target)
+        if status == noErr {
+            logger.info("Toggle fallback: switched input source via TISSelectInputSource")
+            return true
+        }
+
+        logger.error("Toggle fallback: TISSelectInputSource failed with status \(status)")
+        return false
+    }
+
     /// Windows VDI 클라이언트가 Right Alt(AltGr)로 매핑할 수 있는 릴레이 키를 보냅니다.
     /// 현재 기본값은 F16입니다.
     func emitVDIRelayKey() {
@@ -235,5 +252,28 @@ class InputSourceManager {
     private func post(event: CGEvent) {
         event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
         event.post(tap: .cgSessionEventTap)
+    }
+
+    private func targetSourceForDirectToggle() -> TISInputSource? {
+        let currentIndex = currentSourceIndex()
+        let targetID: String
+
+        switch currentIndex {
+        case 1:
+            targetID = source2ID
+        case 2:
+            targetID = source1ID
+        default:
+            targetID = source2ID.isEmpty ? source1ID : source2ID
+        }
+
+        guard !targetID.isEmpty,
+              let sourceList = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            return nil
+        }
+
+        return sourceList.first { source in
+            matchesSource(getSourceID(source), target: targetID)
+        }
     }
 }
