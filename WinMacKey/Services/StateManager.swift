@@ -38,7 +38,6 @@ class StateManager: ObservableObject {
         refreshCurrentSource()
     }
     
-    /// 한영전환 트리거 (Right Cmd/Opt에서 호출)
     /// - Mac 로컬 / 원격 Mac: Control+Space
     /// - Windows VDI: F16 릴레이 키
     /// 실제 상태 갱신은 macOS 입력소스 변경 알림에서 처리됩니다.
@@ -58,7 +57,23 @@ class StateManager: ObservableObject {
             logger.info("Toggle triggered: was \(beforeName), posted Control+Space (state update via notification)")
         }
     }
-    
+
+    func handleTerminalTrigger() {
+        let beforeName = inputSourceManager.currentSourceShortName()
+
+        switchCount += 1
+        commitWindowCompleted = true
+
+        if inputSourceManager.toggleDirectly() {
+            refreshCurrentSource()
+            onSystemInputSourceChanged?()
+            logger.info("Toggle triggered: was \(beforeName), switched directly for terminal context")
+        } else {
+            logger.warning("Terminal toggle failed via direct TIS toggle")
+            onInputSourceToggleVerificationFailed?()
+        }
+    }
+
     /// 현재 상태 새로고침
     func refreshCurrentSource() {
         let idx = inputSourceManager.currentSourceIndex()
@@ -115,6 +130,17 @@ class StateManager: ObservableObject {
                 self.logger.warning("Toggle verification timeout; retrying Control+Space once")
                 self.inputSourceManager.toggleViaKeyboardShortcut()
                 self.startPollingForInputSourceChange(from: previousIndex, retryCount: retryCount + 1)
+                return
+            }
+
+            self.logger.warning("Toggle verification timeout after retry; falling back to direct TIS toggle")
+            if self.inputSourceManager.toggleDirectly() {
+                self.refreshCurrentSource()
+                if !self.commitWindowCompleted {
+                    self.commitWindowCompleted = true
+                    self.onSystemInputSourceChanged?()
+                }
+                self.inputSourcePollTask = nil
                 return
             }
 

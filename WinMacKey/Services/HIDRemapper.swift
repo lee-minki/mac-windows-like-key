@@ -28,9 +28,10 @@ class HIDRemapper {
         0x3C: 0x7000000E5, // kVK_RightShift      → Right Shift
         0x39: 0x700000039, // kVK_CapsLock        → Caps Lock
         
-        // Function keys (IME relay용)
+        // Function keys (IME / VDI relay용)
         0x6A: 0x70000006B, // kVK_F16             → F16 (IME toggle / VDI relay)
         0x4F: 0x70000006D, // kVK_F18             → F18
+        0x50: 0x70000006E,
         
         // Fn/Globe key (Apple 전용)
         0x3F: 0xFF00000003 // kVK_Function        → Fn (Apple vendor-specific)
@@ -49,11 +50,10 @@ class HIDRemapper {
         0x700000039: "Caps Lock",
         0x70000006B: "F16",
         0x70000006D: "F18",
+        0x70000006E: "F19",
         0xFF00000003: "Fn/Globe"
     ]
 
-    /// IME 전환 트리거 HID 리맵 (예: Right Cmd → F18)
-    /// 모든 hidutil 호출 시 자동으로 포함됩니다.
     var imeTriggerMapping: (src: Int64, dst: Int64)? = nil
     
     // MARK: - Device Matching
@@ -129,7 +129,6 @@ class HIDRemapper {
             logger.info("HID mapping: \(srcName) → \(dstName)")
         }
         
-        // IME 트리거 리맵 자동 주입 (Right Cmd/Opt → F18)
         injectIMETriggerMapping(into: &userKeyMapping)
         
         if userKeyMapping.isEmpty {

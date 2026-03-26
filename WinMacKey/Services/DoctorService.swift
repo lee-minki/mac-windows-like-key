@@ -99,9 +99,10 @@ class DoctorService: ObservableObject {
         appState.isEngineRunning = false
         logger.info("✅ Engine stopped, CGEventTap released")
         
-        // 2. ContextManager 모니터링 정지
+        // 2. ContextManager + KeyboardDeviceManager 모니터링 정지
         appState.contextManager.stopMonitoring()
-        logger.info("✅ ContextManager monitoring stopped")
+        appState.keyboardDeviceManager.stopMonitoring()
+        logger.info("✅ ContextManager & KeyboardDeviceManager monitoring stopped")
         
         // 3. 이벤트 로그 클리어
         appState.keyInterceptor.events.removeAll()
@@ -113,11 +114,11 @@ class DoctorService: ObservableObject {
             "LastUpdateCheck",
             "AutoCheckUpdates",
             "CustomVirtualizationApps",
+            "CustomTerminalApps",
             "activeMappingProfileId",
             "visualCustomMappings",
             "eventViewerAlwaysOnTop",
             "savedKeyboardProfiles",
-            "toggleTriggerKey",
             "languagePairSource1",
             "languagePairSource2"
         ]
@@ -355,7 +356,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .system,
                 title: "CapsLock 한영전환",
-                detail: "macOS의 CapsLock 한영전환이 활성화되어 있습니다. 시스템 설정 → 키보드 → 입력 소스 → '모든 입력 소스'에서 'Caps Lock 키로 ABC 입력 소스 전환' 체크를 해제하세요.",
+                detail: "macOS의 CapsLock 한영전환이 활성화되어 있습니다. 로컬 macOS에서는 Caps Lock이 입력 소스 전환으로 동작할 수 있습니다. WinMac Key는 Caps Lock을 직접 처리하지 않으므로, 순수 Caps Lock만 쓰고 싶다면 시스템 설정 → 키보드 → 입력 소스 → '모든 입력 소스'에서 'Caps Lock 키로 ABC 입력 소스 전환' 체크를 해제하세요.",
                 status: .warning,
                 fixAction: .openSystemSettings
             ))
@@ -429,8 +430,8 @@ class DoctorService: ObservableObject {
                         continue
                     }
 
-                    if keyCode == "right_command" || keyCode == "right_option" {
-                        let keyName = keyCode == "right_command" ? "Right Command" : "Right Option"
+                    if keyCode == "right_command" {
+                        let keyName = "Right Command"
                         return "Karabiner의 '\(profileName)' 프로필에서 '\(description)' 규칙이 \(keyName) 키를 직접 가로채고 있습니다. WinMac Key와 같은 트리거 키를 동시에 처리하면 즉시 전환되지 않거나 입력 소스 전환창이 뜰 수 있습니다. Karabiner에서 이 규칙을 끄거나 빈 프로필로 전환하세요."
                     }
                 }
@@ -446,8 +447,8 @@ class DoctorService: ObservableObject {
                         continue
                     }
 
-                    if keyCode == "right_command" || keyCode == "right_option" {
-                        let keyName = keyCode == "right_command" ? "Right Command" : "Right Option"
+                    if keyCode == "right_command" {
+                        let keyName = "Right Command"
                         return "Karabiner의 '\(profileName)' 프로필에서 \(keyName) 키에 simple modification이 적용되어 있습니다. WinMac Key와 같은 키를 동시에 처리하면 전환이 중복되거나 지연될 수 있습니다. 해당 매핑을 해제하세요."
                     }
                 }

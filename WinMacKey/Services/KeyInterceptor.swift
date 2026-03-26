@@ -17,6 +17,7 @@ class KeyInterceptor: ObservableObject {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isRunning = false
+    private var tapIncludesFlagsChanged = false
     private var reactivationTimer: Timer?
 
     @Published var events: [KeyEvent] = []
@@ -26,7 +27,11 @@ class KeyInterceptor: ObservableObject {
     // 키 매핑 테이블 (fn↔Cmd↔Ctrl 등 기존 매핑)
     private(set) var keyMappings: [Int64: Int64] = [:]
 
-    // Right Cmd/Opt toggle 상태
+    /// 현재 매핑에 modifier→비modifier 변환이 있는지 여부
+    /// true일 때만 flagsChanged 이벤트를 처리합니다.
+    /// false이면 flagsChanged를 즉시 패스스루하여 Caps Lock 등 시스템 동작 간섭을 방지합니다.
+    private(set) var needsFlagsChangedProcessing: Bool = false
+
     private var triggerKeyPressed = false
     private var bufferedReplayWindow: BufferedReplayWindow = .none
     private var bufferedReplayStartedAt: UInt64 = 0
@@ -44,7 +49,6 @@ class KeyInterceptor: ObservableObject {
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
 
     // 한영 전환 트리거 키 (HID remap 후 CGEventTap에 도달하는 키: F16)
-    // 물리 키(Right Cmd/Opt)는 hidutil이 F16으로 변환하므로 EventTap에서는 항상 F16을 감지
     // VDI에서는 F16이 패스스루되어 Horizon이 Right Alt로 직접 변환
     var triggerKeyCode: Int64 = Int64(kVK_F16)
 
@@ -81,7 +85,8 @@ class KeyInterceptor: ObservableObject {
         Int64(kVK_Option): .maskAlternate,
         Int64(kVK_RightOption): .maskAlternate,
         Int64(kVK_Function): .maskSecondaryFn,
-        Int64(kVK_CapsLock): .maskAlphaShift
+        // CapsLock은 의도적으로 제외 — 앱이 Caps Lock을 절대 건드리지 않음
+        // Int64(kVK_CapsLock): .maskAlphaShift
     ]
     
     init() {
@@ -129,9 +134,8 @@ class KeyInterceptor: ObservableObject {
                 logger.warning("No saved mappings found for profile: \(self.activeProfileID)")
             }
         }
-        
-        // CapsLock (57) → 57 (순수 캡스락) - 프로파일 상관없이 유지
-        keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
+        ensureCapsLockUntouched()
+        updateNeedsFlagsChangedProcessing()
         
         // HID 레벨 리매핑 적용 (Fn/Globe 포함)
         HIDRemapper.shared.applyMappings(keyMappings)
@@ -142,7 +146,8 @@ class KeyInterceptor: ObservableObject {
         for (src, dst) in mappings {
             keyMappings[src] = dst
         }
-        keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
+        ensureCapsLockUntouched()
+        updateNeedsFlagsChangedProcessing()
         
         // HID 레벨 리매핑 적용 (Fn/Globe 포함)
         HIDRemapper.shared.applyMappings(keyMappings)
@@ -154,7 +159,8 @@ class KeyInterceptor: ObservableObject {
         for (src, dst) in mappings {
             keyMappings[src] = dst
         }
-        keyMappings[Int64(kVK_CapsLock)] = Int64(kVK_CapsLock)
+        ensureCapsLockUntouched()
+        updateNeedsFlagsChangedProcessing()
         
         HIDRemapper.shared.applyMappingsSync(keyMappings)
     }
@@ -162,6 +168,46 @@ class KeyInterceptor: ObservableObject {
     func updateMappings(from profileId: String) {
         self.activeProfileID = profileId
         setupDefaultMappings()
+    }
+
+    /// Caps Lock은 앱이 절대 건드리지 않습니다.
+    /// 프로필에 Caps Lock 매핑이 포함되어 있더라도 제거합니다.
+    private func ensureCapsLockUntouched() {
+        keyMappings.removeValue(forKey: Int64(kVK_CapsLock))
+    }
+
+    /// 현재 매핑 테이블에서 modifier→비modifier 변환이 있는지 계산합니다.
+    /// 이런 매핑이 없으면 CGEventTap에서 flagsChanged를 이벤트 마스크에서 제외하여
+    /// Caps Lock 등 시스템 modifier 동작 간섭을 원천 방지합니다.
+    private func updateNeedsFlagsChangedProcessing() {
+        var needed = false
+        for (src, dst) in keyMappings {
+            guard src != dst else { continue }
+            let srcIsModifier = modifierKeyToFlag[src] != nil
+            let dstIsModifier = modifierKeyToFlag[dst] != nil
+            if srcIsModifier && !dstIsModifier {
+                needed = true
+                logger.info("flagsChanged processing ENABLED (modifier→key mapping found: \(src)→\(dst))")
+                break
+            }
+        }
+        if !needed {
+            logger.info("flagsChanged processing DISABLED (no modifier→key mappings, Caps Lock safe)")
+        }
+        let changed = (needsFlagsChangedProcessing != needed)
+        needsFlagsChangedProcessing = needed
+        if changed {
+            restartTapIfNeeded()
+        }
+    }
+
+    /// flagsChanged 포함 여부가 바뀌면 EventTap을 재생성합니다.
+    private func restartTapIfNeeded() {
+        guard isRunning else { return }
+        guard self.tapIncludesFlagsChanged != self.needsFlagsChangedProcessing else { return }
+        logger.info("Restarting event tap (flagsChanged mask changed: \(self.tapIncludesFlagsChanged) → \(self.needsFlagsChangedProcessing))")
+        stop()
+        start()
     }
     
     // MARK: - Engine Control
@@ -172,16 +218,19 @@ class KeyInterceptor: ObservableObject {
         
         logger.info("Attempting to start engine...")
         
-        // 이벤트 마스크: keyDown, keyUp, flagsChanged
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue) |
-                                      (1 << CGEventType.keyUp.rawValue) |
-                                      (1 << CGEventType.flagsChanged.rawValue)
-        
+        let eventMask: CGEventMask = {
+            var mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) |
+                (1 << CGEventType.keyUp.rawValue)
+            if needsFlagsChangedProcessing {
+                mask |= (1 << CGEventType.flagsChanged.rawValue)
+            }
+            return mask
+        }()
+
         let callback: CGEventTapCallBack = { proxy, type, event, refcon in
             KeyInterceptor.handleEvent(proxy: proxy, type: type, event: event, refcon: refcon)
         }
 
-        // HID tap이 실패하는 환경이 있어 세션 tap으로 자동 폴백합니다.
         let tap = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
@@ -202,20 +251,25 @@ class KeyInterceptor: ObservableObject {
             logger.error("Failed to create HID and session event taps. Check Accessibility permissions.")
             return false
         }
-        
+
         eventTap = tap
-        
-        // RunLoopSource 생성
+        tapIncludesFlagsChanged = needsFlagsChangedProcessing
+
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
-        
+
         CGEvent.tapEnable(tap: tap, enable: true)
         
         isRunning = true
-        logger.info("Engine started successfully.")
-        
-        // EventTap 자동 재활성화 타이머 시작
+        logger.info("Engine started successfully (CGEventTap).")
+        DispatchQueue.main.async {
+            LogService.shared.info(
+                "Engine started (CGEventTap trigger suppression active)",
+                category: "Engine"
+            )
+        }
         startReactivationTimer()
+        
         return true
     }
     
@@ -225,7 +279,6 @@ class KeyInterceptor: ObservableObject {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
-        
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
@@ -291,8 +344,6 @@ class KeyInterceptor: ObservableObject {
         }
     }
     
-    // MARK: - Event Handling
-    
     private static func handleEvent(
         proxy: CGEventTapProxy,
         type: CGEventType,
@@ -326,7 +377,6 @@ class KeyInterceptor: ObservableObject {
         let triggerKey = interceptor.triggerKeyCode
 
         // ====== 트리거 키 처리 (F16 기반 한영 전환 / VDI 패스스루) ======
-        // HID remap으로 Right Cmd/Opt → F16 변환됨.
         // F16은 modifier가 아니므로 keyDown/keyUp으로 도달.
         // → modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
         // VDI 모드: F16 패스스루 → Horizon이 Right Alt로 직접 변환
@@ -355,6 +405,7 @@ class KeyInterceptor: ObservableObject {
                 return nil
             }
         }
+        
         
         // ====== 일반 매핑 처리 ======
         // 이중 매핑 방지: modifier-to-modifier 매핑은 HIDRemapper(hidutil)가 이미 처리하므로
