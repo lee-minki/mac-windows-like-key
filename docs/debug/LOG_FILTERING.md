@@ -11,6 +11,7 @@ Reduce token usage and speed up debugging by filtering logs before sharing them.
 Current status:
 
 - baseline script scaffold added
+- use `scripts/filter-logs.sh` before sharing logs in chat or issues
 
 ## Required Modes
 
