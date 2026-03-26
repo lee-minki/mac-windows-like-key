@@ -50,7 +50,7 @@ struct UpdateView: View {
             }
         }
         .padding(24)
-        .frame(width: 400, height: 380)
+        .frame(width: 420, height: 420)
         .task {
             await updateService.checkForUpdates()
         }
@@ -159,15 +159,16 @@ struct UpdateView: View {
             .background(.green.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: 8))
             
-            // 릴리스 노트
+            // 릴리스 노트 (마크다운 렌더링)
             if let notes = updateService.releaseNotes, !notes.isEmpty {
                 GroupBox("릴리스 노트") {
                     ScrollView {
-                        Text(notes)
+                        Text(makeAttributedReleaseNotes(notes))
                             .font(.caption)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
                     }
-                    .frame(height: 80)
+                    .frame(height: 100)
                 }
             }
         }
@@ -211,6 +212,15 @@ struct UpdateView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
     
+    /// GitHub 릴리스 노트 마크다운을 AttributedString으로 변환
+    private func makeAttributedReleaseNotes(_ markdown: String) -> AttributedString {
+        if let attributed = try? AttributedString(markdown: markdown,
+                                                   options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            return attributed
+        }
+        return AttributedString(markdown)
+    }
+
     private var actionButtons: some View {
         HStack {
             Button("GitHub Releases") {

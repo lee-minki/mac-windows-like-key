@@ -1,13 +1,16 @@
 import Foundation
 import AppKit
+import ApplicationServices
 
 /// 권한 관리 서비스
 /// 손쉬운 사용(Accessibility) 권한 체크 및 요청을 담당합니다.
 class PermissionService: ObservableObject {
     @Published var isAccessibilityGranted: Bool = false
+    @Published var isInputMonitoringGranted: Bool = false
     
     init() {
         checkAccessibilityPermission()
+        checkInputMonitoringPermission()
     }
     
     // MARK: - Accessibility Permission
@@ -21,6 +24,15 @@ class PermissionService: ObservableObject {
         }
         return trusted
     }
+
+    @discardableResult
+    func checkInputMonitoringPermission() -> Bool {
+        let trusted = CGPreflightListenEventAccess()
+        DispatchQueue.main.async {
+            self.isInputMonitoringGranted = trusted
+        }
+        return trusted
+    }
     
     /// 권한 요청 프롬프트 표시 (시스템 다이얼로그)
     func requestAccessibilityPermission() {
@@ -30,6 +42,11 @@ class PermissionService: ObservableObject {
         // 권한 변경 후 상태 업데이트를 위해 폴링
         startPermissionPolling()
     }
+
+    func requestInputMonitoringPermission() {
+        _ = CGRequestListenEventAccess()
+        openInputMonitoringSettings()
+    }
     
     /// 시스템 설정의 손쉬운 사용 패널 열기
     func openAccessibilitySettings() {
@@ -37,6 +54,12 @@ class PermissionService: ObservableObject {
         NSWorkspace.shared.open(url)
         
         // 설정 열때도 폴링 시작
+        startPermissionPolling()
+    }
+
+    func openInputMonitoringSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
+        NSWorkspace.shared.open(url)
         startPermissionPolling()
     }
     
@@ -74,11 +97,10 @@ class PermissionService: ObservableObject {
                 return
             }
             
-            if self.checkAccessibilityPermission() {
+            if self.checkAccessibilityPermission() && self.checkInputMonitoringPermission() {
                 timer.invalidate()
                 self.pollingTimer = nil
                 
-                // 권한 획득 성공 알림
                 NotificationCenter.default.post(
                     name: .accessibilityPermissionGranted,
                     object: nil
