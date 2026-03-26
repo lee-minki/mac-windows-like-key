@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - **트리거 표면 단순화**: Right Option 선택지를 제거하고 Right Command 단일 트리거 모델로 정리
 - **터미널 경로 분기**: terminal-like 앱에서 direct input-source switch를 사용할 수 있도록 context/transport 경로 확장
+- **플랫폼 관리 확장**: 키보드 디바이스/로그인 항목 관리용 서비스 구조 추가
 - **트리거 감지**: CGEventTap `flagsChanged` → `keyDown/keyUp` (F16은 modifier가 아니므로)
 - **modifier flag 스트리핑/쿨다운 제거**: F16은 modifier flag를 생성하지 않으므로 불필요
 - HelpView 매뉴얼 전면 재작성 — 디바이스 프로필, VDI 고스트 키 방지 등 신기능 반영

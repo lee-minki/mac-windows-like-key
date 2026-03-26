@@ -44,6 +44,8 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
     var auxiliaryFnKey: Int64?
     /// Bundle ID for per-app auto-switching (nil = manual activation only)
     var bundleId: String?
+    /// Keyboard device identifier for per-device auto-switching
+    var deviceIdentifier: KeyboardDeviceIdentifier?
 
     init(
         id: UUID = UUID(),
@@ -53,7 +55,8 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         localDesiredKeys: [Int64],
         vdiDesiredKeys: [Int64]? = nil,
         auxiliaryFnKey: Int64? = nil,
-        bundleId: String? = nil
+        bundleId: String? = nil,
+        deviceIdentifier: KeyboardDeviceIdentifier? = nil
     ) {
         self.id = id
         self.name = name
@@ -63,6 +66,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         self.vdiDesiredKeys = vdiDesiredKeys ?? localDesiredKeys
         self.auxiliaryFnKey = auxiliaryFnKey
         self.bundleId = bundleId
+        self.deviceIdentifier = deviceIdentifier
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -75,6 +79,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         case desiredKeys
         case auxiliaryFnKey
         case bundleId
+        case deviceIdentifier
     }
 
     init(from decoder: Decoder) throws {
@@ -88,6 +93,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         vdiDesiredKeys = try container.decodeIfPresent([Int64].self, forKey: .vdiDesiredKeys) ?? localDesiredKeys
         auxiliaryFnKey = try container.decodeIfPresent(Int64.self, forKey: .auxiliaryFnKey)
         bundleId = try container.decodeIfPresent(String.self, forKey: .bundleId)
+        deviceIdentifier = try container.decodeIfPresent(KeyboardDeviceIdentifier.self, forKey: .deviceIdentifier)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -100,6 +106,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         try container.encode(vdiDesiredKeys, forKey: .vdiDesiredKeys)
         try container.encodeIfPresent(auxiliaryFnKey, forKey: .auxiliaryFnKey)
         try container.encodeIfPresent(bundleId, forKey: .bundleId)
+        try container.encodeIfPresent(deviceIdentifier, forKey: .deviceIdentifier)
     }
 
     var usesDistinctVdiLayout: Bool {
@@ -196,5 +203,13 @@ class KeyboardProfileStore: ObservableObject {
     func profile(forBundleId bundleId: String) -> SavedKeyboardProfile? {
         guard !bundleId.isEmpty else { return nil }
         return profiles.first { $0.bundleId == bundleId }
+    }
+
+    /// Find profile matching a keyboard device for per-device auto-switching
+    func profile(forDevice identifier: KeyboardDeviceIdentifier) -> SavedKeyboardProfile? {
+        profiles.first {
+            guard let device = $0.deviceIdentifier else { return false }
+            return device.vendorId == identifier.vendorId && device.productId == identifier.productId
+        }
     }
 }
