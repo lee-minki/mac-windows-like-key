@@ -20,7 +20,8 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 1. `hidutil`이 **Right Command**를 **F16**으로 HID 레벨에서 변환 (modifier flag 없음)
 2. F16 이벤트가 **Omnissa Horizon Client**에 그대로 전달 (패스스루)
 3. VDI 내장 매핑을 통해 윈도우의 **Right Alt** (한/영 전환)로 변환되어 전달됨
-4. 윈도우 OS에서 자연스럽게 한영이 전환됨!
+4. 윈도우 OS에서 자연스럽게 한영 전환이 동작함
+5. Caps Lock은 WinMac Key가 직접 처리하지 않으며, 시스템/클라이언트 기본 동작에 맡깁니다.
 
 ---
 
@@ -48,7 +49,8 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 ### 3. WinMac Key 실행
 
 - WinMac Key를 실행한 뒤 메뉴바에서 엔진을 켭니다. (`WM` 상태)
-- VDI 창에 포커스가 맞춰지면, 우측 Command(또는 Option)를 누를 때마다 이 매핑을 타고 윈도우 한영이 부드럽게 전환됩니다.
+- VDI 창에 포커스가 맞춰지면, 우측 Command를 누를 때마다 F16 릴레이를 타고 윈도우 한영이 부드럽게 전환됩니다.
+- Caps Lock은 앱이 직접 중계하지 않습니다. 필요 시 시스템/클라이언트 기본 동작을 별도로 확인하세요.
 - 외장 키보드 프로필을 쓸 경우 먼저 키캡 프린팅이 `Windows 키보드`인지 고르고, 다음 단계에서 스페이스바 왼쪽 modifier를 실제로 누른 뒤 `Space`로 현재 입력을 확정합니다.
 - 현재 입력 단계에서는 `키캡 기준`과 `macOS 입력`을 함께 보여줘 `Win`/`Alt`가 실제로 어떻게 들어오는지 바로 볼 수 있습니다.
 - `Space` 앞에 감지된 개수에 따라 3키/4키가 자동으로 정해지며, `Mac 로컬` 배치와 `VDI` 배치를 각각 따로 잡을 수 있습니다.
@@ -66,11 +68,11 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 
 ### 현재 해결 방식 (v1.3.0+)
 
-WinMac Key는 `hidutil` HID 레벨 remap을 사용하여 트리거 키(Right Cmd/Opt)를 **F18**(일반 function key)로 변환합니다.
+WinMac Key는 `hidutil` HID 레벨 remap을 사용하여 트리거 키(Right Command)를 **F16**(일반 function key)로 변환합니다.
 
-- F18은 **modifier 키가 아니므로** 후속 키스트로크에 modifier flag가 발생하지 않음
+- F16은 **modifier 키가 아니므로** 후속 키스트로크에 modifier flag가 발생하지 않음
 - Win+P, Win+Shift+R 등의 조합 오발이 **원천적으로 차단**됨
-- VDI 모드에서는 F18을 감지한 뒤 **F16 릴레이 키**를 보내 Horizon이 Right Alt로 변환
+- VDI 모드에서는 F16을 그대로 패스스루해 Horizon이 Right Alt로 변환
 
 ---
 
@@ -80,9 +82,17 @@ WinMac Key는 `hidutil` HID 레벨 remap을 사용하여 트리거 키(Right Cmd
 
 A. 매핑이 `Win` 키나 꼬인 `Alt` 로 넘어간 경우입니다. Horizon 키 매핑 설정에서 `F16 → Right Alt`가 정확히 잡혀 있는지 확인하세요.
 
+### Q. VDI에서 Caps Lock이 기대대로 동작하지 않거나 로컬 Mac만 반응합니다
+
+A.
+
+1. WinMac Key는 Caps Lock을 직접 중계하지 않습니다.
+2. VDI 클라이언트와 원격 Windows의 기본 Caps Lock 처리 경로를 먼저 확인하세요.
+3. 로컬 macOS에서만 Caps Lock 반응을 원치 않는 경우, 시스템 `Caps Lock 키로 ABC 입력 소스 전환` 설정을 확인하세요.
+
 ### Q. 한영전환 후 Shift+영문을 치면 화면녹화나 앱이 실행됩니다
 
-A. v1.3.0 이상으로 업데이트하세요. F18 HID remap 아키텍처로 modifier flag 오염이 원천 차단됩니다.
+A. v1.3.0 이상으로 업데이트하세요. F16 HID remap 아키텍처로 modifier flag 오염이 원천 차단됩니다.
 
 ### Q. 눌러도 아무 반응이 없습니다
 
@@ -90,7 +100,7 @@ A.
 
 1. Horizon Client에 `F16 → Right Alt` 매핑이 정확히 들어가 있는지 확인하세요.
 2. WinMac Key의 Dashboard 메뉴에서 "트리거 키"가 본인이 누르는 키(`rightCmd` 등)로 잘 설정되어 있는지 확인하세요.
-3. Karabiner-Elements에서 Complex Rules (특히 Right Command -> F18, 한/영 등)가 켜져 있다면, **WinMac Key와 충돌하므로 반드시 꺼야 합니다.**
+3. Karabiner-Elements에서 Complex Rules (특히 Right Command -> F16/F18, 한/영 등)가 켜져 있다면, **WinMac Key와 충돌하므로 반드시 꺼야 합니다.**
 
 ### Q. 글자가 밀리거나 씹히는 현상은 없나요?
 

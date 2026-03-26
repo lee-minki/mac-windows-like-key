@@ -3,11 +3,12 @@
 ## 변경 요약
 
 한영전환 방식이 다음처럼 분리되었습니다.
-- 로컬 macOS / 원격 Mac: `Control+Space 시스템 단축키 주입`
+- 로컬 macOS: `Control+Space 시스템 단축키 주입`
 - Windows VDI: `F16 릴레이 키 주입`
+- 원격 Mac / 화면 공유: 별도 검증이 필요하며, 로컬 macOS와 동일하게 보장된다고 가정하지 않습니다.
 
 ### 개선된 점
-- **F16 HID remap 아키텍처**: `hidutil`로 Right Cmd/Opt를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
+- **F16 HID remap 아키텍처**: `hidutil`로 Right Command를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
 - VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
 - 빠른 영문 대문자 입력 시 Windows 키 조합 오발 해결
 - 메뉴바 아이콘이 macOS 네이티브 입력소스 표시기로 동기화
@@ -22,8 +23,9 @@
 **이것이 가장 중요합니다. 이 설정이 없으면 한영전환이 동작하지 않습니다.**
 
 WinMac Key는 Right Command를 누르면 현재 컨텍스트에 따라 다음 중 하나를 전송합니다.
-- 로컬 macOS / 원격 Mac: `Control+Space`
+- 로컬 macOS: `Control+Space`
 - Windows VDI: `F16`
+- 원격 Mac / 화면 공유: 별도 검증 전까지 로컬 macOS와 동일 동작을 보장하지 않습니다.
 
 ### 설정 방법
 
@@ -108,13 +110,19 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 ### 동작 원리
 
 ```
-[Mac 로컬 / 원격 Mac 포커스]
-  Right Cmd → hidutil HID remap → F16 → CGEventTap suppress → Control+Space 합성 → macOS 입력소스 전환
+[Mac 로컬 포커스]
+  Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → macOS 입력소스 전환
+  Caps Lock → 시스템 기본 동작 유지
   내장 키보드: Fn→Cmd, Cmd→Ctrl, Ctrl→Fn (Mac 프로필)
 
 [VDI 앱 포커스] (자동 전환)
   Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon이 F16 → Right Alt 변환
+  Caps Lock → 시스템 기본 동작 유지 (앱이 소유하지 않음)
   내장 키보드: Fn→Ctrl, Ctrl→Fn (VDI 프로필 - 자동 적용)
+
+[원격 Mac / 화면 공유]
+  Right Cmd → 별도 검증 필요
+  Caps Lock → 시스템 기본 동작 유지
 ```
 
 ### Omnissa Horizon 클라이언트 설정
@@ -134,6 +142,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 2. 메뉴바가 `WM`인지 확인 (엔진 ON)
 3. Right Command 누르기
 4. Windows 내에서 한영전환 되는지 확인
+5. 필요 시 Windows 쪽 한/영 동작만 별도로 확인
 
 ---
 
@@ -149,7 +158,8 @@ VDI 앱에 포커스가 가면 **내장 키보드의 Fn 매핑이 자동으로 �
 
 - VDI 앱을 열면 자동으로 VDI 매핑 적용
 - VDI 앱에서 나오면 자동으로 Mac 매핑 복귀
-- 외장 USB 키보드는 프로필을 만들지 않았다면 영향이 없고, 프로필을 만들었다면 저장된 VDI 배치로 함께 전환됩니다
+- 외장 USB 키보드는 프로필을 만들지 않았다면 기본 배치로 동작하고, 프로필을 만들었다면 저장된 VDI 배치로 함께 전환됩니다
+- 내장 키보드도 Profiles 탭에서 "Assign current keyboard"로 등록하면 항상 해당 프로필이 우선 적용됩니다
 - 외장 키보드를 Profiles 탭에서 "Assign current keyboard"로 등록하면, 키보드를 꽂는 순간 해당 프로필이 자동 적용됩니다
 
 ### 지원되는 VDI 앱 (자동 감지)
@@ -217,6 +227,14 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 2. 손쉬운 사용 권한 확인
 3. **macOS 입력소스 전환 단축키가 Control+Space인지 확인** (STEP 1)
 4. Event Viewer → Right Cmd 이벤트가 잡히는지 확인
+
+### "Ghostty / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
+
+1. 최신 경로는 Ghostty 같은 terminal context에서 `F16 suppress + direct input-source switch`를 사용합니다.
+2. raw sequence뿐 아니라 검색 UI, `Cmd+N`, `Cmd+D` 같은 Command shortcut 누출이 없는지 먼저 확인하세요.
+3. 현재까지는 `pasting text` 오버레이가 사라진 단계까지 확인되었습니다. 남은 확인 포인트는 미세한 끊김이 계속 있는지입니다.
+4. 앱을 업데이트한 뒤 WinMac Key 엔진을 한 번 껐다가 다시 켭니다.
+5. Ghostty가 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
 
 ### "VDI에서 한영전환이 안 돼요"
 

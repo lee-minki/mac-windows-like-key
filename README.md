@@ -20,9 +20,9 @@
 
 ## ✨ Features
 
-- **⌨️ Right Command / Right Option 전환**: `hidutil` HID remap으로 Right Cmd/Opt를 F16으로 변환, modifier flag 오염 원천 차단
-- **🖥️ Native VDI Support**: VDI에서는 F16 패스스루로 Horizon이 Right Alt로 직접 변환, 로컬 Mac에서는 `Control+Space` 합성
-- **🔌 Per-Device Auto Profile**: IOKit 기반 외장 키보드 자동 감지 — 키보드별 프로필 자동 전환
+- **⌨️ Right Command 전환**: `hidutil` HID remap으로 Right Command를 F16으로 변환, modifier flag 오염 원천 차단
+- **🖥️ Native VDI Support**: VDI에서는 F16 릴레이로 한/영 전환을 전달하고, 로컬 Mac에서는 `Control+Space`를 합성
+- **🔌 Per-Device Auto Profile**: IOKit 기반 내장/외장 키보드 감지 — 키보드별 프로필 자동 전환
 - **🛡️ VDI Ghost Key Prevention**: F16 HID remap으로 modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
 - **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
@@ -90,20 +90,21 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 - 프로필 이름은 구분용 라벨입니다
 - 저장된 프로필은 현재 앱 컨텍스트에 따라 `Mac 로컬` 목표와 `VDI` 목표 사이를 자동으로 전환합니다
 - 프로필 자동 할당은 키보드 디바이스(VendorID/ProductID) 또는 앱의 Bundle ID 기준으로 동작합니다
-- 외장 키보드를 연결하면 Profiles 탭에서 "Assign current keyboard" 버튼으로 해당 키보드 전용 프로필을 지정할 수 있습니다
+- Profiles 탭에서 "Assign current keyboard" 버튼으로 현재 타이핑 중인 키보드(내장/외장 모두)에 전용 프로필을 지정할 수 있습니다
 - 키보드 전환 시 프로필이 자동으로 따라갑니다 (디바이스 프로필 > 앱 프로필 > 기본 프로필)
 
 ### 6. 권장 추가 설정
 
-- `Caps Lock 키로 ABC 입력 소스 전환`은 꺼두는 것을 권장합니다
+- `Caps Lock 키로 ABC 입력 소스 전환`은 로컬 macOS에서 순수 Caps Lock을 쓰려면 꺼두는 것을 권장합니다
 - Windows VDI를 사용한다면 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요
+- Ghostty, Terminal.app, iTerm2 같은 터미널류 앱 경로는 현재 재설계 중입니다. `[57379u` 같은 raw sequence나 `Cmd+N` 같은 shortcut 누출이 보이면 terminal regression으로 보고 확인이 필요합니다.
 
 ---
 
 ## 💎 VDI 지원
 
-별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Cmd/Opt를 F16으로 HID 레벨 remap하여:
-- 로컬 macOS 및 원격 Mac 세션에서는 F16을 suppress하고 `Control+Space` 합성
+별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Command를 F16으로 HID 레벨 remap하여:
+- 로컬 macOS에서는 F16을 suppress하고 `Control+Space` 합성
 - Windows VDI 앱 포커스에서는 F16을 **패스스루** — Horizon이 Right Alt로 직접 변환
 을 상황에 맞게 처리합니다.
 
