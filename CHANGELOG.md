@@ -18,6 +18,7 @@ v1.3.1 외부 코드 리뷰에서 발견된 7건 일괄 패치. 가장 중요한
 - **MED: release.sh 버전 가드**: 인자로 받은 `VERSION` 과 `Info.plist:CFBundleShortVersionString` 일치 검증. 불일치 시 즉시 거부. `set -euo pipefail` 도입. `check-version-consistency.sh` 자동 호출.
 - **LOW: actor isolation 경고**: `AppState.findAllInstallations` 를 `nonisolated` 로 표기. background queue 에서 안전 호출.
 - **LOW: VDI 로그 문구 정정**: "Fn=Ctrl, Option=Win, Command=Alt" → "Fn↔Ctrl swap applied". 실제 매핑(`vdiInternalKeyboardMappings`)과 일치.
+- **release.sh verify_sign_identity false negative**: `set -euo pipefail` 하에서 `if cmd1 && cmd2 | cmd3` 복합 표현이 의도와 다르게 실패 판정해 키체인에 self-signed identity 가 있어도 ad-hoc fallback 으로 빠지던 버그. 각 명령을 별도 호출로 분해해 exit code 명시 검사.
 
 ### Added
 - **검증 인프라**: `HIDRemapper` 에 `applyCallCount` / `clearCallCount` 카운터. `AppState.init` 끝에 DEBUG assertion 으로 "init 이 HID 안 건드림" invariant 자동 검증. `tests/hid_lifecycle_smoke.swift` smoke 테스트 추가. `docs/MANUAL_TEST_PLAN.md` 회귀 체크리스트 (10개 카테고리, 30+ 검증 항목).

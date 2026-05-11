@@ -56,14 +56,30 @@ bash "${PROJECT_DIR}/scripts/check-version-consistency.sh"
 # Signing identity 검증 — self-signed cert는 find-identity -p codesigning 에 안 잡히므로
 # 실제 codesign 동작 테스트로 판정 (가장 신뢰 가능)
 verify_sign_identity() {
-    local test_file="$(mktemp)"
+    local test_file
+    test_file="$(mktemp)"
     cp /bin/ls "$test_file"
-    if codesign --force -s "$SIGN_IDENTITY" "$test_file" 2>/dev/null \
-       && codesign -dvvv "$test_file" 2>&1 | grep -q "Authority=$SIGN_IDENTITY"; then
+
+    local sign_exit verify_output verify_exit
+    codesign --force -s "$SIGN_IDENTITY" "$test_file" 2>/dev/null
+    sign_exit=$?
+
+    if [ "$sign_exit" -ne 0 ]; then
         rm -f "$test_file"
+        return 1
+    fi
+
+    verify_output="$(codesign -dvvv "$test_file" 2>&1)"
+    verify_exit=$?
+    rm -f "$test_file"
+
+    if [ "$verify_exit" -ne 0 ]; then
+        return 1
+    fi
+
+    if printf '%s\n' "$verify_output" | grep -q "Authority=$SIGN_IDENTITY"; then
         return 0
     fi
-    rm -f "$test_file"
     return 1
 }
 
