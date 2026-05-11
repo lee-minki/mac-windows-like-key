@@ -220,8 +220,20 @@ class HIDRemapper {
     /// 앱이 HID 매핑을 적용한 적 있으면 pre-existing snapshot 으로 복원.
     /// 적용 안 했으면 no-op — 다른 hidutil 도구의 매핑을 건드리지 않음.
     func internalClearAllForTermination() {
+        performSnapshotRestoreAndInternalCleanup()
+    }
+
+    /// 엔진 OFF / Doctor stop / Reset 모두 공용 — pre-existing snapshot 복원 + internal cleanup.
+    /// ownership 무관 (caller 가 책임지고 호출). hasAppliedAnyMapping=false 면 no-op.
+    /// HIGH 1·2 fix — toggleEngine OFF, Doctor stopEngine 도 이 메서드 사용해야 함.
+    func restorePreExistingMappingsAndClearInternal() {
+        performSnapshotRestoreAndInternalCleanup()
+    }
+
+    /// 두 진입점이 공유하는 실제 cleanup 로직.
+    private func performSnapshotRestoreAndInternalCleanup() {
         guard hasAppliedAnyMapping else {
-            logger.info("Termination cleanup: no app mappings were applied — preserving system state")
+            logger.info("Cleanup: no app mappings were applied — preserving system state")
             return
         }
 

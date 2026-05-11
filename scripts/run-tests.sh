@@ -21,6 +21,7 @@ COMMON_SOURCES=(
   WinMacKey/Services/HIDRemapper.swift
   WinMacKey/Services/LogService.swift
   WinMacKey/Services/KeyInterceptor.swift
+  WinMacKey/Services/ContextManager.swift
 )
 COMMON_FRAMEWORKS=(-framework AppKit -framework Carbon)
 
@@ -53,6 +54,26 @@ swiftc \
   "${COMMON_FRAMEWORKS[@]}"
 
 build/tests/ownership_smoke
+
+# ── Toggle-OFF snapshot restore smoke ─────────────────────────────────────────
+# HIGH 1 fix 의 restorePreExistingMappingsAndClearInternal 동작 검증
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/toggle_off_snapshot_smoke.swift \
+  -o build/tests/toggle_off_snapshot_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/toggle_off_snapshot_smoke
+
+# ── Remote Mac Mode flag smoke ────────────────────────────────────────────────
+# v1.3.4 NEW: isRemoteMacAppFocused 외부 설정, vdi/remote flag 독립성 검증
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/remote_mac_mode_smoke.swift \
+  -o build/tests/remote_mac_mode_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/remote_mac_mode_smoke
 
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh

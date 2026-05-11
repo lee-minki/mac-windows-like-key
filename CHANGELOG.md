@@ -6,7 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.3
+## [Unreleased] — v1.3.4
+
+v1.3.3 lifecycle 검토에서 발견된 HIGH 3건 + MEDIUM 1건 fix + Mac→Mac 원격접속 한영전환 신규 지원.
+
+### Added
+- **Mac → Mac 원격접속 한영전환**: Apple Screen Sharing, Apple Remote Desktop, Jump Desktop, CoRD, RealVNC, TeamViewer, AnyDesk, Parsec 자동 감지. 이 앱들이 포커스면 F16 패스스루 — 원격 Mac 의 WinMacKey 가 자체 처리. 로컬 맥북의 입력소스는 안 바뀜. **양쪽 Mac 모두 WinMacKey 설치 + 동일 self-signed cert 필요** (이미 stable signing 으로 권한 영속됨).
+- `ContextManager.allRemoteMacApps` + UserDefaults `CustomRemoteMacApps` (사용자 도구 확장 가능).
+- `AppState.isRemoteMacMode` published. LogService 에 진입/이탈 기록.
+- `KeyInterceptor.isRemoteMacAppFocused` flag — VDI 와 별도 분기.
+- `HIDRemapper.restorePreExistingMappingsAndClearInternal()` — engine OFF / Doctor stop / Reset 공용 cleanup. snapshot 복원 + internal keyboard 정리.
+- `tests/toggle_off_snapshot_smoke.swift` — HIGH 1 fix 의 cleanup conditional 검증.
+- `tests/remote_mac_mode_smoke.swift` — VDI/Remote flag 독립성, 외부 설정 동작 검증.
+- MANUAL_TEST_PLAN.md K-6 (VDI internal cleanup), O 카테고리 (Mac→Mac 원격) 신규.
+- README.md 의 VDI 섹션에 Mac→Mac 원격 워크플로 추가.
+
+### Fixed
+- **HIGH: toggleEngine OFF 가 pre-existing hidutil 을 wipe 하던 문제**: `keyInterceptor.stop()` 의 default `clearHIDMappings: true` → 빈 매핑으로 set. 다른 hidutil 도구(Karabiner 등) 매핑이 사라짐. `restorePreExistingMappingsAndClearInternal()` 으로 변경 — pre-existing snapshot 복원 + internal keyboard cleanup.
+- **HIGH: VDI 진입 후 엔진 OFF 시 internal keyboard mapping 잔존**: `clearMappingsSync()` 가 global 만 정리하던 문제. cleanup 메서드가 internal 도 같이 처리.
+- **HIGH: Doctor restart 가 ownership 없이 start 하던 문제**: `performFix(.restartEngine)` 이 `takeOwnership()` 호출 안 해 RightCmd→F16 매핑이 적용 안 되던 회귀. 정상 `toggleEngine` ON 흐름과 동일 lifecycle (release → 대기 → take → start → refresh).
+- **MEDIUM: Doctor stopEngine ownership release 누락**: `performFix(.stopEngine)` 이 단순 `stop()` 만 호출하고 release 안 함. 다음 restart 가 take 없이 진행되는 cascade 원인. snapshot restore + release 추가.
+
+---
+
+## [1.3.3] — Superseded by v1.3.4
+
+외부 배포된 상태이나 위 HIGH 3건 미수정. 사용자가 다른 hidutil 도구 미사용 + VDI 중 engine 토글 안 함 + Doctor stop→restart 시퀀스 안 하면 영향 없음. 그러나 외부 표면 깨끗하게 유지를 위해 Draft 처리 후 v1.3.4 로 대체.
+
+---
+
+## [Unreleased] — v1.3.3 (Skipped — superseded by v1.3.4)
 
 v1.3.2 외부 코드리뷰 2차 결과 + lifecycle 우회 경로 분석에서 발견된 항목 일괄 패치.
 "엔진 OFF = 시스템 영향 없음" 안전 경계를 ownership 모델로 구조적 보장.

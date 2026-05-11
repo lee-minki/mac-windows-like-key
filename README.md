@@ -112,7 +112,22 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Command를 F16으로 HID 레벨 remap하여:
 - 로컬 macOS에서는 F16을 suppress하고 `Control+Space` 합성
 - Windows VDI 앱 포커스에서는 F16을 **패스스루** — Horizon이 Right Alt로 직접 변환
+- **Mac → Mac 원격접속** (Screen Sharing 등) 에서는 F16을 패스스루 — 원격 Mac 의 WinMacKey 가 자체 처리
+
 을 상황에 맞게 처리합니다.
+
+### 🖥️ Mac → Mac 원격접속 (v1.3.4+)
+
+맥북에서 맥미니/맥스튜디오 등에 원격접속 시 한영전환:
+
+1. **양쪽 Mac 모두에 WinMacKey 설치** (동일 self-signed cert 로 빌드된 .dmg)
+2. 양쪽 모두 손쉬운 사용 권한 허용 + 엔진 ON
+3. 화면 공유 (Apple Screen Sharing, ARD, Jump Desktop 등) 로 원격 Mac 연결
+4. 원격 Mac 창에 포커스 → Right Command 누름
+5. 로컬 맥북에서: F16 으로 변환되어 화면 공유 거쳐 원격 Mac 으로 전송
+6. 원격 Mac 의 WinMacKey 가 F16 감지 → `Control+Space` 합성 → 원격 macOS 입력소스 전환
+
+지원되는 원격접속 도구 (자동 감지): Apple Screen Sharing, Apple Remote Desktop, Jump Desktop, CoRD, RealVNC, TeamViewer, AnyDesk, Parsec. 다른 도구는 설정에서 추가 가능.
 
 ### 검증된 환경
 

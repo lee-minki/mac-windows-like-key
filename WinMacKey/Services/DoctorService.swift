@@ -479,19 +479,32 @@ class DoctorService: ObservableObject {
             NSWorkspace.shared.open(url)
             
         case .stopEngine:
-            appState.keyInterceptor.stop()
+            // MEDIUM fix: ownership release + snapshot restore까지 정상 OFF 흐름과 동일.
+            appState.keyInterceptor.stop(clearHIDMappings: false)
+            HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
+            if HIDRemapper.shared.isOwnedByEngine {
+                HIDRemapper.shared.releaseOwnership()
+            }
             appState.isEngineRunning = false
-            
+
         case .restartEngine:
-            appState.keyInterceptor.stop()
+            // HIGH 3 fix: stop → cleanup → release → 비동기 → take → start → refresh.
+            // 정상 toggleEngine OFF→ON 흐름과 ownership lifecycle 일치.
+            appState.keyInterceptor.stop(clearHIDMappings: false)
+            HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
+            if HIDRemapper.shared.isOwnedByEngine {
+                HIDRemapper.shared.releaseOwnership()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                HIDRemapper.shared.takeOwnership()
                 let started = appState.keyInterceptor.start()
                 appState.isEngineRunning = started
                 if started {
-                    // stop() 이 HID 매핑을 해제했으므로 (RightCmd→F16 포함) 반드시 재적용 필요.
-                    // 이 호출이 없으면 EventTap은 켜지지만 트리거 매핑이 없어 한영전환이 침묵한다.
-                    // AppState.toggleEngine 의 ON 분기와 동일한 패턴.
+                    // start 후 매핑 재적용 (RightCmd→F16 포함). ownership 이 있어야 동작.
                     appState.refreshActiveProfileForCurrentContext()
+                } else {
+                    // start 실패 시 ownership 도로 release
+                    HIDRemapper.shared.releaseOwnership()
                 }
             }
             

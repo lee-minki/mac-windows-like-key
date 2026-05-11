@@ -89,25 +89,30 @@ killall WinMacKey 2>/dev/null
 - [ ] **J-2**: 메뉴바 → "WinMac Key 종료"
 - [ ] **J-3**: `hidutil property --get UserKeyMapping` 결과가 **A-1과 동일** (외부 사전 상태로 복귀)
 
-### K. Pre-existing hidutil ownership 보존 (v1.3.3+)
+### K. Pre-existing hidutil ownership 보존 (v1.3.3+, v1.3.4 보강)
 
 다른 hidutil 도구 매핑이 앱에 의해 지워지지 않는지 검증.
 
 ```bash
 # 1. 미리 외부 hidutil 매핑 설정 (예: Karabiner 흉내)
 hidutil property --set '{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0x7000000E0,"HIDKeyboardModifierMappingDst":0x7000000E1}]}'
-hidutil property --get UserKeyMapping > /tmp/wmkey-precondition.json
+
+# Global + Internal keyboard 각각 baseline 저장
+hidutil property --get UserKeyMapping > /tmp/wmkey-global-baseline.json
+hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --get UserKeyMapping > /tmp/wmkey-internal-baseline.json
 ```
 
 - [ ] **K-1**: 위 매핑이 적용된 상태에서 앱 실행 → 메뉴바 `wm` 확인 (engine OFF)
-- [ ] **K-2**: `hidutil property --get UserKeyMapping` 결과가 **K-1 직전과 동일** (앱 실행만으론 변경 없음)
-- [ ] **K-3**: 엔진 ON → `hidutil --get` 결과에 WinMacKey 매핑 + 사전 매핑이 함께 보임 (또는 WinMacKey 매핑으로 일시 교체)
-- [ ] **K-4**: 엔진 OFF → `hidutil --get` 결과가 K-1 사전 상태로 복원
-- [ ] **K-5**: 엔진 ON → 앱 종료 ("WinMac Key 종료") → `hidutil --get` 결과가 K-1 사전 상태로 복원
+- [ ] **K-2**: Global + Internal `hidutil --get` 결과가 **K-1 직전과 동일** (앱 실행만으론 변경 없음)
+- [ ] **K-3**: 엔진 ON → Global 에 WinMacKey 매핑 등장
+- [ ] **K-4**: 엔진 OFF → Global `hidutil --get` 결과가 K-1 사전 상태로 복원 ← **v1.3.4 fix**
+- [ ] **K-5**: 엔진 ON → 앱 종료 → Global 결과가 K-1 사전 상태로 복원
+- [ ] **K-6**: VDI 진입 → 엔진 OFF → Internal `hidutil --get` 결과가 K-1 사전 상태로 복원 ← **v1.3.4 fix (VDI internal cleanup)**
 
 ```bash
 # 정리
 hidutil property --set '{"UserKeyMapping":[]}'
+hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --set '{"UserKeyMapping":[]}'
 ```
 
 ### L. TCC reset 자동 실행 confirmation (v1.3.3+)
@@ -134,6 +139,32 @@ hidutil property --set '{"UserKeyMapping":[]}'
 - [ ] **N-3**: "취소" 클릭 → 클립보드 변경 없음
 - [ ] **N-4**: "복사" 클릭 → 클립보드에 로그 내용 들어감
 - [ ] **N-5**: Event Viewer 에서 익명화된 표시 (`app-xxxxxxxx`, `modifier`/`letter`/`function` 카테고리) 확인 (privacy mode ON 시)
+
+### O. Mac → Mac 원격접속 한영전환 (v1.3.4+)
+
+본인 맥북에서 맥미니 등에 원격접속 시 한영전환이 원격 Mac 에서 동작하는지.
+
+**사전 준비**:
+- 양쪽 Mac 모두 동일 self-signed cert 로 빌드된 WinMacKey v1.3.4+ 설치
+- 양쪽 모두 손쉬운 사용 권한 허용 + 엔진 ON
+- 양쪽 모두 macOS 입력소스 단축키 = `Control+Space`
+
+**검증 절차**:
+- [ ] **O-1**: 원격 Mac (맥미니) 에서 텍스트 편집기 열고 현재 입력소스 = ABC 확인
+- [ ] **O-2**: 맥북에서 Screen Sharing.app 으로 맥미니 연결
+- [ ] **O-3**: 맥북의 메뉴바에 "Remote Mac mode: enabled" 가 LogService 에 기록되는지 확인 (Console.app 으로 winmackey.log 모니터)
+- [ ] **O-4**: 원격 Mac 창에 포커스 → Right Command 한 번 누름
+- [ ] **O-5**: 원격 Mac 의 입력소스가 EN ↔ 한 으로 전환됐는지 확인
+- [ ] **O-6**: 맥북 자체의 입력소스는 **변경 안 됨** (로컬은 그대로) 확인
+- [ ] **O-7**: 한글 입력 중 원격 Mac 에서 `안녕하` 입력 + Right Command → 조합 commit + 영문 전환
+
+**실패 시 분석**:
+- O-4 후 변화 없음 → 화면 공유가 F16 을 원격에 전달 안 함. 다른 원격 도구 시도 또는 Approach 재설계 필요.
+- O-5 가 부분만 됨 (예: 한 번에 안 됨) → 원격 Mac 의 Control+Space 단축키 설정 확인.
+- O-6 가 위반됨 (로컬도 같이 바뀜) → AppState 의 isRemoteMacMode 분기 동작 안 함. Doctor 로 진단.
+
+**다른 원격 도구 (Jump Desktop, AnyDesk, ARD)**:
+같은 절차로 검증. 도구마다 키 전달 방식이 달라 결과가 다를 수 있음. 동작하는 도구는 README 의 검증된 환경에 추가.
 
 ## 통과 기준
 

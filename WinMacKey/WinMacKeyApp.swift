@@ -84,8 +84,9 @@ class AppState: ObservableObject {
     @Published var currentAppBundleId: String = ""
     @Published var currentProfileId: String?
     @Published var hasAccessibilityPermission: Bool = false
-    @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부
+    @Published var isVdiMode: Bool = false  // VDI 앱 포커스 여부 (Windows VDI)
     @Published var isTerminalMode: Bool = false
+    @Published var isRemoteMacMode: Bool = false  // Mac 원격접속 앱 포커스 (Screen Sharing 등)
     
     // 언어 페어 설정 (Source 1 ↔ Source 2 토글)
     @AppStorage("languagePairSource1") var languagePairSource1: String = "" {
@@ -165,9 +166,15 @@ class AppState: ObservableObject {
             MainActor.assumeIsolated {
                 let isVdiMode = self?.isVdiMode == true
                 let isTerminalMode = self?.isTerminalMode == true
+                let isRemoteMacMode = self?.isRemoteMacMode == true
                 if isVdiMode {
-                    // VDI: F16이 패스스루되어 Horizon이 직접 처리
-                    // 릴레이 키 발행 불필요, 버퍼링만 시작
+                    // VDI: F16이 패스스루되어 Horizon이 직접 처리.
+                    // 로컬 합성 안 함 (로컬 입력소스 부작용 방지).
+                    self?.keyInterceptor.beginVdiRelayCooldownWindow()
+                    self?.stateManager.switchCount += 1
+                } else if isRemoteMacMode {
+                    // Mac 원격접속: F16 이 화면 공유를 거쳐 원격 Mac 의 WinMacKey 가 처리.
+                    // 로컬 합성 안 함 (로컬 맥북의 입력소스 안 바뀌도록).
                     self?.keyInterceptor.beginVdiRelayCooldownWindow()
                     self?.stateManager.switchCount += 1
                 } else if isTerminalMode {
@@ -207,12 +214,19 @@ class AppState: ObservableObject {
             let isNowVdi = self.contextManager.isVirtualizationApp
             let wasTerminal = self.isTerminalMode
             let isNowTerminal = self.contextManager.isTerminalApp
+            let wasRemoteMac = self.isRemoteMacMode
+            let isNowRemoteMac = self.contextManager.isRemoteMacApp
             self.keyInterceptor.isVdiAppFocused = isNowVdi
+            self.keyInterceptor.isRemoteMacAppFocused = isNowRemoteMac
             self.isVdiMode = isNowVdi
             self.isTerminalMode = isNowTerminal
+            self.isRemoteMacMode = isNowRemoteMac
 
             if wasTerminal != isNowTerminal {
                 LogService.shared.info("Terminal mode: \(isNowTerminal ? "enabled" : "disabled") (\(appName))", category: "Terminal")
+            }
+            if wasRemoteMac != isNowRemoteMac {
+                LogService.shared.info("Remote Mac mode: \(isNowRemoteMac ? "enabled — F16 will pass through to remote Mac" : "disabled") (\(appName))", category: "RemoteMac")
             }
 
             // VDI 모드 전환: 내장 키보드 매핑 교체
@@ -420,12 +434,16 @@ class AppState: ObservableObject {
 
     func toggleEngine() {
         if isEngineRunning {
-            // 엔진 OFF: HID ownership 해제 전에 매핑 정리.
-            // stop() → clearMappingsSync() 가 ownership 게이트를 통과해야 하므로 release 는 그 뒤.
-            keyInterceptor.stop()
+            // 엔진 OFF lifecycle:
+            //   1. keyInterceptor.stop(clearHIDMappings: false) — EventTap 만 정지, HID 는 아래에서 명시 처리
+            //   2. restorePreExistingMappingsAndClearInternal — snapshot 복원 + internal keyboard cleanup
+            //   3. releaseOwnership — 게이트 닫기
+            // HIGH 1·2 fix: 단순 clear 가 아니라 사전 상태 복원 + VDI internal mapping 도 정리.
+            keyInterceptor.stop(clearHIDMappings: false)
+            HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
             HIDRemapper.shared.releaseOwnership()
             isEngineRunning = false
-            LogService.shared.info("Engine stopped", category: "Engine")
+            LogService.shared.info("Engine stopped (snapshot restored, internal cleared)", category: "Engine")
         } else {
             checkPermissions()
             guard hasAccessibilityPermission else {

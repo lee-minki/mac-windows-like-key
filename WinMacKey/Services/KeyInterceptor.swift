@@ -54,6 +54,11 @@ class KeyInterceptor: ObservableObject {
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
+
+    // Mac 원격접속 앱 포커스 여부 (Screen Sharing, ARD, Jump Desktop 등).
+    // true 면 F16 패스스루 — 원격 Mac 의 WinMacKey 가 자체적으로 한영전환 처리.
+    // 로컬에서는 입력소스 합성 안 함 (로컬 입력소스 변경 부작용 방지).
+    var isRemoteMacAppFocused: Bool = false
     
     // 이벤트 로그 최대 개수
     private let maxEventLogCount = 1000
@@ -416,8 +421,10 @@ class KeyInterceptor: ObservableObject {
     // MARK: - Event Handling Pipeline (split from handleEvent)
 
     /// F16 트리거 키 처리.
-    /// VDI 모드: 패스스루 → Horizon이 Right Alt로 변환.
-    /// 로컬 Mac:  suppress → 외부에서 Control+Space 합성으로 입력소스 전환.
+    /// 세 가지 분기:
+    ///   - VDI 모드: 패스스루 → Horizon 이 F16 → Right Alt 변환
+    ///   - Remote Mac 모드: 패스스루 → 화면 공유가 F16 그대로 전달 → 원격 Mac 의 WinMacKey 가 처리
+    ///   - 로컬 Mac: suppress → 외부에서 Control+Space 합성으로 입력소스 전환
     private func handleTriggerKey(
         event: CGEvent,
         type: CGEventType,
@@ -428,7 +435,11 @@ class KeyInterceptor: ObservableObject {
             let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
             if !isRepeat && !triggerKeyPressed {
                 triggerKeyPressed = true
-                logger.info("⚡️ Trigger key (F16) detected (VDI=\(self.isVdiAppFocused))")
+                logger.info("⚡️ Trigger key (F16) detected (VDI=\(self.isVdiAppFocused), Remote=\(self.isRemoteMacAppFocused))")
+                // onInputSourceToggle 콜백:
+                //   - VDI 모드: AppState 가 cooldown 만 시작, 합성 안 함 (Horizon 이 변환)
+                //   - Remote Mac 모드: AppState 가 cooldown 만 시작, 합성 안 함 (원격 Mac 이 처리)
+                //   - 로컬: AppState 가 Control+Space 합성
                 onInputSourceToggle?()
             }
         } else {
@@ -438,9 +449,11 @@ class KeyInterceptor: ObservableObject {
 
         logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
 
-        if isVdiAppFocused {
+        if isVdiAppFocused || isRemoteMacAppFocused {
+            // VDI 또는 Remote Mac: F16 패스스루
             return Unmanaged.passUnretained(event)
         } else {
+            // 로컬 Mac: F16 suppress (외부에서 Control+Space 합성)
             return nil
         }
     }
