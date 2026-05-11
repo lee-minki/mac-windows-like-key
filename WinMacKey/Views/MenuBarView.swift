@@ -264,7 +264,12 @@ struct MenuBarView: View {
             .keyboardShortcut(",", modifiers: .command)
             
             // 업데이트 확인 버튼
-            Button(action: { openWindow(id: "update-window") }) {
+            // LSUIElement 앱이라 NSApp.activate 없으면 윈도우가 뒤에 숨음 (v1.3.7 fix).
+            // 다른 메뉴 버튼들과 일관성 맞춤.
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "update-window")
+            }) {
                 HStack {
                     Label("업데이트 확인...", systemImage: "arrow.triangle.2.circlepath")
                     
