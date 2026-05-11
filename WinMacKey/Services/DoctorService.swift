@@ -128,9 +128,13 @@ class DoctorService: ObservableObject {
         }
         logger.info("✅ UserDefaults cleared")
         
-        // 5. HID 매핑 해제 (동기 — 완료 보장)
-        HIDRemapper.shared.clearAllMappingsSync()
-        logger.info("✅ HID mappings cleared (global + internal keyboard)")
+        // 5. HID 매핑 해제 — ownership 우회 (emergency cleanup path).
+        //    keyInterceptor.stop() 이 ownership 있는 동안 한 번 호출됐고, release 후 internal cleanup.
+        if HIDRemapper.shared.isOwnedByEngine {
+            HIDRemapper.shared.releaseOwnership()
+        }
+        HIDRemapper.shared.internalClearAllForTermination()
+        logger.info("✅ HID mappings cleared via termination path (global + internal keyboard)")
 
         // 6. monitoring 재시작 — emergency recovery 후 앱은 정상 lifecycle 로 복귀해야 한다.
         // 이 단계가 없으면 reset 후 앱 재시작 없이는 디바이스 자동 전환·VDI 컨텍스트 감지가 죽은 상태.

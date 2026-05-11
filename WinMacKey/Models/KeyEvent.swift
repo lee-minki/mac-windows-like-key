@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// 키 이벤트 타입
 enum KeyEventType: String, Codable {
@@ -68,4 +69,42 @@ struct KeyEvent: Identifiable, Codable {
 extension KeyEvent {
     static let capsLockKeyCode: UInt32 = 0x39      // macOS CapsLock
     static let windowsIMEKeyCode: UInt32 = 0x15   // Windows 한/영 전환 (스캔코드)
+}
+
+// MARK: - Privacy / Anonymization
+//
+// 로그·뷰어·export 에서 사용자 사용 패턴(어느 앱에서 어떤 키를 눌렀는지) 노출을 줄이기 위한 익명화.
+// 기본 privacy mode (UserDefaults `loggingPrivacyMode`, default true) 에서는 다음으로 대체:
+//   - bundleId → SHA-256 prefix hash (app-xxxxxxxx)
+//   - keyCode  → 카테고리 ("modifier" / "function" / "letter" / "number" / "trigger" / "other")
+// Verbose mode 에서만 raw 표시. Export 시점에 사용자 confirmation 으로 raw 포함 동의 받음.
+
+extension KeyEvent {
+    /// bundleId 의 SHA-256 prefix 를 사용한 안정적 익명 식별자.
+    /// 같은 앱은 같은 hash 라 통계는 유지되지만 어떤 앱인지 모름.
+    var bundleIdAnonymized: String? {
+        guard let bid = bundleId, !bid.isEmpty else { return nil }
+        let digest = SHA256.hash(data: Data(bid.utf8))
+        let hex = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        return "app-\(hex)"
+    }
+
+    /// keyCode 를 거친 카테고리로 분류 — 실제 키는 노출하지 않되 패턴은 보여줌.
+    var keyCodeCategory: String {
+        switch rawKey {
+        case 0x37, 0x36, 0x3A, 0x3D, 0x38, 0x3C, 0x3B, 0x3E, 0x3F: return "modifier"
+        case 0x39: return "capslock"
+        case 0x6A: return "trigger"  // F16
+        case 0x60...0x6F, 0x7A, 0x78, 0x63, 0x76: return "function"
+        case 0x12...0x1D, 0x53...0x5C: return "number"
+        case 0x00...0x32: return "letter"
+        default: return "other"
+        }
+    }
+
+    /// 익명화된 표시용 row text. EventViewer 가 privacy mode ON 시 사용.
+    func anonymizedSummary() -> String {
+        let app = bundleIdAnonymized ?? "(no-app)"
+        return "\(timestampFormatted) [\(type.rawValue)] \(keyCodeCategory) (\(latencyFormatted)) — \(app)"
+    }
 }

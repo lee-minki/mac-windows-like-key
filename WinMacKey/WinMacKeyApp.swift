@@ -5,8 +5,9 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
-        // 앱 종료 시 모든 HID 매핑 해제 — 글로벌 + 내장 키보드 디바이스별 (동기)
-        HIDRemapper.shared.clearAllMappingsSync()
+        // 앱 종료 시 cleanup — ownership 우회 path 사용.
+        // Phase D 에서 pre-existing snapshot 복원 로직 추가 예정.
+        HIDRemapper.shared.internalClearAllForTermination()
     }
 }
 
@@ -187,6 +188,10 @@ class AppState: ObservableObject {
             }
         }
         stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2)
+
+        // 다른 hidutil 도구 (Karabiner 등) 의 매핑을 보존하기 위해 앱이 HID 를 건드리기 전 snapshot 저장.
+        // applicationWillTerminate / Reset / Recovery 에서 이 snapshot 으로 복원된다.
+        HIDRemapper.shared.captureSystemSnapshotIfNeeded()
 
         updateIMETriggerRemap()
         keyInterceptor.activeProfileID = activeMappingProfileId
@@ -413,7 +418,10 @@ class AppState: ObservableObject {
 
     func toggleEngine() {
         if isEngineRunning {
+            // 엔진 OFF: HID ownership 해제 전에 매핑 정리.
+            // stop() → clearMappingsSync() 가 ownership 게이트를 통과해야 하므로 release 는 그 뒤.
             keyInterceptor.stop()
+            HIDRemapper.shared.releaseOwnership()
             isEngineRunning = false
             LogService.shared.info("Engine stopped", category: "Engine")
         } else {
@@ -424,14 +432,17 @@ class AppState: ObservableObject {
                 return
             }
 
-
+            // 엔진 ON: HID ownership 획득 후 EventTap 켜고 매핑 적용.
+            HIDRemapper.shared.takeOwnership()
             let started = keyInterceptor.start()
             isEngineRunning = started
             if started {
-                // HID 매핑 재적용 (stop 시 clearMappingsSync로 해제되므로)
+                // HID 매핑 적용 — stop 시 clearMappingsSync 로 해제됐으므로 재적용
                 refreshActiveProfileForCurrentContext()
                 LogService.shared.info("Engine started", category: "Engine")
             } else {
+                // start 실패 시 ownership 도로 반환
+                HIDRemapper.shared.releaseOwnership()
                 LogService.shared.error("Engine failed to start", category: "Engine")
             }
         }

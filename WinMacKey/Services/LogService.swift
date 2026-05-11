@@ -221,11 +221,36 @@ class LogService: ObservableObject {
         return report
     }
     
-    /// 로그를 클립보드에 복사
+    /// 로그를 클립보드에 복사.
+    /// 호출 전에 caller 가 confirmAndCopyToClipboard() 를 통한 명시적 동의를 받는 것을 권장.
     func copyToClipboard() {
         let content = exportForFeedback()
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(content, forType: .string)
+    }
+
+    /// 사용자 confirmation 후 클립보드 복사.
+    /// 로그에 bundle ID, 사용 패턴이 포함되어 있다는 사실을 명시.
+    @MainActor
+    func confirmAndCopyToClipboard() {
+        let alert = NSAlert()
+        alert.messageText = "로그를 클립보드에 복사하시겠습니까?"
+        alert.informativeText = """
+            복사될 내용에는 다음 정보가 포함됩니다:
+
+              • macOS / 앱 버전
+              • 최근 100개 로그 항목 (timestamp, 카테고리, 메시지)
+              • 일부 항목에 포커스된 앱 bundle ID 가 포함될 수 있음
+
+            클립보드는 다른 앱이 접근할 수 있으니 공유 전 내용을 확인하세요.
+            """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "복사")
+        alert.addButton(withTitle: "취소")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            copyToClipboard()
+        }
     }
     
     /// 로그 파일 경로 열기 (Finder에서)

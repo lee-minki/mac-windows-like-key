@@ -116,8 +116,12 @@ class PermissionService: ObservableObject {
         pb.setString(tccutilResetCommand, forType: .string)
     }
 
-    /// Terminal.app을 열어 tccutil 명령을 자동 입력
-    /// 사용자는 Enter만 눌러 실행
+    /// Terminal.app 을 열고 tccutil 명령을 자동 실행.
+    /// ⚠️ 위험: TCC 권한 entry 를 즉시 변경하는 명령 — 사용자 confirmation 후에만 호출되어야 한다.
+    /// caller (예: MenuBarView 의 stale grant 안내) 는 반드시 NSAlert 등으로 명시 동의를 받은 뒤 호출.
+    ///
+    /// AppleScript `do script` 는 명령을 새 Terminal 창에서 자동 입력 + Enter 실행 (사용자 추가 입력 불필요).
+    /// 즉 "사용자는 Enter만" 이 아니라 "즉시 실행" 이다 — UI 측에서 confirmation 가드 필수.
     func runTccutilResetInTerminal() {
         let cmd = tccutilResetCommand
         let escaped = cmd.replacingOccurrences(of: "\\", with: "\\\\")
@@ -131,6 +135,31 @@ class PermissionService: ObservableObject {
         guard let script = NSAppleScript(source: source) else { return }
         var err: NSDictionary?
         script.executeAndReturnError(&err)
+    }
+
+    /// 사용자에게 confirmation dialog 띄우고 동의하면 runTccutilResetInTerminal 호출.
+    /// 이 메서드를 통해서만 자동 실행이 가능하도록 UI 가 호출해야 한다.
+    @MainActor
+    func confirmAndRunTccutilReset() {
+        let alert = NSAlert()
+        alert.messageText = "TCC 권한 등록을 초기화하시겠습니까?"
+        alert.informativeText = """
+            다음 명령이 Terminal.app 에서 즉시 실행됩니다:
+
+            \(tccutilResetCommand)
+
+            이 명령은 WinMac Key 의 손쉬운 사용 권한 등록을 제거합니다.
+            실행 후 앱을 다시 실행하면 권한 요청 다이얼로그가 나타납니다.
+
+            계속하시려면 '실행'을 누르세요.
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "실행")
+        alert.addButton(withTitle: "취소")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            runTccutilResetInTerminal()
+        }
     }
 
     // MARK: - Permission Polling

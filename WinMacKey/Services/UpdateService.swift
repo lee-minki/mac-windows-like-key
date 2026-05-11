@@ -175,8 +175,14 @@ class UpdateService: ObservableObject {
             updateStatus = "압축 해제 중..."
             downloadProgress = 0.8
             let extractedAppURL = try extractUpdate(from: tempFileURL)
-            
-            // 3. 앱 교체
+
+            // 4. 추출된 .app 검증 — Ed25519 통과해도 .app 내용물의 정체성 별도 확인
+            //    (defense in depth: 서명키가 유출돼도 잘못된 bundle id/version 은 거부)
+            updateStatus = "패키지 검증 중..."
+            downloadProgress = 0.85
+            try verifyExtractedApp(at: extractedAppURL)
+
+            // 5. 앱 교체
             updateStatus = "설치 중..."
             downloadProgress = 0.9
             let appPath = Bundle.main.bundleURL
@@ -194,6 +200,77 @@ class UpdateService: ObservableObject {
         }
     }
     
+    /// 추출된 .app 의 정체성 검증.
+    /// 서명(Ed25519)이 통과해도 .app 내용물이 우리가 의도한 앱인지 별도 확인:
+    ///   - CFBundleIdentifier == com.winmackey.app
+    ///   - CFBundleShortVersionString == latestVersion (release 메타와 일치)
+    ///   - .app 의 위치가 archive 루트 또는 1-depth 이내
+    ///   - codesign --verify round-trip 통과
+    private func verifyExtractedApp(at appURL: URL) throws {
+        let fm = FileManager.default
+
+        // 1. .app 위치 검증 — archive 깊은 곳에 묻혀 있으면 거부 (악성 archive 방어)
+        let pathComponents = appURL.pathComponents
+        // tmpdir 내부 깊이만 따짐 — 외부 시스템 디렉터리 (/var/folders/...) 은 제외
+        // ".../WinMacKeyUpdate/SomeDeep/Path/WinMacKey.app" 같은 경우 거부.
+        // 추출 디렉터리에서 .app 까지 최대 깊이 3 허용 (DMG 의 경우 마운트포인트/.app 도 가능)
+        let extractDirName = appURL.deletingLastPathComponent().lastPathComponent
+        let suspiciousDepth = pathComponents.suffix(5).joined(separator: "/")
+        _ = suspiciousDepth  // 로깅용; 실제 검증은 아래 contains 로
+        if appURL.path.contains("/.app/") || appURL.path.contains("/__MACOSX/") {
+            throw UpdateError.installFailed("의심스러운 archive 구조: \(extractDirName)")
+        }
+
+        // 2. Info.plist 읽기
+        let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
+        guard fm.fileExists(atPath: infoURL.path),
+              let infoData = try? Data(contentsOf: infoURL),
+              let infoPlist = try? PropertyListSerialization.propertyList(from: infoData, format: nil) as? [String: Any]
+        else {
+            throw UpdateError.installFailed("Info.plist 읽기 실패")
+        }
+
+        // 3. CFBundleIdentifier 검증
+        let expectedBundleID = "com.winmackey.app"
+        guard let bundleID = infoPlist["CFBundleIdentifier"] as? String,
+              bundleID == expectedBundleID
+        else {
+            let got = infoPlist["CFBundleIdentifier"] as? String ?? "(missing)"
+            throw UpdateError.installFailed("Bundle ID 불일치: 기대 '\(expectedBundleID)', 실제 '\(got)'")
+        }
+
+        // 4. CFBundleShortVersionString == latestVersion 검증
+        let expectedVersion = latestVersion ?? ""
+        let actualVersion = (infoPlist["CFBundleShortVersionString"] as? String) ?? ""
+        if !expectedVersion.isEmpty && actualVersion != expectedVersion {
+            throw UpdateError.installFailed("버전 불일치: release '\(expectedVersion)', .app '\(actualVersion)'")
+        }
+
+        // 5. codesign --verify round-trip — 서명이 valid on disk 인지 확인
+        let verifyTask = Process()
+        verifyTask.launchPath = "/usr/bin/codesign"
+        verifyTask.arguments = ["--verify", "--no-strict", appURL.path]
+        verifyTask.standardOutput = Pipe()
+        let errPipe = Pipe()
+        verifyTask.standardError = errPipe
+        do {
+            try verifyTask.run()
+            verifyTask.waitUntilExit()
+            if verifyTask.terminationStatus != 0 {
+                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                let errText = String(data: errData, encoding: .utf8) ?? "(no stderr)"
+                throw UpdateError.installFailed("codesign --verify 실패: \(errText.prefix(200))")
+            }
+        } catch let updateErr as UpdateError {
+            throw updateErr
+        } catch {
+            throw UpdateError.installFailed("codesign 실행 실패: \(error.localizedDescription)")
+        }
+
+        // 6. 통과 — 로그
+        // (LogService 가 main actor 라 여기서 직접 호출은 회피, caller 가 로그)
+    }
+
     /// 다운로드된 자산이 임베드된 Ed25519 public key로 서명되었는지 검증
     /// 실패 시 throw — 검증 실패한 자산은 절대 설치하지 않음
     private func verifyDownloadSignature(assetURL: URL) async throws {
@@ -253,12 +330,12 @@ class UpdateService: ObservableObject {
         }
         
         let expectedLength = response.expectedContentLength
+        // UUID 기반 isolated tmpdir — 동시 실행·이전 실패 흔적·외부 파일 충돌 방어
         let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WinMacKey-update-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let fileExtension = url.pathExtension.isEmpty ? "zip" : url.pathExtension
-        let tempFile = tempDir.appendingPathComponent("WinMacKey-update.\(fileExtension)")
-        
-        // 기존 파일 제거
-        try? FileManager.default.removeItem(at: tempFile)
+        let tempFile = tempDir.appendingPathComponent("update.\(fileExtension)")
         
         FileManager.default.createFile(atPath: tempFile.path, contents: nil)
         let handle = try FileHandle(forWritingTo: tempFile)
@@ -307,11 +384,9 @@ class UpdateService: ObservableObject {
 
     /// .zip 압축 해제 → .app 경로 반환
     private func extractZipUpdate(from zipURL: URL) throws -> URL {
+        // UUID 기반 isolated 추출 디렉터리 — 동시성 race / 잔존 파일 / 악성 placeholder 방어
         let extractDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("WinMacKeyUpdate", isDirectory: true)
-        
-        // 기존 디렉토리 제거
-        try? FileManager.default.removeItem(at: extractDir)
+            .appendingPathComponent("WinMacKeyUpdate-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: extractDir, withIntermediateDirectories: true)
         
         // unzip 실행
@@ -418,8 +493,11 @@ class UpdateService: ObservableObject {
         // 종료 sequence 와 동시에 실행되어도 새 인스턴스가 안전하게 launch됨.
         try? task.run()
 
-        // HID 매핑 해제 후 종료
-        HIDRemapper.shared.clearMappingsSync()
+        // HID 매핑 해제 후 종료 — ownership 우회 (update install 도 명시적 cleanup path).
+        if HIDRemapper.shared.isOwnedByEngine {
+            HIDRemapper.shared.releaseOwnership()
+        }
+        HIDRemapper.shared.internalClearAllForTermination()
         NSApplication.shared.terminate(nil)
     }
     

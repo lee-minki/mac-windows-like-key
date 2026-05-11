@@ -127,14 +127,16 @@ struct MenuBarView: View {
 
                 if isStale {
                     HStack(spacing: 6) {
-                        Button("터미널에서 초기화") {
-                            appState.permissionService.runTccutilResetInTerminal()
+                        // Primary: 클립보드 복사 (안전, side effect 없음)
+                        Button("명령 복사") {
+                            appState.permissionService.copyTccutilCommandToClipboard()
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
 
-                        Button("명령 복사") {
-                            appState.permissionService.copyTccutilCommandToClipboard()
+                        // Secondary: 자동 실행 — confirmation dialog 후에만 동작
+                        Button("터미널에서 실행…") {
+                            appState.permissionService.confirmAndRunTccutilReset()
                         }
                         .controlSize(.small)
                     }
@@ -357,7 +359,5 @@ struct MenuBarView: View {
 
 }
 
-#Preview {
-    MenuBarView()
-        .environmentObject(AppState())
-}
+// SwiftUI #Preview 는 swiftc CLI 컴파일에서 macro 확장 컨텍스트 부족으로 깨질 수 있어
+// MenuBarView+Preview.swift 로 분리됨. smoke test 가 View 파일을 컴파일해도 영향 없음.

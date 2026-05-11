@@ -54,33 +54,47 @@ fi
 bash "${PROJECT_DIR}/scripts/check-version-consistency.sh"
 
 # Signing identity 검증 — self-signed cert는 find-identity -p codesigning 에 안 잡히므로
-# 실제 codesign 동작 테스트로 판정 (가장 신뢰 가능)
+# 실제 codesign 동작 테스트로 판정 (가장 신뢰 가능).
+# 실패 시 진단 정보를 stderr 에 출력 — ad-hoc fallback 으로 silent 하게 빠지지 않도록.
 verify_sign_identity() {
     local test_file
     test_file="$(mktemp)"
     cp /bin/ls "$test_file"
 
-    local sign_exit verify_output verify_exit
-    codesign --force -s "$SIGN_IDENTITY" "$test_file" 2>/dev/null
+    local sign_log sign_exit
+    sign_log="$(codesign --force -s "$SIGN_IDENTITY" "$test_file" 2>&1)"
     sign_exit=$?
 
     if [ "$sign_exit" -ne 0 ]; then
+        echo "   ⚠️  verify_sign_identity: codesign sign 실패 (exit=$sign_exit)" >&2
+        echo "       stderr: $sign_log" >&2
         rm -f "$test_file"
         return 1
     fi
 
+    local verify_output verify_exit
     verify_output="$(codesign -dvvv "$test_file" 2>&1)"
     verify_exit=$?
     rm -f "$test_file"
 
     if [ "$verify_exit" -ne 0 ]; then
+        echo "   ⚠️  verify_sign_identity: codesign -dvvv 실패 (exit=$verify_exit)" >&2
+        echo "       output: $verify_output" >&2
         return 1
     fi
 
-    if printf '%s\n' "$verify_output" | grep -q "Authority=$SIGN_IDENTITY"; then
+    # Authority 라인 추출해 비교
+    local actual_authority
+    actual_authority="$(printf '%s\n' "$verify_output" | awk -F= '/^Authority=/{print $2}' | head -1)"
+
+    if [ "$actual_authority" = "$SIGN_IDENTITY" ]; then
         return 0
+    else
+        echo "   ⚠️  verify_sign_identity: Authority 불일치" >&2
+        echo "       expected: '$SIGN_IDENTITY'" >&2
+        echo "       actual:   '$actual_authority'" >&2
+        return 1
     fi
-    return 1
 }
 
 SIGN_FLAGS=()
@@ -124,7 +138,17 @@ if [ ! -d "$APP_PATH" ]; then
     echo "❌ 빌드 실패: ${PRODUCT_NAME}.app 없음"
     exit 1
 fi
+
+# 산출 .app 의 서명 정보 자동 진단 출력 — release 운영자가 즉시 확인 가능
 echo "✅ 앱 빌드 완료"
+echo ""
+echo "   📜 빌드 산출물 서명 진단:"
+APP_AUTHORITY="$(codesign -dvvv "$APP_PATH" 2>&1 | awk -F= '/^Authority=/{print $2; exit}')"
+APP_IDENT="$(codesign -dvvv "$APP_PATH" 2>&1 | awk -F= '/^Identifier=/{print $2; exit}')"
+APP_DR="$(codesign -d -r- "$APP_PATH" 2>&1 | awk -F'=> ' '/designated/{print $2; exit}')"
+echo "      Identifier:           ${APP_IDENT:-<unknown>}"
+echo "      Authority:            ${APP_AUTHORITY:-<none — ad-hoc>}"
+echo "      Designated Requirement: ${APP_DR:-<unknown>}"
 echo ""
 
 # ── ZIP 생성 (자동 업데이트 채널용) ─────────────────────────────────────────────
@@ -186,10 +210,18 @@ if [ -f "$UPDATE_SIGN_KEY" ]; then
     for asset in "$ZIP_PATH" "$DMG_PATH"; do
         sig_path="${asset}.sig"
         if "$ED_OPENSSL" pkeyutl -sign -inkey "$UPDATE_SIGN_KEY" -rawin -in "$asset" -out "$sig_path" 2>/dev/null; then
-            echo "   ✅ $(basename "$sig_path") ($(du -h "$sig_path" | cut -f1))"
-            SIG_FILES+=("$sig_path")
+            # 서명 직후 round-trip 검증 — 키와 자산 사이 정합성 즉시 확인
+            if "$ED_OPENSSL" pkeyutl -verify -inkey "$UPDATE_SIGN_KEY" -rawin -in "$asset" -sigfile "$sig_path" >/dev/null 2>&1; then
+                sig_size=$(stat -f%z "$sig_path" 2>/dev/null || stat -c%s "$sig_path" 2>/dev/null)
+                echo "   ✅ $(basename "$sig_path") (${sig_size} bytes, self-verify OK)"
+                SIG_FILES+=("$sig_path")
+            else
+                echo "   ❌ 서명 후 self-verify 실패: $(basename "$asset")"
+                echo "       키와 자산 사이 round-trip 깨짐 — release 중단"
+                exit 1
+            fi
         else
-            echo "   ❌ 서명 실패: $(basename "$asset")"
+            echo "   ❌ 서명 생성 실패: $(basename "$asset")"
             exit 1
         fi
     done

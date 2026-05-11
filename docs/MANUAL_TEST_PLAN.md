@@ -89,6 +89,52 @@ killall WinMacKey 2>/dev/null
 - [ ] **J-2**: 메뉴바 → "WinMac Key 종료"
 - [ ] **J-3**: `hidutil property --get UserKeyMapping` 결과가 **A-1과 동일** (외부 사전 상태로 복귀)
 
+### K. Pre-existing hidutil ownership 보존 (v1.3.3+)
+
+다른 hidutil 도구 매핑이 앱에 의해 지워지지 않는지 검증.
+
+```bash
+# 1. 미리 외부 hidutil 매핑 설정 (예: Karabiner 흉내)
+hidutil property --set '{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0x7000000E0,"HIDKeyboardModifierMappingDst":0x7000000E1}]}'
+hidutil property --get UserKeyMapping > /tmp/wmkey-precondition.json
+```
+
+- [ ] **K-1**: 위 매핑이 적용된 상태에서 앱 실행 → 메뉴바 `wm` 확인 (engine OFF)
+- [ ] **K-2**: `hidutil property --get UserKeyMapping` 결과가 **K-1 직전과 동일** (앱 실행만으론 변경 없음)
+- [ ] **K-3**: 엔진 ON → `hidutil --get` 결과에 WinMacKey 매핑 + 사전 매핑이 함께 보임 (또는 WinMacKey 매핑으로 일시 교체)
+- [ ] **K-4**: 엔진 OFF → `hidutil --get` 결과가 K-1 사전 상태로 복원
+- [ ] **K-5**: 엔진 ON → 앱 종료 ("WinMac Key 종료") → `hidutil --get` 결과가 K-1 사전 상태로 복원
+
+```bash
+# 정리
+hidutil property --set '{"UserKeyMapping":[]}'
+```
+
+### L. TCC reset 자동 실행 confirmation (v1.3.3+)
+
+- [ ] **L-1**: 메뉴바에 stale grant 경고가 표시된 상황 만들기 (이전 빌드 권한 잔존)
+- [ ] **L-2**: "터미널에서 실행…" 버튼 클릭
+- [ ] **L-3**: confirmation dialog 가 표시됨 (제목: "TCC 권한 등록을 초기화하시겠습니까?")
+- [ ] **L-4**: "취소" 클릭 → Terminal 안 열림
+- [ ] **L-5**: 다시 "터미널에서 실행…" → "실행" 클릭 → Terminal 열리고 `tccutil reset Accessibility com.winmackey.app` 자동 실행
+- [ ] **L-6**: "명령 복사" 버튼 클릭 → 클립보드에 명령 복사 (Terminal 안 열림)
+
+### M. Update install .app 검증 (v1.3.3+)
+
+테스트 어려움 — release.sh 가 정상 산출물을 만드는 한 자동 통과. 인공 변조 테스트는 별도 환경 필요.
+
+- [ ] **M-1**: `./scripts/release.sh <next-version> --no-release` 로 정상 빌드된 자산은 통과
+- [ ] **M-2**: 앱 내 "업데이트 확인" → 자동 설치 시 verifyExtractedApp 단계가 메시지로 표시
+- [ ] **M-3**: (인공) 변조 자산: dmg 안의 .app Info.plist 의 CFBundleIdentifier 변경 후 같은 키로 재서명 → 업데이트 시 거부 메시지
+
+### N. 로그 / 클립보드 프라이버시 (v1.3.3+)
+
+- [ ] **N-1**: 메뉴바 → 로그 뷰어 → "클립보드 복사" 버튼
+- [ ] **N-2**: confirmation dialog 표시됨 (제목: "로그를 클립보드에 복사하시겠습니까?")
+- [ ] **N-3**: "취소" 클릭 → 클립보드 변경 없음
+- [ ] **N-4**: "복사" 클릭 → 클립보드에 로그 내용 들어감
+- [ ] **N-5**: Event Viewer 에서 익명화된 표시 (`app-xxxxxxxx`, `modifier`/`letter`/`function` 카테고리) 확인 (privacy mode ON 시)
+
 ## 통과 기준
 
 - 모든 체크 PASS → 패치 commit 가능

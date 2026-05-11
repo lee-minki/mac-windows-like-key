@@ -143,14 +143,20 @@ class KeyInterceptor: ObservableObject {
         updateNeedsFlagsChangedProcessing()
     }
 
-    /// keyMappings를 계산하고 HID 시스템에 적용. 반드시 engine ON 컨텍스트에서만 호출.
-    /// init에서 호출 금지 — 시스템 상태 변경이라 안전 경계를 깨뜨림.
+    /// keyMappings를 계산하고 HID 시스템에 적용.
+    /// engine OFF 면 HID 적용 skip (dictionary 만 갱신) — ownership 모델과 일관.
     func setupDefaultMappings() {
         computeKeyMappings()
+        guard HIDRemapper.shared.isOwnedByEngine else {
+            logger.info("setupDefaultMappings: engine OFF, skipping HID apply")
+            return
+        }
         // HID 레벨 리매핑 적용 (Fn/Globe 포함)
         HIDRemapper.shared.applyMappings(keyMappings)
     }
     
+    /// 매핑 dictionary 갱신 + HID 적용. ownership 없으면 dictionary 만 갱신하고 HID 호출 skip.
+    /// 위저드가 엔진 OFF 상태에서 부르면 시스템 상태는 안 바뀌지만 다음 engine ON 시 정확한 매핑 사용.
     func applyCustomMappings(_ mappings: [Int64: Int64]) {
         keyMappings.removeAll()
         for (src, dst) in mappings {
@@ -158,12 +164,16 @@ class KeyInterceptor: ObservableObject {
         }
         ensureCapsLockUntouched()
         updateNeedsFlagsChangedProcessing()
-        
-        // HID 레벨 리매핑 적용 (Fn/Globe 포함)
+
+        guard HIDRemapper.shared.isOwnedByEngine else {
+            logger.info("applyCustomMappings: engine OFF, skipping HID apply (dictionary updated)")
+            return
+        }
         HIDRemapper.shared.applyMappings(keyMappings)
     }
-    
-    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때
+
+    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때.
+    /// engine OFF 면 동일하게 dictionary 만 갱신.
     func applyCustomMappingsSync(_ mappings: [Int64: Int64]) {
         keyMappings.removeAll()
         for (src, dst) in mappings {
@@ -171,7 +181,11 @@ class KeyInterceptor: ObservableObject {
         }
         ensureCapsLockUntouched()
         updateNeedsFlagsChangedProcessing()
-        
+
+        guard HIDRemapper.shared.isOwnedByEngine else {
+            logger.info("applyCustomMappingsSync: engine OFF, skipping HID apply (dictionary updated)")
+            return
+        }
         HIDRemapper.shared.applyMappingsSync(keyMappings)
     }
     
@@ -212,11 +226,13 @@ class KeyInterceptor: ObservableObject {
     }
 
     /// flagsChanged 포함 여부가 바뀌면 EventTap을 재생성합니다.
+    /// HID 매핑은 보존 — EventTap 만 재생성하므로 RightCmd→F16 같은 트리거 매핑이 풀리지 않음.
+    /// 재시작 윈도우(수십 ms) 동안 한영전환 침묵 가능성 차단.
     private func restartTapIfNeeded() {
         guard isRunning else { return }
         guard self.tapIncludesFlagsChanged != self.needsFlagsChangedProcessing else { return }
         logger.info("Restarting event tap (flagsChanged mask changed: \(self.tapIncludesFlagsChanged) → \(self.needsFlagsChangedProcessing))")
-        stop()
+        stop(clearHIDMappings: false)
         start()
     }
     
@@ -283,28 +299,33 @@ class KeyInterceptor: ObservableObject {
         return true
     }
     
-    func stop() {
+    /// EventTap 정지. 기본 동작은 HID 매핑도 함께 해제하지만,
+    /// 내부 restart (`restartTapIfNeeded`) 처럼 매핑 보존이 필요한 경우 `clearHIDMappings: false`.
+    func stop(clearHIDMappings: Bool = true) {
         guard isRunning else { return }
-        
+
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
-        
+
         reactivationTimer?.invalidate()
         reactivationTimer = nil
-        
+
         eventTap = nil
         runLoopSource = nil
         isRunning = false
         cancelPendingBufferedReplay(dropBufferedEvents: true)
-        
-        // HID 매핑도 해제 (동기 — 완료 보장)
-        HIDRemapper.shared.clearMappingsSync()
-        
-        logger.info("Engine stopped.")
+
+        if clearHIDMappings {
+            // HID 매핑 해제 (동기 — 완료 보장)
+            HIDRemapper.shared.clearMappingsSync()
+            logger.info("Engine stopped (HID mappings cleared).")
+        } else {
+            logger.info("Engine stopped (HID mappings preserved for restart).")
+        }
     }
 
     func beginInputSourceCommitWindow() {

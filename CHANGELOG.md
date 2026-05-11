@@ -6,7 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.2
+## [Unreleased] — v1.3.3
+
+v1.3.2 외부 코드리뷰 2차 결과 + lifecycle 우회 경로 분석에서 발견된 항목 일괄 패치.
+"엔진 OFF = 시스템 영향 없음" 안전 경계를 ownership 모델로 구조적 보장.
+
+### Added
+- **HID Ownership 모델**: `HIDRemapper` 에 `isOwnedByEngine` flag + `takeOwnership` / `releaseOwnership` lifecycle. 모든 `applyMappings*` / `clearMappings*` write 메서드에 ownership 가드. 엔진 OFF 상태에서 어떤 path 든 HID 시스템 상태를 못 건드림.
+- **Pre-existing hidutil snapshot/restore**: 앱이 처음 HID 를 건드리기 전 시스템 `UserKeyMapping` snapshot 저장. 종료/Reset/Recovery 시 snapshot 으로 복원. Karabiner 등 다른 hidutil 도구의 매핑이 앱에 의해 지워지지 않음.
+- **HIDRemapper 가드 우회 cleanup path**: `internalClearAllForTermination` — 종료/Reset 시 ownership 무관 cleanup. `hasAppliedAnyMapping` 가 false 면 no-op (앱이 안 건드린 시스템은 건드리지 않음).
+- **Engine-OFF UI invariant smoke** (`tests/engine_off_ui_smoke.swift`): `applyCustomMappings`, `applyCustomMappingsSync`, `setupDefaultMappings` 를 engine OFF 에서 호출해도 HID 호출 0건 자동 검증.
+- **Ownership semantics smoke** (`tests/ownership_smoke.swift`): take/release ownership lifecycle, termination cleanup no-op 등 invariant 4종 자동 검증.
+- **MANUAL_TEST_PLAN.md K~N 카테고리**: pre-existing hidutil 보존, TCC reset confirmation, update install 검증, 로그 프라이버시.
+- **release.sh 진단 로그**: 빌드 후 산출 .app 의 Authority / Identifier / Designated Requirement 자동 출력. Ed25519 서명 후 self-verify round-trip. verify_sign_identity 실패 시 stderr 에 expected vs actual Authority 출력.
+
+### Fixed
+- **`restartTapIfNeeded` HID flicker**: flagsChanged mask 변경 시 EventTap 재시작이 `stop()` 으로 글로벌 HID 매핑을 풀어버려 짧은 시간 동안 RightCmd→F16 트리거가 침묵하던 회귀. `stop(clearHIDMappings: false)` 시그니처 추가, 내부 restart 는 HID 보존.
+- **`applyCustomMappings*` 위저드 우회**: engine OFF 에서 직접 호출 시 HID 적용하던 경로. dictionary 갱신 + HID 적용 분리, ownership 가드.
+- **TCC reset 자동 실행 silent execution**: `runTccutilResetInTerminal` 이 AppleScript `do script` 로 confirmation 없이 즉시 실행되던 동작. `confirmAndRunTccutilReset` 추가 — NSAlert 로 사용자 명시 동의 후에만 실행. MenuBarView 의 "터미널에서 실행…" 버튼이 이 confirmation path 를 거치도록 변경. "명령 복사" 가 primary action.
+- **Update install 추출 .app 검증 부족**: Ed25519 서명 통과해도 .app 의 정체성 별도 확인 없던 문제. `verifyExtractedApp` 신규 — `CFBundleIdentifier == com.winmackey.app`, `CFBundleShortVersionString == latestVersion`, `codesign --verify` round-trip, archive 구조 검증.
+- **Update 임시 경로 동시성 race**: 고정 경로 `WinMacKey-update.zip`, `WinMacKeyUpdate/` 가 동시 실행/잔존 파일/외부 placeholder 와 충돌하던 문제. UUID 기반 isolated tmpdir.
+- **applicationWillTerminate over-clear**: `HIDRemapper.clearAllMappingsSync` 무조건 호출로 다른 hidutil 도구의 매핑까지 wipe 하던 문제. `internalClearAllForTermination` 으로 변경, snapshot 복원 path 와 결합.
+
+### Changed
+- `LogService.copyToClipboard` 에 `confirmAndCopyToClipboard` wrapper 추가 — 로그 export 가 클립보드 노출이라는 사실을 명시.
+- `KeyEvent` 에 `bundleIdAnonymized` (SHA-256 prefix), `keyCodeCategory` (modifier/letter/function/trigger 등) helper 추가. 향후 privacy mode UI 토글 도입 시 사용.
+- `MenuBarView` 의 `#Preview` 를 `MenuBarView+Preview.swift` 로 분리 — swiftc CLI smoke test 가 View 파일 컴파일해도 macro 확장 충돌 없도록.
+
+---
+
+## [1.3.2] — Skipped (consolidated into v1.3.3)
+
+내부 빌드만 진행되고 외부 안내 보류. 아래 변경 사항은 모두 v1.3.3 에 포함됨.
 
 v1.3.1 외부 코드 리뷰에서 발견된 7건 일괄 패치. 가장 중요한 항목은 "엔진 OFF 시 시스템 영향 없음" 안전 경계 위반 (앱 실행만으로 hidutil 글로벌 매핑이 변경될 수 있던 버그).
 

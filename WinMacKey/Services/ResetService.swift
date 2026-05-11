@@ -34,9 +34,13 @@ class ResetService {
     ) {
         logger.info("Starting full reset...")
 
-        // 1. 엔진 정지
+        // 1. 엔진 정지 — keyInterceptor.stop() 이 ownership 있는 동안 clearMappingsSync 호출.
+        //    toggleEngine 과 다르게 명시적 release 는 stop 후 즉시 (이후 추가 cleanup 이 hidutil 안 건드림).
         keyInterceptor.stop()
-        logger.info("Engine stopped")
+        if HIDRemapper.shared.isOwnedByEngine {
+            HIDRemapper.shared.releaseOwnership()
+        }
+        logger.info("Engine stopped, HID ownership released")
 
         // 1b. 키보드 디바이스 모니터링 정지
         keyboardDeviceManager?.stopMonitoring()
@@ -50,9 +54,9 @@ class ResetService {
         clearUserDefaults()
         logger.info("UserDefaults cleared")
 
-        // 4. 모든 HID 매핑 해제 — 글로벌 + 디바이스별 (동기 — 완료 보장)
-        HIDRemapper.shared.clearAllMappingsSync()
-        logger.info("All HID mappings cleared")
+        // 4. 모든 HID 매핑 해제 — ownership 우회 (이미 release 됨, Reset 은 명시적 cleanup path).
+        HIDRemapper.shared.internalClearAllForTermination()
+        logger.info("All HID mappings cleared (via termination path)")
 
         logger.info("Full reset completed")
 

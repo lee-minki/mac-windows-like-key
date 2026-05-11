@@ -15,15 +15,104 @@ class HIDRemapper {
     // MARK: - Operation Counters (lifecycle invariant verification)
     //
     // 이 카운터는 "엔진 OFF 시 HID 미터치" invariant를 검증하기 위한 것.
-    // KeyInterceptor.init / AppState.init 같은 path가 실수로 hidutil을 건드리면
-    // DEBUG 빌드의 assertion이 잡아낸다. 회귀 방어 가드레일.
+    // 어떤 path든 ownership 없이 HID 를 건드리면 DEBUG 빌드의 assertion 이 잡아낸다.
     private(set) var applyCallCount: Int = 0
     private(set) var clearCallCount: Int = 0
+    /// ownership 가드 위반이 감지된 횟수 (DEBUG 검증용).
+    private(set) var unauthorizedWriteAttempts: Int = 0
 
-    /// 카운터 리셋 — 테스트/검증 시퀀스 시작점에서 호출
     func resetOperationCounters() {
         applyCallCount = 0
         clearCallCount = 0
+        unauthorizedWriteAttempts = 0
+    }
+
+    // MARK: - Ownership Model
+    //
+    // hidutil 은 시스템 전역 단일 키 — 다른 도구(Karabiner 등)가 동시에 쓰고 있을 수 있다.
+    // 따라서 본 앱은 "엔진 ON 동안만 HID 를 소유한다"는 명시적 lifecycle 을 가진다.
+    //
+    // 게이트 규칙:
+    //   - 엔진 ON 진입 시 takeOwnership() 호출 → 이후 applyMappings* / clearMappings* 허용
+    //   - 엔진 OFF 진입 시 releaseOwnership() 호출 → 이후 모든 HID write 거부
+    //
+    // 의도된 우회는 internalClearAllForTermination() 만 허용 (앱 종료/Reset/Doctor recovery
+    // 같은 명시적 cleanup path 가 호출). 이 경로는 ownership 와 무관하게 항상 동작.
+
+    private(set) var isOwnedByEngine: Bool = false
+
+    /// 앱이 처음 HID 를 건드리기 전의 시스템 UserKeyMapping snapshot.
+    /// hidutil --get 의 old-style plist 출력을 parse 해 [[String: Any]] 로 보관.
+    /// 종료/Reset 시 이 snapshot 을 JSON 으로 재직렬화해 --set 으로 복원.
+    private var preExistingMappings: [[String: Any]]?
+    /// snapshot capture 가 성공했는지 (nil 도 valid — 빈 매핑 의미).
+    private var snapshotCaptured: Bool = false
+    /// 앱이 실제로 HID 매핑을 적용한 적 있는지.
+    private var hasAppliedAnyMapping: Bool = false
+
+    /// 앱 시작 시 1회 호출 — 현재 hidutil 상태를 snapshot 으로 저장.
+    /// AppState.init body 의 updateIMETriggerRemap 전에 호출되어야 함.
+    func captureSystemSnapshotIfNeeded() {
+        guard !snapshotCaptured else { return }
+        preExistingMappings = readCurrentUserKeyMapping()
+        snapshotCaptured = true
+
+        let count = preExistingMappings?.count ?? 0
+        if count > 0 {
+            logger.info("Pre-existing UserKeyMapping snapshot captured: \(count) entries (will be restored on cleanup)")
+        } else {
+            logger.info("Pre-existing UserKeyMapping snapshot: empty/clean state")
+        }
+    }
+
+    /// hidutil property --get UserKeyMapping → parsed array of mapping dicts.
+    /// 빈 매핑 / 파싱 실패 시 빈 array 반환 (nil 아님 — capture 자체는 성공으로 본다).
+    private func readCurrentUserKeyMapping() -> [[String: Any]]? {
+        let task = Process()
+        task.launchPath = "/usr/bin/hidutil"
+        task.arguments = ["property", "--get", "UserKeyMapping"]
+        let outPipe = Pipe()
+        task.standardOutput = outPipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+            guard task.terminationStatus == 0 else { return [] }
+
+            // hidutil --get 출력은 OpenStep (old-style) plist text.
+            // 빈 경우: "(\n)" → 빈 array. 파싱 실패 시 빈 array 로 fallback (caller 가 clear 처리).
+            if let array = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [[String: Any]] {
+                return array
+            }
+            return []
+        } catch {
+            return []
+        }
+    }
+
+    func takeOwnership() {
+        isOwnedByEngine = true
+        logger.info("HID ownership acquired by engine")
+    }
+
+    func releaseOwnership() {
+        isOwnedByEngine = false
+        logger.info("HID ownership released by engine")
+    }
+
+    /// ownership 가드 — write 메서드 진입 시 호출.
+    /// 거부되면 false 반환 + 카운터 증가 + DEBUG 빌드에서는 assertion.
+    private func checkOwnership(operation: String) -> Bool {
+        if isOwnedByEngine { return true }
+
+        unauthorizedWriteAttempts += 1
+        logger.error("HID write attempted without ownership: \(operation) — refused")
+        #if DEBUG
+        assertionFailure("HID \(operation) attempted without engine ownership")
+        #endif
+        return false
     }
     
     // MARK: - HID Usage ID Table
@@ -83,7 +172,9 @@ class HIDRemapper {
     /// 내장 키보드에만 매핑 적용 (동기)
     /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     func applyMappingsForInternalKeyboardSync(_ mappings: [Int64: Int64]) {
+        guard checkOwnership(operation: "applyMappingsForInternalKeyboardSync") else { return }
         applyCallCount += 1
+        hasAppliedAnyMapping = true
         var combined = mappings
         if let trigger = imeTriggerMapping, trigger.src != trigger.dst {
             combined[trigger.src] = trigger.dst
@@ -103,6 +194,7 @@ class HIDRemapper {
 
     /// 내장 키보드의 매핑만 해제 (동기)
     func clearMappingsForInternalKeyboardSync() {
+        guard checkOwnership(operation: "clearMappingsForInternalKeyboardSync") else { return }
         clearCallCount += 1
         let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", "{\"UserKeyMapping\":[]}"])
         if result {
@@ -113,12 +205,82 @@ class HIDRemapper {
     }
 
     /// 모든 디바이스의 매핑을 완전히 해제 (앱 종료/리셋용)
+    /// ⚠️ ownership 가드 적용 — 엔진이 hidutil 소유 중일 때만 동작.
+    /// 종료/Reset/Recovery 등 명시적 cleanup path 는 internalClearAllForTermination() 사용.
     func clearAllMappingsSync() {
+        guard checkOwnership(operation: "clearAllMappingsSync") else { return }
         // 글로벌 매핑 해제
-        clearMappingsSync()
+        clearMappingsSyncNoGuard()
         // 내장 키보드 디바이스별 매핑도 해제
-        clearMappingsForInternalKeyboardSync()
+        clearMappingsForInternalKeyboardSyncNoGuard()
         logger.info("All mappings cleared (global + internal keyboard)")
+    }
+
+    /// 종료/Reset/Recovery 시 호출되는 명시적 cleanup path.
+    /// 앱이 HID 매핑을 적용한 적 있으면 pre-existing snapshot 으로 복원.
+    /// 적용 안 했으면 no-op — 다른 hidutil 도구의 매핑을 건드리지 않음.
+    func internalClearAllForTermination() {
+        guard hasAppliedAnyMapping else {
+            logger.info("Termination cleanup: no app mappings were applied — preserving system state")
+            return
+        }
+
+        // Snapshot 으로 복원 (없거나 비어있으면 결과적으로 clear 와 동일).
+        let restored = restorePreExistingSnapshot()
+        if !restored {
+            // 복원 실패 — 안전 fallback 으로 clear (사용자의 다른 hidutil 매핑이 사라질 수 있음, 로그로 알림).
+            logger.error("Snapshot restore failed — falling back to clearMappings (other hidutil tools' mappings will be lost)")
+            clearMappingsSyncNoGuard()
+        }
+
+        // 내장 키보드 디바이스별 매핑은 앱이 추가한 것이므로 항상 clear
+        clearMappingsForInternalKeyboardSyncNoGuard()
+
+        // 한 번 cleanup 후엔 동일 lifecycle 에서 또 복원하지 않도록 reset
+        hasAppliedAnyMapping = false
+    }
+
+    /// preExistingMappings 를 hidutil 에 다시 적용. 성공 시 true.
+    private func restorePreExistingSnapshot() -> Bool {
+        let entries = preExistingMappings ?? []
+        let config: [String: Any] = ["UserKeyMapping": entries]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: config),
+              let json = String(data: jsonData, encoding: .utf8) else {
+            return false
+        }
+        let result = runHidutil(arguments: ["property", "--set", json])
+        clearCallCount += 1
+        if result {
+            if entries.isEmpty {
+                logger.info("Restored to empty UserKeyMapping (no pre-existing mappings)")
+            } else {
+                logger.info("Restored pre-existing UserKeyMapping (\(entries.count) entries — preserved other hidutil tools)")
+            }
+        }
+        return result
+    }
+
+    /// ownership 가드 없는 내부 동기 clear — guarded wrapper 에서만 호출.
+    private func clearMappingsSyncNoGuard() {
+        clearCallCount += 1
+        let emptyConfig = "{\"UserKeyMapping\":[]}"
+        let result = runHidutil(arguments: ["property", "--set", emptyConfig])
+        if result {
+            logger.info("HID mappings cleared (sync, no-guard)")
+        } else {
+            logger.error("Failed to clear HID mappings (sync, no-guard)")
+        }
+    }
+
+    /// ownership 가드 없는 내장 키보드 clear — guarded wrapper 에서만 호출.
+    private func clearMappingsForInternalKeyboardSyncNoGuard() {
+        clearCallCount += 1
+        let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", "{\"UserKeyMapping\":[]}"])
+        if result {
+            logger.info("Internal keyboard mappings cleared (no-guard)")
+        } else {
+            logger.error("Failed to clear internal keyboard mappings (no-guard)")
+        }
     }
 
     // MARK: - Apply Mappings (Global)
@@ -127,7 +289,9 @@ class HIDRemapper {
     /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     /// - Parameter mappings: [sourceKeyCode: destinationKeyCode] (macOS virtual keycode 사용)
     func applyMappings(_ mappings: [Int64: Int64]) {
+        guard checkOwnership(operation: "applyMappings") else { return }
         applyCallCount += 1
+        hasAppliedAnyMapping = true
         var userKeyMapping: [[String: UInt64]] = []
         
         for (src, dst) in mappings {
@@ -176,7 +340,9 @@ class HIDRemapper {
     
     /// 동기 버전 — 위저드, 리셋 등 완료를 보장해야 할 때 사용
     func applyMappingsSync(_ mappings: [Int64: Int64]) {
+        guard checkOwnership(operation: "applyMappingsSync") else { return }
         applyCallCount += 1
+        hasAppliedAnyMapping = true
         var userKeyMapping: [[String: UInt64]] = []
         
         for (src, dst) in mappings {
@@ -211,6 +377,7 @@ class HIDRemapper {
     
     /// 모든 HID 매핑 해제
     func clearMappings() {
+        guard checkOwnership(operation: "clearMappings") else { return }
         clearCallCount += 1
         let emptyConfig = "{\"UserKeyMapping\":[]}"
         queue.async { [self] in
@@ -223,8 +390,10 @@ class HIDRemapper {
         }
     }
     
-    /// 동기 버전 — 앱 종료, 리셋, 위저드 등에서 사용
+    /// 동기 버전 — 엔진 stop, 위저드 등에서 사용
+    /// 종료/Reset path 는 internalClearAllForTermination() 을 거쳐 ownership bypass 함.
     func clearMappingsSync() {
+        guard checkOwnership(operation: "clearMappingsSync") else { return }
         clearCallCount += 1
         let emptyConfig = "{\"UserKeyMapping\":[]}"
         let result = runHidutil(arguments: ["property", "--set", emptyConfig])
