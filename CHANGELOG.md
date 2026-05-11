@@ -6,14 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.7
+## [1.3.7] — 2026-05-11
 
 ### Fixed
 - **업데이트 확인 버튼 누르면 윈도우가 다른 앱 뒤에 숨던 버그**: `MenuBarView` 의 "업데이트 확인..." 버튼이 `NSApp.activate(ignoringOtherApps: true)` 호출 누락. LSUIElement (메뉴바 전용) 앱은 명시적 activate 없으면 새 윈도우가 background 로 열림. 사용자가 "다이얼로그 안 뜸" 으로 인지. 다른 메뉴 버튼 (설정 / Event Viewer / Doctor / Help / Log Viewer) 5종은 모두 activate 를 호출하고 있어 일관성 위반. 한 줄 fix.
 
 ---
 
-## [Unreleased] — v1.3.6
+## [1.3.6] — Superseded by v1.3.7
 
 키보드 디바이스 바인딩 UX 를 "Press-to-bind" 패턴으로 전면 개편. 사용자가 매번 "직전에 어느 키보드를 썼는지" 머릿속에서 추적해야 했던 모호함 해소.
 
@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.5
+## [1.3.5] — Superseded by v1.3.7
 
 v1.3.4 의 Mac → Mac Remote Mode 설계가 잘못된 가정 위에 있었음을 확인하고 정정.
 

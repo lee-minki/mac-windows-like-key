@@ -95,7 +95,8 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 - 프로필 이름은 구분용 라벨입니다
 - 저장된 프로필은 현재 앱 컨텍스트에 따라 `Mac 로컬` 목표와 `VDI` 목표 사이를 자동으로 전환합니다
 - 프로필 자동 할당은 키보드 디바이스(VendorID/ProductID) 또는 앱의 Bundle ID 기준으로 동작합니다
-- Profiles 탭에서 "Assign current keyboard" 버튼으로 현재 타이핑 중인 키보드(내장/외장 모두)에 전용 프로필을 지정할 수 있습니다
+- Profiles 탭에서 **"Bind keyboard…"** 버튼을 누르면 모달이 뜨고, 바인딩할 키보드의 키를 한 번 누르면 디바이스 정보(이름·VID:PID·내장/외장)를 확인한 뒤 바인딩이 완료됩니다 (v1.3.6+ Press-to-bind UX)
+- 한 디바이스에는 하나의 프로필만 바인딩됩니다. 다른 프로필에 이미 바인딩된 키보드를 다시 바인딩하면 자동으로 이전됩니다
 - 키보드 전환 시 프로필이 자동으로 따라갑니다 (디바이스 프로필 > 앱 프로필 > 기본 프로필)
 
 ### 6. 권장 추가 설정
