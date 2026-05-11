@@ -27,6 +27,7 @@ v1.3.2 외부 코드리뷰 2차 결과 + lifecycle 우회 경로 분석에서 �
 - **Update install 추출 .app 검증 부족**: Ed25519 서명 통과해도 .app 의 정체성 별도 확인 없던 문제. `verifyExtractedApp` 신규 — `CFBundleIdentifier == com.winmackey.app`, `CFBundleShortVersionString == latestVersion`, `codesign --verify` round-trip, archive 구조 검증.
 - **Update 임시 경로 동시성 race**: 고정 경로 `WinMacKey-update.zip`, `WinMacKeyUpdate/` 가 동시 실행/잔존 파일/외부 placeholder 와 충돌하던 문제. UUID 기반 isolated tmpdir.
 - **applicationWillTerminate over-clear**: `HIDRemapper.clearAllMappingsSync` 무조건 호출로 다른 hidutil 도구의 매핑까지 wipe 하던 문제. `internalClearAllForTermination` 으로 변경, snapshot 복원 path 와 결합.
+- **GitHub Actions CI 실패 (Xcode 15.0 + strict concurrency)**: `WinMacKeyApp.swift` 의 Task closure 가 outer closure 의 `[weak self]` 만 잡고 inner 에서 그대로 self 캡처하던 패턴을 strict concurrency 가 거부. `Task { @MainActor [weak self] in }` 로 명시 캡처. CI workflow 의 Xcode pin 을 `latest-stable` 로 갱신. Release upload step 은 제거 — local `release.sh` 가 self-signed + Ed25519 와 함께 담당 (Developer ID 도입 시 재활성화).
 
 ### Changed
 - `LogService.copyToClipboard` 에 `confirmAndCopyToClipboard` wrapper 추가 — 로그 export 가 클립보드 노출이라는 사실을 명시.

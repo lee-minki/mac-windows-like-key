@@ -299,7 +299,9 @@ class AppState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            // Task closure 가 Sendable 이라 outer [weak self] 만으로는 캡처가 안전하지 않음.
+            // Task 에 명시적 [weak self] 를 다시 주어 Swift strict concurrency 통과.
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.checkPermissions()
                 if self.startEngineOnAppLaunch && self.hasAccessibilityPermission && !self.isEngineRunning {
@@ -315,7 +317,7 @@ class AppState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.checkPermissions()
                 self?.launchAtLoginService.refreshStatus()
             }
