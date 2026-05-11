@@ -18,7 +18,7 @@
 #   - gh CLI (brew install gh) + gh auth login 완료 (GitHub Release 업로드 시)
 #   - --no-release 플래그를 주면 로컬 산출물만 만들고 종료
 
-set -e
+set -euo pipefail
 
 VERSION=${1:?"Usage: ./scripts/release.sh <version> [--no-release]"}
 SKIP_RELEASE=0
@@ -33,6 +33,25 @@ PRODUCT_NAME="WinMacKey"
 
 : "${SIGN_IDENTITY:=WinMacKey Self-Signed}"
 : "${UPDATE_SIGN_KEY:=$HOME/.config/winmackey/update-signing.key}"
+
+# ── 버전 일관성 가드 ───────────────────────────────────────────────────────────
+# 인자로 받은 VERSION 과 Info.plist 의 CFBundleShortVersionString 이 일치해야 한다.
+# 불일치 시: 산출물은 옛 버전 표시, tag/asset 명은 새 버전 → 사용자가 받는 자산이 자기 정체성을 잘못 말하게 됨.
+INFO_PLIST="${PROJECT_DIR}/WinMacKey/Info.plist"
+INFO_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
+
+if [ "$VERSION" != "$INFO_VERSION" ]; then
+    echo "❌ Version mismatch"
+    echo "   Argument: $VERSION"
+    echo "   Info.plist CFBundleShortVersionString: $INFO_VERSION"
+    echo ""
+    echo "Info.plist 를 먼저 bump 후 재실행하세요. 예:"
+    echo "   /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString $VERSION' \"$INFO_PLIST\""
+    exit 1
+fi
+
+# 추가로 전체 정합성 검사 (pbxproj/CHANGELOG 까지)
+bash "${PROJECT_DIR}/scripts/check-version-consistency.sh"
 
 # Signing identity 검증 — self-signed cert는 find-identity -p codesigning 에 안 잡히므로
 # 실제 codesign 동작 테스트로 판정 (가장 신뢰 가능)
@@ -186,8 +205,13 @@ for sig in "${SIG_FILES[@]:-}"; do
     [ -n "$sig" ] && RELEASE_ASSETS+=("$sig")
 done
 
+# 현재 HEAD를 명시적으로 target으로 지정 — gh release create는 기본적으로
+# default branch (main)에 tag를 생성하므로 feature 브랜치에서 release할 때 필수.
+RELEASE_TARGET="$(git rev-parse HEAD)"
+
 gh release create "v${VERSION}" \
     "${RELEASE_ASSETS[@]}" \
+    --target "$RELEASE_TARGET" \
     --title "WinMac Key v${VERSION}" \
     --notes "## WinMac Key v${VERSION}
 

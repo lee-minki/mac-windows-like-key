@@ -211,9 +211,10 @@ class AppState: ObservableObject {
             }
 
             // VDI 모드 전환: 내장 키보드 매핑 교체
+            // 실제 매핑은 vdiInternalKeyboardMappings 정의 (Fn↔Ctrl swap) 와 일치해야 함.
             if isNowVdi && !wasVdi {
                 self.switchToVdiMapping()
-                LogService.shared.info("VDI mode: internal keyboard → Fn=Ctrl, Option=Win, Command=Alt (\(appName))", category: "VDI")
+                LogService.shared.info("VDI mode: internal keyboard Fn↔Ctrl swap applied (\(appName))", category: "VDI")
             } else if !isNowVdi && wasVdi {
                 self.switchToMacMapping()
                 LogService.shared.info("Mac mode: internal keyboard override cleared (\(appName))", category: "VDI")
@@ -245,6 +246,24 @@ class AppState: ObservableObject {
             "AppState initialized (accessibility: \(hasAccessibilityPermission))",
             category: "App"
         )
+
+        // Invariant: 앱 초기화는 절대 hidutil 시스템 상태를 건드려서는 안 됨.
+        // 엔진이 명시적으로 켜질 때만 (toggleEngine → refreshActiveProfileForCurrentContext) HID 적용.
+        // 이 assertion이 firing 하면 init path 어딘가에서 HIDRemapper.apply*/clear* 가 불린 것.
+        #if DEBUG
+        let applyCount = HIDRemapper.shared.applyCallCount
+        let clearCount = HIDRemapper.shared.clearCallCount
+        assert(applyCount == 0,
+               "Invariant violated: HIDRemapper.applyMappings was called \(applyCount) time(s) during init")
+        assert(clearCount == 0,
+               "Invariant violated: HIDRemapper.clearMappings was called \(clearCount) time(s) during init")
+        if applyCount > 0 || clearCount > 0 {
+            LogService.shared.error(
+                "Lifecycle invariant violation — init touched HID: apply=\(applyCount), clear=\(clearCount)",
+                category: "App"
+            )
+        }
+        #endif
     }
     
     func checkPermissions() {
@@ -423,12 +442,19 @@ class AppState: ObservableObject {
         LogService.shared.warning("Reset all triggered", category: "App")
         resetService.resetAll(keyInterceptor: keyInterceptor, keyboardDeviceManager: keyboardDeviceManager) { [weak self] in
             DispatchQueue.main.async {
-                self?.isEngineRunning = false
-                self?.currentLatencyMs = 0.0
-                self?.stateManager.switchCount = 0
-                self?.stateManager.refreshCurrentSource()
-                self?.launchAtLoginService.unregisterForReset()
-                LogService.shared.info("Reset completed", category: "App")
+                guard let self = self else { return }
+                self.isEngineRunning = false
+                self.currentLatencyMs = 0.0
+                self.stateManager.switchCount = 0
+                self.stateManager.refreshCurrentSource()
+                self.launchAtLoginService.unregisterForReset()
+
+                // ResetService.resetAll 이 keyboardDeviceManager.stopMonitoring 을 호출하므로
+                // 디바이스 자동 전환·VDI 컨텍스트 감지가 죽은 상태. 재시작해 앱 lifecycle 의 정상 상태로 복귀.
+                self.keyboardDeviceManager.startMonitoring()
+                self.lastActiveKeyboard = nil
+
+                LogService.shared.info("Reset completed (monitoring restarted)", category: "App")
             }
         }
     }
@@ -479,7 +505,9 @@ class AppState: ObservableObject {
         }
     }
 
-    private static func findAllInstallations(bundleID: String) -> [URL] {
+    /// `@MainActor` 격리에서 벗어나 background queue 에서 직접 호출 가능하게 한다.
+    /// 본 함수는 외부 프로세스(`mdfind`) 호출과 파일시스템 read-only 조회만 수행하므로 isolation 불필요.
+    nonisolated private static func findAllInstallations(bundleID: String) -> [URL] {
         let task = Process()
         task.launchPath = "/usr/bin/mdfind"
         task.arguments = ["kMDItemCFBundleIdentifier == '\(bundleID)'"]

@@ -5,12 +5,26 @@ import os.log
 /// macOS의 IOHIDEventDriver 레벨에서 키를 변경합니다.
 /// CGEventTap보다 낮은 레벨이므로 Fn/Globe 키도 리맵 가능합니다.
 class HIDRemapper {
-    
+
     static let shared = HIDRemapper()
 
     private let logger = Logger(subsystem: "com.winmackey.app", category: "HIDRemapper")
     /// hidutil 호출을 직렬화하여 빠른 연속 호출 시 순서를 보장
     private let queue = DispatchQueue(label: "com.winmackey.hidutil", qos: .userInitiated)
+
+    // MARK: - Operation Counters (lifecycle invariant verification)
+    //
+    // 이 카운터는 "엔진 OFF 시 HID 미터치" invariant를 검증하기 위한 것.
+    // KeyInterceptor.init / AppState.init 같은 path가 실수로 hidutil을 건드리면
+    // DEBUG 빌드의 assertion이 잡아낸다. 회귀 방어 가드레일.
+    private(set) var applyCallCount: Int = 0
+    private(set) var clearCallCount: Int = 0
+
+    /// 카운터 리셋 — 테스트/검증 시퀀스 시작점에서 호출
+    func resetOperationCounters() {
+        applyCallCount = 0
+        clearCallCount = 0
+    }
     
     // MARK: - HID Usage ID Table
     // https://developer.apple.com/library/archive/technotes/tn2450/_index.html
@@ -69,6 +83,7 @@ class HIDRemapper {
     /// 내장 키보드에만 매핑 적용 (동기)
     /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     func applyMappingsForInternalKeyboardSync(_ mappings: [Int64: Int64]) {
+        applyCallCount += 1
         var combined = mappings
         if let trigger = imeTriggerMapping, trigger.src != trigger.dst {
             combined[trigger.src] = trigger.dst
@@ -88,6 +103,7 @@ class HIDRemapper {
 
     /// 내장 키보드의 매핑만 해제 (동기)
     func clearMappingsForInternalKeyboardSync() {
+        clearCallCount += 1
         let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", "{\"UserKeyMapping\":[]}"])
         if result {
             logger.info("Internal keyboard mappings cleared (sync)")
@@ -111,6 +127,7 @@ class HIDRemapper {
     /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     /// - Parameter mappings: [sourceKeyCode: destinationKeyCode] (macOS virtual keycode 사용)
     func applyMappings(_ mappings: [Int64: Int64]) {
+        applyCallCount += 1
         var userKeyMapping: [[String: UInt64]] = []
         
         for (src, dst) in mappings {
@@ -159,6 +176,7 @@ class HIDRemapper {
     
     /// 동기 버전 — 위저드, 리셋 등 완료를 보장해야 할 때 사용
     func applyMappingsSync(_ mappings: [Int64: Int64]) {
+        applyCallCount += 1
         var userKeyMapping: [[String: UInt64]] = []
         
         for (src, dst) in mappings {
@@ -193,6 +211,7 @@ class HIDRemapper {
     
     /// 모든 HID 매핑 해제
     func clearMappings() {
+        clearCallCount += 1
         let emptyConfig = "{\"UserKeyMapping\":[]}"
         queue.async { [self] in
             let result = runHidutil(arguments: ["property", "--set", emptyConfig])
@@ -206,6 +225,7 @@ class HIDRemapper {
     
     /// 동기 버전 — 앱 종료, 리셋, 위저드 등에서 사용
     func clearMappingsSync() {
+        clearCallCount += 1
         let emptyConfig = "{\"UserKeyMapping\":[]}"
         let result = runHidutil(arguments: ["property", "--set", emptyConfig])
         if result {

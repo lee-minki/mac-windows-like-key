@@ -53,7 +53,7 @@ class PermissionService: ObservableObject {
         AXIsProcessTrustedWithOptions(options)
 
         // 권한 변경 후 상태 업데이트를 위해 폴링
-        startPermissionPolling()
+        startAccessibilityPolling()
     }
 
     func requestInputMonitoringPermission() {
@@ -67,20 +67,21 @@ class PermissionService: ObservableObject {
         NSWorkspace.shared.open(url)
 
         // 설정 열때도 폴링 시작
-        startPermissionPolling()
+        startAccessibilityPolling()
     }
 
     func openInputMonitoringSettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
         NSWorkspace.shared.open(url)
-        startPermissionPolling()
+        startInputMonitoringPolling()
     }
 
-    /// 시스템 설정 열기 (일반)
+    /// 시스템 설정 열기 (일반) — 어느 권한을 위한 동선인지 모호하므로 Accessibility 폴링만 시작.
+    /// 사용자가 Input Monitoring 설정을 위해 따로 도착하면 그 진입점에서 별도 polling.
     func openSystemPreferences() {
         let url = URL(fileURLWithPath: "/System/Applications/System Settings.app")
         NSWorkspace.shared.open(url)
-        startPermissionPolling()
+        startAccessibilityPolling()
     }
 
     /// 키보드 단축키 설정 열기 (입력 소스)
@@ -133,21 +134,45 @@ class PermissionService: ObservableObject {
     }
 
     // MARK: - Permission Polling
+    //
+    // Accessibility 와 Input Monitoring 은 사용자 동선·문서상 별개로 다룬다.
+    // - Accessibility: 엔진 동작에 필수 (CGEventTap 권한). 부여 즉시 자동 엔진 시작 트리거.
+    // - Input Monitoring: 일부 macOS 버전에서만 보조적으로 요구되며 UI 흐름은 분리됨.
+    //
+    // 과거에는 두 권한 polling 종료 조건이 AND 결합이라 Accessibility 만 허용한
+    // 사용자는 timer 가 계속 돌고 accessibilityPermissionGranted 알림이 발화되지 않았다.
+    // 두 polling 을 완전히 분리해 각자의 동선을 가짐.
 
-    private var pollingTimer: Timer?
+    private var accessibilityPollingTimer: Timer?
+    private var inputMonitoringPollingTimer: Timer?
+    private let pollingTimeout: TimeInterval = 300  // 5분 후 자동 종료 (배터리 보호)
+    private var accessibilityPollingStartedAt: Date?
+    private var inputMonitoringPollingStartedAt: Date?
 
-    private func startPermissionPolling() {
-        pollingTimer?.invalidate()
-        pollingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+    private func startAccessibilityPolling() {
+        accessibilityPollingTimer?.invalidate()
+        accessibilityPollingStartedAt = Date()
+        accessibilityPollingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
             guard let self = self else {
                 timer.invalidate()
                 return
             }
 
-            if self.checkAccessibilityPermission() && self.checkInputMonitoringPermission() {
+            // Timeout
+            if let start = self.accessibilityPollingStartedAt,
+               Date().timeIntervalSince(start) > self.pollingTimeout {
                 timer.invalidate()
-                self.pollingTimer = nil
+                self.accessibilityPollingTimer = nil
+                self.accessibilityPollingStartedAt = nil
+                return
+            }
 
+            if self.checkAccessibilityPermission() {
+                timer.invalidate()
+                self.accessibilityPollingTimer = nil
+                self.accessibilityPollingStartedAt = nil
+
+                // 권한 허용 직후 자동 엔진 시작 흐름의 트리거.
                 NotificationCenter.default.post(
                     name: .accessibilityPermissionGranted,
                     object: nil
@@ -156,9 +181,38 @@ class PermissionService: ObservableObject {
         }
     }
 
+    private func startInputMonitoringPolling() {
+        inputMonitoringPollingTimer?.invalidate()
+        inputMonitoringPollingStartedAt = Date()
+        inputMonitoringPollingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+
+            if let start = self.inputMonitoringPollingStartedAt,
+               Date().timeIntervalSince(start) > self.pollingTimeout {
+                timer.invalidate()
+                self.inputMonitoringPollingTimer = nil
+                self.inputMonitoringPollingStartedAt = nil
+                return
+            }
+
+            if self.checkInputMonitoringPermission() {
+                timer.invalidate()
+                self.inputMonitoringPollingTimer = nil
+                self.inputMonitoringPollingStartedAt = nil
+            }
+        }
+    }
+
     func stopPolling() {
-        pollingTimer?.invalidate()
-        pollingTimer = nil
+        accessibilityPollingTimer?.invalidate()
+        accessibilityPollingTimer = nil
+        accessibilityPollingStartedAt = nil
+        inputMonitoringPollingTimer?.invalidate()
+        inputMonitoringPollingTimer = nil
+        inputMonitoringPollingStartedAt = nil
     }
 }
 

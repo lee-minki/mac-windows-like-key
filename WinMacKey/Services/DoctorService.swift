@@ -131,8 +131,15 @@ class DoctorService: ObservableObject {
         // 5. HID 매핑 해제 (동기 — 완료 보장)
         HIDRemapper.shared.clearAllMappingsSync()
         logger.info("✅ HID mappings cleared (global + internal keyboard)")
-        
-        logger.info("🎉 Emergency Recovery completed — system is clean")
+
+        // 6. monitoring 재시작 — emergency recovery 후 앱은 정상 lifecycle 로 복귀해야 한다.
+        // 이 단계가 없으면 reset 후 앱 재시작 없이는 디바이스 자동 전환·VDI 컨텍스트 감지가 죽은 상태.
+        appState.contextManager.startMonitoring()
+        appState.keyboardDeviceManager.startMonitoring()
+        appState.lastActiveKeyboard = nil
+        logger.info("✅ ContextManager & KeyboardDeviceManager monitoring restarted")
+
+        logger.info("🎉 Emergency Recovery completed — system is clean, monitoring active")
     }
     
     // MARK: - Individual Checks
@@ -474,7 +481,14 @@ class DoctorService: ObservableObject {
         case .restartEngine:
             appState.keyInterceptor.stop()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                appState.isEngineRunning = appState.keyInterceptor.start()
+                let started = appState.keyInterceptor.start()
+                appState.isEngineRunning = started
+                if started {
+                    // stop() 이 HID 매핑을 해제했으므로 (RightCmd→F16 포함) 반드시 재적용 필요.
+                    // 이 호출이 없으면 EventTap은 켜지지만 트리거 매핑이 없어 한영전환이 침묵한다.
+                    // AppState.toggleEngine 의 ON 분기와 동일한 패턴.
+                    appState.refreshActiveProfileForCurrentContext()
+                }
             }
             
         case .resetAll:

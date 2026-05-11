@@ -6,7 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.1
+## [Unreleased] — v1.3.2
+
+v1.3.1 외부 코드 리뷰에서 발견된 7건 일괄 패치. 가장 중요한 항목은 "엔진 OFF 시 시스템 영향 없음" 안전 경계 위반 (앱 실행만으로 hidutil 글로벌 매핑이 변경될 수 있던 버그).
+
+### Fixed
+- **HIGH: 앱 init 시점 HID 시스템 미터치 보장**: `KeyInterceptor.init()` 이 `setupDefaultMappings()` 를 호출해 `hidutil` 글로벌 매핑을 변경하던 버그. 사용자의 외부 hidutil 설정이 앱 실행만으로 지워질 수 있었다. `setupDefaultMappings` 를 `computeKeyMappings`(메모리만)와 `setupDefaultMappings`(메모리+HID)로 분리. init은 전자만 호출. HID 적용은 engine ON 경로(`refreshActiveProfileForCurrentContext`)에서만.
+- **HIGH: Doctor restart 후 HID 재적용 누락**: `DoctorService.performFix(.restartEngine)` 이 `stop()` → `start()` 만 호출해 RightCmd→F16 매핑이 풀린 상태로 EventTap 만 켜지던 버그. UI는 엔진 ON 인데 한영전환 침묵. start 성공 후 `appState.refreshActiveProfileForCurrentContext()` 호출 추가.
+- **MED: Reset/Emergency Recovery 후 모니터링 재시작**: `ResetService.resetAll` 과 `DoctorService.emergencyRecovery` 가 KeyboardDeviceManager / ContextManager 를 stop 후 재시작하지 않아 초기화 후 앱 재시작 전까지 디바이스 자동 전환·VDI 컨텍스트 감지가 죽어 있었다. 두 매니저 모두 monitoring 재시작 + lastActiveKeyboard 리셋.
+- **MED: 권한 폴링 분리**: `startPermissionPolling` 이 Accessibility + Input Monitoring 둘 다 만족해야 종료해 Accessibility 만 허용한 사용자는 polling 이 영원히 돌고 자동 엔진 시작 알림이 발화되지 않던 버그. `startAccessibilityPolling` / `startInputMonitoringPolling` 분리. 각자 5분 timeout.
+- **MED: release.sh 버전 가드**: 인자로 받은 `VERSION` 과 `Info.plist:CFBundleShortVersionString` 일치 검증. 불일치 시 즉시 거부. `set -euo pipefail` 도입. `check-version-consistency.sh` 자동 호출.
+- **LOW: actor isolation 경고**: `AppState.findAllInstallations` 를 `nonisolated` 로 표기. background queue 에서 안전 호출.
+- **LOW: VDI 로그 문구 정정**: "Fn=Ctrl, Option=Win, Command=Alt" → "Fn↔Ctrl swap applied". 실제 매핑(`vdiInternalKeyboardMappings`)과 일치.
+
+### Added
+- **검증 인프라**: `HIDRemapper` 에 `applyCallCount` / `clearCallCount` 카운터. `AppState.init` 끝에 DEBUG assertion 으로 "init 이 HID 안 건드림" invariant 자동 검증. `tests/hid_lifecycle_smoke.swift` smoke 테스트 추가. `docs/MANUAL_TEST_PLAN.md` 회귀 체크리스트 (10개 카테고리, 30+ 검증 항목).
+
+---
+
+## [1.3.1] — Skipped (consolidated into v1.3.2)
+
+내부 빌드만 진행되고 외부 안내 보류. 아래 변경 사항은 모두 v1.3.2 에 포함됨.
 
 ### Added
 - **Stable code signing identity 지원**: `scripts/setup-signing.sh` 로 self-signed cert 1회 생성 → 같은 identity로 서명된 빌드 간 손쉬운 사용 권한 영속 (Designated Requirement가 leaf cert SHA-1로 바인딩). Apple Developer Program 없이도 빌드/업데이트마다 권한 재요청 불필요. `SIGN_IDENTITY` 환경변수로 override, cert 없으면 ad-hoc fallback.

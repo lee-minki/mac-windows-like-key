@@ -91,7 +91,10 @@ class KeyInterceptor: ObservableObject {
     
     init() {
         KeyInterceptor.shared = self
-        setupDefaultMappings()
+        // Lifecycle invariant: init에서는 HID 시스템 상태를 절대 건드리지 않음.
+        // keyMappings는 내부 메모리에만 계산해 두고, 실제 hidutil 적용은
+        // engine ON path (toggleEngine → refreshActiveProfileForCurrentContext) 에서만 수행.
+        computeKeyMappings()
     }
     
     // 활성화된 프로파일 ID (AppStorage와 동기화)
@@ -102,11 +105,13 @@ class KeyInterceptor: ObservableObject {
     
     // MARK: - Setup
     
-    func setupDefaultMappings() {
-        logger.info("Setting up mappings for profile: \(self.activeProfileID)")
-        
+    /// 활성 프로필을 keyMappings dictionary에 로드만 한다. HID 시스템 상태는 건드리지 않음.
+    /// init 시점·UI 갱신 시점처럼 engine OFF에서도 호출 가능한 안전 경로.
+    func computeKeyMappings() {
+        logger.info("Computing mappings for profile: \(self.activeProfileID)")
+
         keyMappings.removeAll()
-        
+
         // 이름 기반 매칭 (기본 프로파일)
         let selectedProfile: MappingProfile?
         switch activeProfileID {
@@ -115,7 +120,7 @@ class KeyInterceptor: ObservableObject {
         case "winMacKeyOriginal": selectedProfile = .winMacKeyOriginal
         default:                 selectedProfile = nil
         }
-        
+
         if let profile = selectedProfile {
             for (src, dst) in profile.mappings {
                 keyMappings[src] = dst
@@ -136,7 +141,12 @@ class KeyInterceptor: ObservableObject {
         }
         ensureCapsLockUntouched()
         updateNeedsFlagsChangedProcessing()
-        
+    }
+
+    /// keyMappings를 계산하고 HID 시스템에 적용. 반드시 engine ON 컨텍스트에서만 호출.
+    /// init에서 호출 금지 — 시스템 상태 변경이라 안전 경계를 깨뜨림.
+    func setupDefaultMappings() {
+        computeKeyMappings()
         // HID 레벨 리매핑 적용 (Fn/Globe 포함)
         HIDRemapper.shared.applyMappings(keyMappings)
     }
