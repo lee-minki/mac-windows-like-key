@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — v1.3.6
+
+키보드 디바이스 바인딩 UX 를 "Press-to-bind" 패턴으로 전면 개편. 사용자가 매번 "직전에 어느 키보드를 썼는지" 머릿속에서 추적해야 했던 모호함 해소.
+
+### Added
+- **Press-to-bind capture UX** (`WinMacKey/Views/KeyboardBindingCaptureView.swift`):
+  - Profile 의 "Bind keyboard…" 버튼 클릭 → modal sheet 열림
+  - 대기 → 키 입력 감지 → 디바이스 정보 표시 (이름·VID:PID·내장/외장) → 확인 버튼
+  - 10초 timeout · 사용자 취소 · 다른 키보드로 재캡처 가능
+  - 같은 디바이스에 이미 바인딩된 다른 프로필이 있으면 충돌 경고 표시
+  - 연결된 키보드 목록을 fallback 으로 노출 (키 입력 불편한 경우 직접 선택)
+- `KeyboardDeviceManager.startCapture / cancelCapture` API — 일회성 다음-키 감지.
+- `tests/keyboard_capture_smoke.swift` — capture mode 5 invariants 자동 검증.
+
+### Changed
+- `ProfilesView` 의 "Assign current keyboard" 버튼 → **"Bind keyboard…"** 로 라벨 변경.
+- 바인딩 시 같은 디바이스의 다른 프로필 바인딩이 있으면 **자동으로 이전** (한 디바이스 = 한 프로필 보장).
+- `DashboardView` 에 `bindingTargetProfile` state + `.sheet(item:)` modifier.
+
+### Fixed (UX 개선)
+- 기존: 사용자가 "직전 active device" 라는 implicit state 를 머릿속에서 추적해야 했음. 마우스로 메뉴 조작 중 의도하지 않은 키보드 바인딩 가능.
+- v1.3.6: 모달 활성 시점에 명시적으로 키 입력 감지 → 시각적 확인 후 바인딩. 오류 가능성 구조적으로 봉쇄.
+
+---
+
 ## [Unreleased] — v1.3.5
 
 v1.3.4 의 Mac → Mac Remote Mode 설계가 잘못된 가정 위에 있었음을 확인하고 정정.

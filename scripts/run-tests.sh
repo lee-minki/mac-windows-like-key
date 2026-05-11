@@ -22,8 +22,9 @@ COMMON_SOURCES=(
   WinMacKey/Services/LogService.swift
   WinMacKey/Services/KeyInterceptor.swift
   WinMacKey/Services/ContextManager.swift
+  WinMacKey/Services/KeyboardDeviceManager.swift
 )
-COMMON_FRAMEWORKS=(-framework AppKit -framework Carbon)
+COMMON_FRAMEWORKS=(-framework AppKit -framework Carbon -framework IOKit)
 
 # ── HID lifecycle invariant smoke ─────────────────────────────────────────────
 # KeyInterceptor.init() 이 HID 시스템 상태를 건드리지 않는지 검증
@@ -85,6 +86,16 @@ swiftc \
   "${COMMON_FRAMEWORKS[@]}"
 
 build/tests/trigger_branching_smoke
+
+# ── KeyboardDeviceManager capture mode smoke (v1.3.6 NEW) ─────────────────────
+# Press-to-bind UX 의 핵심 — startCapture / cancelCapture / supersede invariant
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/keyboard_capture_smoke.swift \
+  -o build/tests/keyboard_capture_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/keyboard_capture_smoke
 
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh

@@ -8,6 +8,10 @@ struct DashboardView: View {
     @State private var selectedTab = 0
     @AppStorage("eventViewerAlwaysOnTop") private var eventViewerAlwaysOnTop: Bool = false
 
+    /// 키보드 바인딩 capture sheet 가 띄워질 대상 프로필.
+    /// nil 이면 sheet 닫힘. 키보드 바인딩 UX 의 핵심 state.
+    @State private var bindingTargetProfile: SavedKeyboardProfile?
+
     private var triggerShortcutDescription: String {
         "Right Command → Ctrl+Space (Mac) / F16 (VDI)"
     }
@@ -317,6 +321,35 @@ struct DashboardView: View {
                 .listStyle(.inset)
             }
         }
+        .sheet(item: $bindingTargetProfile) { target in
+            // 같은 디바이스에 이미 바인딩된 다른 프로필이 있는지 검사 (충돌 경고용).
+            // BindingCaptureView 가 캡처된 디바이스와 비교해 충돌 시 안내.
+            // 여기서는 일단 default 로 nil 전달, view 가 캡처 시 실시간으로 다시 검사하지만
+            // 정적으로 미리 알려주려면 candidate 가 정해진 후가 자연스러움. 그래서 view 내부 처리.
+            KeyboardBindingCaptureView(
+                appState: appState,
+                profileName: target.name,
+                existingBindingOnSameDevice: nil, // 동적으로 view 가 검사
+                onConfirm: { identifier in
+                    // 다른 프로필이 동일 디바이스 바인딩 중이면 해당 바인딩 제거 (이전).
+                    for existing in appState.profileStore.profiles where existing.id != target.id {
+                        if existing.deviceIdentifier == identifier {
+                            var demoted = existing
+                            demoted.deviceIdentifier = nil
+                            appState.profileStore.update(demoted)
+                        }
+                    }
+                    // 새 바인딩 적용.
+                    var updated = target
+                    updated.deviceIdentifier = identifier
+                    appState.profileStore.update(updated)
+                    bindingTargetProfile = nil
+                },
+                onCancel: {
+                    bindingTargetProfile = nil
+                }
+            )
+        }
     }
 
     private func savedProfileRow(_ profile: SavedKeyboardProfile) -> some View {
@@ -430,16 +463,15 @@ struct DashboardView: View {
                     .controlSize(.mini)
                 } else {
                     Button {
-                        var updated = profile
-                        updated.deviceIdentifier = appState.lastActiveKeyboard
-                        appState.profileStore.update(updated)
+                        // v1.3.6: Press-to-bind UX — sheet 열어 명시적으로 키 캡처.
+                        // 기존 "직전 active device 자동 사용" 의 모호함 해소.
+                        bindingTargetProfile = profile
                     } label: {
-                        Label("Assign current keyboard", systemImage: "plus.circle")
+                        Label("Bind keyboard…", systemImage: "keyboard.badge.ellipsis")
                             .font(.caption)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.mini)
-                    .disabled(appState.lastActiveKeyboard == nil)
                 }
             }
         }

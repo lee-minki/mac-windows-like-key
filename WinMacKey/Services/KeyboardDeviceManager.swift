@@ -48,6 +48,58 @@ class KeyboardDeviceManager: ObservableObject {
     var onDeviceConnected: ((KeyboardDeviceIdentifier) -> Void)?
     var onDeviceDisconnected: ((KeyboardDeviceIdentifier) -> Void)?
 
+    // MARK: - Capture Mode
+    //
+    // "Press-to-bind" UX 를 위한 일회성 capture.
+    // UI 가 startCapture 호출 → 다음 키 입력이 들어오면 콜백으로 디바이스 정보 전달 후 자동 종료.
+    // capture 활성 동안에도 lastActiveDevice / onActiveDeviceChanged 는 정상 동작 (캡처와 무관).
+
+    @Published private(set) var isCapturing: Bool = false
+    private var captureCallback: ((KeyboardDeviceIdentifier) -> Void)?
+    private var captureTimeoutCallback: (() -> Void)?
+    private var captureTimer: Timer?
+
+    /// 다음 키 입력의 디바이스를 캡처.
+    /// - Parameter timeout: 무입력 시 자동 cancel (default 10초)
+    /// - Parameter onCapture: 디바이스 식별자 전달 (메인 스레드에서 호출됨)
+    /// - Parameter onTimeout: timeout 시 호출 (메인 스레드)
+    @MainActor
+    func startCapture(
+        timeout: TimeInterval = 10.0,
+        onCapture: @escaping (KeyboardDeviceIdentifier) -> Void,
+        onTimeout: @escaping () -> Void
+    ) {
+        // 이전 capture 있으면 cancel
+        cancelCapture()
+
+        captureCallback = onCapture
+        captureTimeoutCallback = onTimeout
+        isCapturing = true
+
+        captureTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.isCapturing else { return }
+                self.cancelCapture()
+                onTimeout()
+            }
+        }
+
+        logger.info("KeyboardDeviceManager: capture started (timeout=\(timeout)s)")
+    }
+
+    /// 진행 중인 capture 취소 (사용자 취소 또는 timeout).
+    @MainActor
+    func cancelCapture() {
+        captureCallback = nil
+        captureTimeoutCallback = nil
+        captureTimer?.invalidate()
+        captureTimer = nil
+        if isCapturing {
+            isCapturing = false
+            logger.info("KeyboardDeviceManager: capture cancelled")
+        }
+    }
+
     /// IOHIDDevice → Identifier 캐시 (포인터 비교로 빠른 룩업)
     private var deviceCache: [IOHIDDevice: KeyboardDeviceIdentifier] = [:]
 
@@ -196,17 +248,29 @@ class KeyboardDeviceManager: ObservableObject {
         }
     }
 
-    /// 키 입력 감지 — 마지막 사용 키보드 추적
-    /// IOHIDManager는 CFRunLoopGetMain()에 스케줄되므로 콜백은 메인 스레드에서 실행됨.
-    /// 포인터 비교로 같은 디바이스는 즉시 스킵하여 매 키 이벤트 오버헤드를 최소화.
+    /// 키 입력 감지 — 마지막 사용 키보드 추적 + capture mode 처리.
+    /// IOHIDManager 콜백은 메인 RunLoop에서 실행되어 main-thread context.
     private func handleInputValue(from device: IOHIDDevice) {
-        // 같은 디바이스면 스킵 (매 키 이벤트마다 호출되므로 최소 비용)
-        if device === lastActiveDeviceRef { return }
-
-        lastActiveDeviceRef = device
         let identifier = deviceCache[device] ?? Self.extractIdentifier(from: device)
 
-        // 메인 RunLoop에서 실행되므로 직접 갱신 (DispatchQueue 딜레이 없음)
+        // === Capture mode 처리 ===
+        // 활성이면 일회성 콜백 호출 후 자동 종료. lastActiveDevice 갱신과 무관.
+        if isCapturing, let callback = captureCallback {
+            captureCallback = nil
+            captureTimeoutCallback = nil
+            captureTimer?.invalidate()
+            captureTimer = nil
+            isCapturing = false
+            logger.info("KeyboardDeviceManager: capture fired (\(identifier.displayName))")
+            // Main thread (current context) 에서 즉시 호출
+            callback(identifier)
+            // Note: capture 활성 동안에도 lastActiveDevice 는 동시 갱신 — 자연스러운 동작
+        }
+
+        // === 일반 lastActiveDevice 추적 (capture 와 독립) ===
+        if device === lastActiveDeviceRef { return }
+        lastActiveDeviceRef = device
+
         let changed = self.lastActiveDevice != identifier
         self.lastActiveDevice = identifier
         if changed {

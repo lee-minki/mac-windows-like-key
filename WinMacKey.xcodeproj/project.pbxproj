@@ -34,6 +34,7 @@
 		HHH00001 /* HIDRemapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = HHH00002 /* HIDRemapper.swift */; };
 		III00001 /* KeyboardDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = III00002 /* KeyboardDeviceManager.swift */; };
 		JJJ00001 /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = JJJ00002 /* LaunchAtLoginService.swift */; };
+		KKK00001 /* KeyboardBindingCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KKK00002 /* KeyboardBindingCaptureView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +68,7 @@
 		HHH00002 /* HIDRemapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HIDRemapper.swift; sourceTree = "<group>"; };
 		III00002 /* KeyboardDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDeviceManager.swift; sourceTree = "<group>"; };
 		JJJ00002 /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
+		KKK00002 /* KeyboardBindingCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBindingCaptureView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -161,6 +163,7 @@
 				EEE00002 /* HelpView.swift */,
 				FFF00004 /* DoctorView.swift */,
 				GGG00004 /* LogView.swift */,
+				KKK00002 /* KeyboardBindingCaptureView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -268,6 +271,7 @@
 				HHH00001 /* HIDRemapper.swift in Sources */,
 				III00001 /* KeyboardDeviceManager.swift in Sources */,
 				JJJ00001 /* LaunchAtLoginService.swift in Sources */,
+				KKK00001 /* KeyboardBindingCaptureView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -400,7 +404,7 @@
 				CODE_SIGN_ENTITLEMENTS = WinMacKey/WinMacKey.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -411,7 +415,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5;
+				MARKETING_VERSION = 1.3.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.winmackey.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -427,7 +431,7 @@
 				CODE_SIGN_ENTITLEMENTS = WinMacKey/WinMacKey.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -438,7 +442,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5;
+				MARKETING_VERSION = 1.3.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.winmackey.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
