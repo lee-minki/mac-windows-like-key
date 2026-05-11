@@ -35,8 +35,8 @@ if [ "$info_build" != "$project_build" ]; then
   exit 1
 fi
 
-if ! grep -q "\[Unreleased\] — v${info_version}" CHANGELOG.md; then
-  echo "version check failed: CHANGELOG.md Unreleased heading does not match v${info_version}" >&2
+if ! grep -qE "\[Unreleased\] — v${info_version}|\[${info_version}\] — [0-9]{4}-[0-9]{2}-[0-9]{2}" CHANGELOG.md; then
+  echo "version check failed: CHANGELOG.md missing entry for v${info_version} (expect [Unreleased] — v${info_version} or [${info_version}] — YYYY-MM-DD)" >&2
   exit 1
 fi
 

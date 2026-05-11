@@ -27,6 +27,12 @@ xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -
 open build/DerivedData/Build/Products/Debug/WinMacKey.app
 ```
 
+## CHANGELOG Conventions
+- During active development of vX.Y.Z: heading is `## [Unreleased] — vX.Y.Z`.
+- Once shipped (Latest on GitHub), promote to `## [X.Y.Z] — YYYY-MM-DD`.
+- Intermediate patch versions kept Draft on GitHub: heading is `## [X.Y.Z] — Superseded by vA.B.C`.
+- `scripts/check-version-consistency.sh` accepts both `[Unreleased] — v${version}` and `[${version}] — YYYY-MM-DD` forms for the current `Info.plist` version.
+
 ## Source-of-Truth Rules
 - Keep local Mac behavior and VDI behavior distinct.
 - `docs/SETUP_GUIDE.md` and `docs/VDI_SETUP.md` are the user-facing source of truth for setup; `docs/manual.html` must either mirror them or clearly point back to them.
