@@ -13,6 +13,9 @@ import Foundation
 @main
 struct ToggleOffSnapshotSmoke {
     static func main() {
+        // 실제 hidutil 호출 skip — Process spawn 으로 인한 SIGKILL 회피.
+        HIDRemapper.skipExternalHidutilCallsForTesting = true
+
         let remapper = HIDRemapper.shared
         remapper.resetOperationCounters()
 

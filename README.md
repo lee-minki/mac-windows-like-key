@@ -116,18 +116,29 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 을 상황에 맞게 처리합니다.
 
-### 🖥️ Mac → Mac 원격접속 (v1.3.4+)
+### 🖥️ Mac → Mac 원격접속 (v1.3.5+)
 
-맥북에서 맥미니/맥스튜디오 등에 원격접속 시 한영전환:
+맥북에서 맥미니/맥스튜디오 등에 Apple Screen Sharing 으로 원격접속 시 한영전환:
 
-1. **양쪽 Mac 모두에 WinMacKey 설치** (동일 self-signed cert 로 빌드된 .dmg)
-2. 양쪽 모두 손쉬운 사용 권한 허용 + 엔진 ON
-3. 화면 공유 (Apple Screen Sharing, ARD, Jump Desktop 등) 로 원격 Mac 연결
-4. 원격 Mac 창에 포커스 → Right Command 누름
-5. 로컬 맥북에서: F16 으로 변환되어 화면 공유 거쳐 원격 Mac 으로 전송
-6. 원격 Mac 의 WinMacKey 가 F16 감지 → `Control+Space` 합성 → 원격 macOS 입력소스 전환
+1. **로컬 맥북에만 WinMacKey 설치** (원격 Mac 에는 설치 불필요)
+2. Screen Sharing 으로 원격 Mac 연결
+3. 원격 Mac 창에 포커스 → 맥북의 Right Command 누름
+4. **맥북의 입력소스가 토글** (메뉴바 EN ↔ 한)
+5. 이후 타이핑 → 맥북의 입력소스에서 변환된 문자가 Screen Sharing 거쳐 원격 화면에 입력
 
-지원되는 원격접속 도구 (자동 감지): Apple Screen Sharing, Apple Remote Desktop, Jump Desktop, CoRD, RealVNC, TeamViewer, AnyDesk, Parsec. 다른 도구는 설정에서 추가 가능.
+#### 작동 원리
+
+Apple Screen Sharing 은 **키 스캔코드가 아니라 변환된 character(Unicode)** 를 원격에 전달합니다. 즉 로컬 맥북의 IME 가 'a' → 'ㅁ' 으로 변환하면 원격 화면에 'ㅁ' 이 들어갑니다. 따라서 한영전환 처리는 로컬 맥북에서 일어나면 충분하고, 원격 Mac 의 입력소스 상태는 결과에 영향을 주지 않습니다.
+
+#### 주의 사항
+
+- 맥북 메뉴바의 입력소스 표시기 (EN / 한) 가 토글됩니다 — 이게 정상 동작
+- 원격 Mac 자체의 입력소스는 안 바뀝니다 (Screen Sharing 이 character 단위 forward 라 무관)
+- VDI (Omnissa Horizon) 와 동작 모델이 다름 — VDI 는 F16 패스스루, Mac 원격은 로컬 토글
+
+#### 다른 원격접속 도구
+
+Jump Desktop, AnyDesk, RealVNC, TeamViewer 등은 키 forwarding 방식이 다를 수 있습니다. 동작 여부 실측 권장.
 
 ### 검증된 환경
 

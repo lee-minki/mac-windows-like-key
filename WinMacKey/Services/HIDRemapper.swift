@@ -12,6 +12,12 @@ class HIDRemapper {
     /// hidutil 호출을 직렬화하여 빠른 연속 호출 시 순서를 보장
     private let queue = DispatchQueue(label: "com.winmackey.hidutil", qos: .userInitiated)
 
+    /// 테스트 환경에서 hidutil Process spawn 을 skip.
+    /// 카운터·ownership 게이트·snapshot capture 같은 in-memory state 는 정상 동작하지만
+    /// 실제 /usr/bin/hidutil 호출은 no-op. 이걸로 smoke test 가 SIGKILL 없이 결정론적으로 동작.
+    /// 프로덕션 빌드는 false 유지 (변경 금지).
+    static var skipExternalHidutilCallsForTesting: Bool = false
+
     // MARK: - Operation Counters (lifecycle invariant verification)
     //
     // 이 카운터는 "엔진 OFF 시 HID 미터치" invariant를 검증하기 위한 것.
@@ -68,6 +74,10 @@ class HIDRemapper {
     /// hidutil property --get UserKeyMapping → parsed array of mapping dicts.
     /// 빈 매핑 / 파싱 실패 시 빈 array 반환 (nil 아님 — capture 자체는 성공으로 본다).
     private func readCurrentUserKeyMapping() -> [[String: Any]]? {
+        if Self.skipExternalHidutilCallsForTesting {
+            return []  // 빈 baseline 으로 가정
+        }
+
         let task = Process()
         task.launchPath = "/usr/bin/hidutil"
         task.arguments = ["property", "--get", "UserKeyMapping"]
@@ -418,6 +428,10 @@ class HIDRemapper {
     
     /// 현재 HID 매핑 상태 조회
     func getCurrentMappings() -> String {
+        if Self.skipExternalHidutilCallsForTesting {
+            return "(test mode — hidutil skipped)"
+        }
+
         let task = Process()
         task.launchPath = "/usr/bin/hidutil"
         task.arguments = ["property", "--get", "UserKeyMapping"]
@@ -481,6 +495,13 @@ class HIDRemapper {
 
     @discardableResult
     private func runHidutil(arguments: [String]) -> Bool {
+        // 테스트 환경: hidutil Process spawn 자체를 skip.
+        // 카운터/상태 머신 검증은 정상 동작하지만 실제 시스템 hidutil 안 건드림.
+        if Self.skipExternalHidutilCallsForTesting {
+            logger.info("hidutil call skipped (testing mode): \(arguments.joined(separator: " "))")
+            return true
+        }
+
         let task = Process()
         task.launchPath = "/usr/bin/hidutil"
         task.arguments = arguments

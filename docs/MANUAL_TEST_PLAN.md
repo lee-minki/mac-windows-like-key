@@ -140,31 +140,33 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 - [ ] **N-4**: "복사" 클릭 → 클립보드에 로그 내용 들어감
 - [ ] **N-5**: Event Viewer 에서 익명화된 표시 (`app-xxxxxxxx`, `modifier`/`letter`/`function` 카테고리) 확인 (privacy mode ON 시)
 
-### O. Mac → Mac 원격접속 한영전환 (v1.3.4+)
+### O. Mac → Mac 원격접속 한영전환 (v1.3.5+)
 
-본인 맥북에서 맥미니 등에 원격접속 시 한영전환이 원격 Mac 에서 동작하는지.
+본인 맥북에서 맥미니 등에 Apple Screen Sharing 으로 원격접속 시 한영전환.
+
+**핵심**: Screen Sharing 은 character 단위로 forward 하므로 **로컬 맥북의 입력소스 토글만으로** 원격 화면에 올바른 문자가 들어감. 원격 Mac 에는 WinMacKey 설치 불필요.
 
 **사전 준비**:
-- 양쪽 Mac 모두 동일 self-signed cert 로 빌드된 WinMacKey v1.3.4+ 설치
-- 양쪽 모두 손쉬운 사용 권한 허용 + 엔진 ON
-- 양쪽 모두 macOS 입력소스 단축키 = `Control+Space`
+- 맥북에 WinMacKey v1.3.5+ 설치, 손쉬운 사용 권한 + 엔진 ON
+- 맥북 macOS 입력소스 단축키 = `Control+Space`
+- 맥미니: 그냥 보통 Mac 상태 (WinMacKey 설치 안 해도 됨)
 
 **검증 절차**:
-- [ ] **O-1**: 원격 Mac (맥미니) 에서 텍스트 편집기 열고 현재 입력소스 = ABC 확인
-- [ ] **O-2**: 맥북에서 Screen Sharing.app 으로 맥미니 연결
-- [ ] **O-3**: 맥북의 메뉴바에 "Remote Mac mode: enabled" 가 LogService 에 기록되는지 확인 (Console.app 으로 winmackey.log 모니터)
-- [ ] **O-4**: 원격 Mac 창에 포커스 → Right Command 한 번 누름
-- [ ] **O-5**: 원격 Mac 의 입력소스가 EN ↔ 한 으로 전환됐는지 확인
-- [ ] **O-6**: 맥북 자체의 입력소스는 **변경 안 됨** (로컬은 그대로) 확인
-- [ ] **O-7**: 한글 입력 중 원격 Mac 에서 `안녕하` 입력 + Right Command → 조합 commit + 영문 전환
+- [ ] **O-1**: 맥북에서 Screen Sharing.app 으로 맥미니 연결
+- [ ] **O-2**: 원격 (맥미니) 의 텍스트 편집기에 포커스
+- [ ] **O-3**: 맥북 입력소스 = 영어 상태에서 "abc" 타이핑 → 맥미니 텍스트에 "abc" 들어감
+- [ ] **O-4**: 맥북에서 Right Command 누름 → **맥북 메뉴바 입력소스가 EN ↔ 한 으로 토글** (정상 동작)
+- [ ] **O-5**: 이어서 "asd" 타이핑 → 맥미니 텍스트에 "ㅁㄴㅇ" 들어감
+- [ ] **O-6**: 다시 Right Command → 맥북 영어로 토글 → "qwe" → "qwe" 들어감
+- [ ] **O-7**: 맥미니 자체 입력소스는 변경되든 안 되든 무관 (참고용 — Screen Sharing 이 character forward 라 결과에 영향 없음)
 
 **실패 시 분석**:
-- O-4 후 변화 없음 → 화면 공유가 F16 을 원격에 전달 안 함. 다른 원격 도구 시도 또는 Approach 재설계 필요.
-- O-5 가 부분만 됨 (예: 한 번에 안 됨) → 원격 Mac 의 Control+Space 단축키 설정 확인.
-- O-6 가 위반됨 (로컬도 같이 바뀜) → AppState 의 isRemoteMacMode 분기 동작 안 함. Doctor 로 진단.
+- O-4 위반 (맥북 입력소스 안 바뀜) → 로컬 모드 동작 안 함. Doctor 로 진단.
+- O-5 위반 (영어가 들어감) → 맥북 입력소스가 실제로 한국어로 안 바뀌었거나 한국어 입력 소스가 macOS 에 추가 안 됨.
+- O-3 자체가 안 됨 → Screen Sharing 자체 문제 (WinMacKey 무관).
 
-**다른 원격 도구 (Jump Desktop, AnyDesk, ARD)**:
-같은 절차로 검증. 도구마다 키 전달 방식이 달라 결과가 다를 수 있음. 동작하는 도구는 README 의 검증된 환경에 추가.
+**다른 원격접속 도구 (Jump Desktop, AnyDesk, ARD)**:
+이론적으로 같은 character forwarding 이라면 동일 동작. 실측 권장. 예외적으로 raw scan code forwarding 하는 도구가 있다면 다른 동작 가능.
 
 ## 통과 기준
 

@@ -6,7 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.4
+## [Unreleased] — v1.3.5
+
+v1.3.4 의 Mac → Mac Remote Mode 설계가 잘못된 가정 위에 있었음을 확인하고 정정.
+
+### 핵심 정정
+- v1.3.4 는 "Mac 원격 = VDI 처럼 F16 패스스루 → 원격 Mac 의 WinMacKey 가 처리" 로 디자인. 사용자가 양쪽 Mac 에 WinMacKey 설치 필요.
+- 실측 결과: Apple Screen Sharing 은 **키 스캔코드가 아니라 변환된 character(Unicode) 를 forward**. 즉 로컬 맥북의 IME 결과 문자가 그대로 원격 화면에 입력됨. F16 같은 raw key event 는 원격에 전달 안 됨.
+- 따라서 한영전환 처리는 **로컬 맥북에서 끝나야 함**. 원격 Mac 의 WinMacKey 가 받을 게 없음.
+
+### Fixed
+- **`KeyInterceptor.handleTriggerKey`**: `isVdiAppFocused || isRemoteMacAppFocused` → `isVdiAppFocused`. Remote Mac 케이스를 패스스루 분기에서 제거.
+- **`AppState.onInputSourceToggle`**: `isRemoteMacMode` 별도 분기 삭제. 로컬 Mac 과 동일한 합성 path 사용 (로컬 macOS 의 Control+Space 합성 → 로컬 입력소스 토글 → Screen Sharing 이 변환된 character 를 원격에 forward).
+- 결과: 양쪽 Mac 설치 불필요. 맥북의 Right Cmd → 맥북 입력소스 토글 → 원격 화면에 올바른 문자.
+
+### Added
+- `tests/trigger_branching_smoke.swift` — KeyInterceptor 의 mode flag 들이 외부 설정 가능 + 서로 독립 + triggerKeyCode=F16 invariant. v1.3.4 와 v1.3.5 둘 다 통과해야 하는 회귀 lock-down (5 invariants).
+- `HIDRemapper.skipExternalHidutilCallsForTesting` static flag — smoke 가 실제 hidutil Process spawn 으로 SIGKILL 받는 문제 해결. 카운터/ownership 게이트/snapshot capture 같은 in-memory state 는 정상 검증되지만 실제 시스템 hidutil 은 안 건드림.
+
+### Changed
+- `ContextManager.remoteMacApps` 셋은 유지하되 **동작 분기 미사용** — 진단·로깅·UI 표시용으로만. (Screen Sharing 활성 감지가 의미 있어 유지)
+- README.md 의 "Mac → Mac 원격접속" 섹션 전면 재작성:
+  - 양쪽 설치 → 로컬만 설치
+  - F16 패스스루 → 로컬 입력소스 토글
+  - "원격 Mac 입력소스 전환" → "원격 화면에 변환된 문자 입력"
+- MANUAL_TEST_PLAN.md O 카테고리 기대값 반전 (맥북 입력소스가 토글되는 게 정상).
+
+### Removed
+- v1.3.4 의 잘못된 Mac → Mac Remote Mode passthrough 동작.
+
+### Note
+- v1.3.4 는 외부 표면(GitHub Latest)에서 Draft 처리.
+- 회귀 검증: 7종 smoke (mapping_profile / hid_lifecycle / engine_off_ui / ownership / toggle_off_snapshot / remote_mac_mode / **trigger_branching**) 모두 hotfix 전후 동일 PASS. VDI · 로컬 Mac · Terminal · 외장 키보드 경로 한 줄도 안 바뀜.
+
+---
+
+## [1.3.4] — Superseded by v1.3.5
+
+Mac → Mac Remote Mode 디자인 잘못된 가정으로 실패. 외부 미공개 (Draft).
 
 v1.3.3 lifecycle 검토에서 발견된 HIGH 3건 + MEDIUM 1건 fix + Mac→Mac 원격접속 한영전환 신규 지원.
 

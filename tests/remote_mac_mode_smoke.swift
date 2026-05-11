@@ -12,6 +12,7 @@ import Foundation
 @main
 struct RemoteMacModeSmoke {
     static func main() {
+        HIDRemapper.skipExternalHidutilCallsForTesting = true
         _ = ContextManager()  // 인스턴스 생성 자체가 컴파일 가능성 검증
 
         // === 1. Apple Screen Sharing bundle id 가 known list 에 있는지 ===

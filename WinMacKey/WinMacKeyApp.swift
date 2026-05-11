@@ -166,21 +166,18 @@ class AppState: ObservableObject {
             MainActor.assumeIsolated {
                 let isVdiMode = self?.isVdiMode == true
                 let isTerminalMode = self?.isTerminalMode == true
-                let isRemoteMacMode = self?.isRemoteMacMode == true
                 if isVdiMode {
                     // VDI: F16이 패스스루되어 Horizon이 직접 처리.
                     // 로컬 합성 안 함 (로컬 입력소스 부작용 방지).
                     self?.keyInterceptor.beginVdiRelayCooldownWindow()
                     self?.stateManager.switchCount += 1
-                } else if isRemoteMacMode {
-                    // Mac 원격접속: F16 이 화면 공유를 거쳐 원격 Mac 의 WinMacKey 가 처리.
-                    // 로컬 합성 안 함 (로컬 맥북의 입력소스 안 바뀌도록).
-                    self?.keyInterceptor.beginVdiRelayCooldownWindow()
-                    self?.stateManager.switchCount += 1
                 } else if isTerminalMode {
                     self?.stateManager.handleTerminalTrigger()
                 } else {
-                    // 로컬 Mac: F16 suppress 후 Control+Space 합성
+                    // 로컬 Mac / Mac 원격 (Screen Sharing 등) / 그 외:
+                    // F16 suppress 후 로컬 macOS 에 Control+Space 합성 → 로컬 입력소스 토글.
+                    // Mac 원격의 경우 Screen Sharing 이 변환된 character 를 forward 하므로 충분.
+                    // (참고: isRemoteMacMode 는 진단·로깅용으로 유지되지만 동작 분기에는 미사용)
                     self?.keyInterceptor.beginInputSourceCommitWindow()
                     self?.stateManager.handleTrigger(isVdiMode: false)
                 }

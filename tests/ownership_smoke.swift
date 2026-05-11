@@ -11,6 +11,7 @@ import Foundation
 @main
 struct OwnershipSmoke {
     static func main() {
+        HIDRemapper.skipExternalHidutilCallsForTesting = true
         let remapper = HIDRemapper.shared
 
         // === 1. Ownership 없으면 apply 거부 ===

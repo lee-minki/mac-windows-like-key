@@ -11,6 +11,7 @@ import Foundation
 @main
 struct HIDLifecycleSmoke {
     static func main() {
+        HIDRemapper.skipExternalHidutilCallsForTesting = true
         let initialApply = HIDRemapper.shared.applyCallCount
         let initialClear = HIDRemapper.shared.clearCallCount
 

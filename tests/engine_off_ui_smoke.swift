@@ -11,6 +11,7 @@ import Foundation
 @main
 struct EngineOffUISmoke {
     static func main() {
+        HIDRemapper.skipExternalHidutilCallsForTesting = true
         // 초기 상태 — ownership 없음
         HIDRemapper.shared.resetOperationCounters()
         precondition(!HIDRemapper.shared.isOwnedByEngine,

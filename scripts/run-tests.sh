@@ -75,6 +75,17 @@ swiftc \
 
 build/tests/remote_mac_mode_smoke
 
+# ── Trigger branching invariant smoke ─────────────────────────────────────────
+# KeyInterceptor 의 mode flag 들이 외부 설정 가능 + 서로 독립 + triggerKeyCode=F16 invariant
+# v1.3.4 와 v1.3.5 둘 다 통과해야 하는 회귀 lock-down
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/trigger_branching_smoke.swift \
+  -o build/tests/trigger_branching_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/trigger_branching_smoke
+
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh
 bash scripts/check-release-workflow.sh
