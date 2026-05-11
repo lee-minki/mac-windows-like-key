@@ -18,7 +18,7 @@ v1.3.2 외부 코드리뷰 2차 결과 + lifecycle 우회 경로 분석에서 �
 - **Engine-OFF UI invariant smoke** (`tests/engine_off_ui_smoke.swift`): `applyCustomMappings`, `applyCustomMappingsSync`, `setupDefaultMappings` 를 engine OFF 에서 호출해도 HID 호출 0건 자동 검증.
 - **Ownership semantics smoke** (`tests/ownership_smoke.swift`): take/release ownership lifecycle, termination cleanup no-op 등 invariant 4종 자동 검증.
 - **MANUAL_TEST_PLAN.md K~N 카테고리**: pre-existing hidutil 보존, TCC reset confirmation, update install 검증, 로그 프라이버시.
-- **release.sh 진단 로그**: 빌드 후 산출 .app 의 Authority / Identifier / Designated Requirement 자동 출력. Ed25519 서명 후 self-verify round-trip. verify_sign_identity 실패 시 stderr 에 expected vs actual Authority 출력.
+- **release.sh 진단 로그**: 빌드 후 산출 .app 의 Authority / Identifier / Designated Requirement 자동 출력. Ed25519 서명 후 self-verify round-trip. verify_sign_identity 실패 시 stderr 에 expected vs actual Authority 출력. codesign 출력 변수 캡처 후 awk 추출로 SIGPIPE/pipefail 충돌 회피.
 
 ### Fixed
 - **`restartTapIfNeeded` HID flicker**: flagsChanged mask 변경 시 EventTap 재시작이 `stop()` 으로 글로벌 HID 매핑을 풀어버려 짧은 시간 동안 RightCmd→F16 트리거가 침묵하던 회귀. `stop(clearHIDMappings: false)` 시그니처 추가, 내부 restart 는 HID 보존.

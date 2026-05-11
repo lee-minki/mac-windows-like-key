@@ -83,9 +83,9 @@ verify_sign_identity() {
         return 1
     fi
 
-    # Authority 라인 추출해 비교
+    # Authority 라인 추출해 비교 — awk 안에서 exit 으로 SIGPIPE 회피
     local actual_authority
-    actual_authority="$(printf '%s\n' "$verify_output" | awk -F= '/^Authority=/{print $2}' | head -1)"
+    actual_authority="$(printf '%s\n' "$verify_output" | awk -F= '/^Authority=/{print $2; exit}')"
 
     if [ "$actual_authority" = "$SIGN_IDENTITY" ]; then
         return 0
@@ -139,15 +139,18 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-# 산출 .app 의 서명 정보 자동 진단 출력 — release 운영자가 즉시 확인 가능
+# 산출 .app 의 서명 정보 자동 진단 출력 — release 운영자가 즉시 확인 가능.
+# codesign 출력을 한 번만 캡처하고 변수에서 추출 — pipe 닫힘으로 인한 SIGPIPE 회피.
 echo "✅ 앱 빌드 완료"
 echo ""
 echo "   📜 빌드 산출물 서명 진단:"
-APP_AUTHORITY="$(codesign -dvvv "$APP_PATH" 2>&1 | awk -F= '/^Authority=/{print $2; exit}')"
-APP_IDENT="$(codesign -dvvv "$APP_PATH" 2>&1 | awk -F= '/^Identifier=/{print $2; exit}')"
-APP_DR="$(codesign -d -r- "$APP_PATH" 2>&1 | awk -F'=> ' '/designated/{print $2; exit}')"
-echo "      Identifier:           ${APP_IDENT:-<unknown>}"
-echo "      Authority:            ${APP_AUTHORITY:-<none — ad-hoc>}"
+CODESIGN_INFO="$(codesign -dvvv "$APP_PATH" 2>&1 || true)"
+CODESIGN_DR="$(codesign -d -r- "$APP_PATH" 2>&1 || true)"
+APP_AUTHORITY="$(printf '%s\n' "$CODESIGN_INFO" | awk -F= '/^Authority=/{print $2; exit}')"
+APP_IDENT="$(printf '%s\n' "$CODESIGN_INFO" | awk -F= '/^Identifier=/{print $2; exit}')"
+APP_DR="$(printf '%s\n' "$CODESIGN_DR" | awk -F'=> ' '/designated/{print $2; exit}')"
+echo "      Identifier:             ${APP_IDENT:-<unknown>}"
+echo "      Authority:              ${APP_AUTHORITY:-<none — ad-hoc>}"
 echo "      Designated Requirement: ${APP_DR:-<unknown>}"
 echo ""
 
