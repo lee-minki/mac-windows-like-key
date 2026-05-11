@@ -1,4 +1,4 @@
-# WinMac Key v2.0 설정 가이드
+# WinMac Key v1.3.0 설정 가이드
 
 ## 변경 요약
 
@@ -15,6 +15,31 @@
 - Windows VDI(Omnissa Horizon 등)에서 F16 패스스루 → Right Alt 변환으로 동작
 - Karabiner DriverKit 완전 불필요
 - IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 자동 전환
+
+---
+
+## STEP 0: 최초 실행 (Apple 미서명 빌드)
+
+현재 WinMac Key는 Apple Developer ID 서명이 없는 ad-hoc 빌드로 배포됩니다.
+첫 실행 시 macOS Gatekeeper가 **"확인되지 않은 개발자가 만든 앱입니다"** 경고를 띄울 수 있습니다.
+
+다음 두 방법 중 하나로 한 번만 허용해주면 이후 실행은 정상 동작합니다.
+
+### 방법 1: Finder에서 우클릭 → 열기 (권장)
+
+1. DMG를 마운트한 뒤 `WinMacKey.app`을 **Applications** 폴더로 드래그
+2. Applications 폴더에서 `WinMacKey.app` **우클릭 → 열기**
+3. 경고 팝업의 **"열기"** 버튼을 다시 한 번 클릭
+
+### 방법 2: 터미널에서 quarantine 속성 제거
+
+```bash
+xattr -dr com.apple.quarantine /Applications/WinMacKey.app
+```
+
+> Gatekeeper는 새 앱이 인터넷에서 받아진 경우 "quarantine" 속성을 붙입니다.
+> 위 두 방법은 모두 이 속성을 제거하는 같은 효과이며, 이후엔 일반 앱처럼 더블클릭으로 실행됩니다.
+> WinMac Key는 `hidutil`/CGEventTap 기반 메뉴바 유틸리티이며 시스템 파일을 건드리지 않습니다.
 
 ---
 
@@ -93,6 +118,20 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 2. 엔진 토글 ON
 3. `WM` (대문자)로 변경 확인
 
+### 재부팅 후 자동 실행 옵션
+
+재부팅 후 매번 앱을 직접 켜기 싫다면 다음 두 옵션을 함께 켜세요.
+
+1. 메뉴바 `wm/WM` 클릭 → **설정...**
+2. **General → Startup** 카드에서 **로그인 시 자동 실행** ON
+3. 같은 카드에서 **앱 실행 후 엔진 자동 시작** ON
+4. 상태가 `승인 필요`로 나오면 **로그인 항목 설정 열기**를 눌러 시스템 설정에서 WinMac Key를 허용
+
+주의:
+- `로그인 시 자동 실행`은 macOS 로그인 항목에 앱을 등록합니다.
+- `앱 실행 후 엔진 자동 시작`은 앱이 켜질 때 엔진까지 자동으로 켭니다.
+- 손쉬운 사용 권한이 없으면 앱은 실행되지만 엔진 시작은 보류됩니다.
+
 ---
 
 ## STEP 4: Mac 로컬 동작 확인
@@ -162,16 +201,18 @@ VDI 앱에 포커스가 가면 **내장 키보드의 Fn 매핑이 자동으로 �
 - 내장 키보드도 Profiles 탭에서 "Assign current keyboard"로 등록하면 항상 해당 프로필이 우선 적용됩니다
 - 외장 키보드를 Profiles 탭에서 "Assign current keyboard"로 등록하면, 키보드를 꽂는 순간 해당 프로필이 자동 적용됩니다
 
-### 지원되는 VDI 앱 (자동 감지)
+### VDI 앱 상태
 
-| 앱 | Bundle ID |
-|---|---|
-| Omnissa Horizon Client | `com.omnissa.horizon.client.mac` |
-| Omnissa Horizon Protocol | `com.omnissa.horizon.protocol` |
-| VMware Horizon (Legacy) | `com.vmware.horizon` |
-| VMware Fusion | `com.vmware.fusion` |
-| Parallels Desktop | `com.parallels.desktop.console` |
-| Microsoft RDP | `com.microsoft.rdc.macos` |
+| 구분 | 앱 | Bundle ID |
+|---|---|---|
+| 검증됨 | Omnissa Horizon Client | `com.omnissa.horizon.client.mac` |
+| 자동 감지 / 미검증 | Omnissa Horizon Protocol | `com.omnissa.horizon.protocol` |
+| 자동 감지 / 미검증 | VMware Horizon (Legacy) | `com.vmware.horizon` |
+| 자동 감지 / 미검증 | VMware Fusion | `com.vmware.fusion` |
+| 자동 감지 / 미검증 | Parallels Desktop | `com.parallels.desktop.console` |
+| 자동 감지 / 미검증 | Microsoft RDP | `com.microsoft.rdc.macos` |
+
+> 자동 감지는 앱 포커스 분기만 의미합니다. 실제 VDI 한/영 전환은 각 클라이언트의 `F16 → Right Alt` 매핑과 별도 검증이 필요합니다.
 
 ---
 

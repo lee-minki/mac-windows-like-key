@@ -6,7 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.3.0
+## [Unreleased] — v1.3.1
+
+### Added
+- **Stable code signing identity 지원**: `scripts/setup-signing.sh` 로 self-signed cert 1회 생성 → 같은 identity로 서명된 빌드 간 손쉬운 사용 권한 영속 (Designated Requirement가 leaf cert SHA-1로 바인딩). Apple Developer Program 없이도 빌드/업데이트마다 권한 재요청 불필요. `SIGN_IDENTITY` 환경변수로 override, cert 없으면 ad-hoc fallback.
+- **자동 업데이트 위치 가드**: `UpdateService` 가 `/Applications/` 외 위치(Downloads, Desktop 등)에서 실행 중이면 다운로드를 거부. `UpdateError.notInApplicationsFolder` 신규.
+- **중복 설치 감지**: 앱 실행 시 `mdfind` 백그라운드로 동일 bundle ID의 모든 .app 위치를 탐색해 메뉴바에 경고 카드 표시. build/DerivedData/Volumes/Trash/tmp 경로는 자동 제외.
+- **Orphan TCC 권한 감지·복구 UI**: 이전에 권한이 부여됐으나 csreq 변경(ad-hoc → self-signed 마이그레이션 등)으로 무효화된 상태를 자동 감지. 메뉴바에서 `tccutil reset Accessibility com.winmackey.app` 명령 클립보드 복사 또는 Terminal.app에서 자동 실행 (AppleScript).
+- **Ed25519 자동 업데이트 무결성 검증**: `scripts/setup-update-signing.sh` 로 keypair 생성. public key는 앱에 임베드, private key는 `~/.config/winmackey/update-signing.key` 보관. `release.sh` 가 ZIP/DMG 빌드 후 `.sig` 동봉. 업데이트 다운로드 시 CryptoKit `Curve25519.Signing.PublicKey.isValidSignature` 로 검증, 실패하면 설치 거부. GitHub 계정 탈취로 인한 RCE 시나리오 방어.
+
+### Changed
+- `scripts/release.sh` 가 self-signed identity를 실제 codesign 테스트로 자동 감지 후 manual 서명. unsigned .dmg 시대 종료.
+- `WinMacKey/Services/KeyInterceptor.swift` 의 133줄 `handleEvent` C 콜백을 `handleTriggerKey` / `handleMappedKey` / `translateMapping` / `dispatchVerificationCallback` 4개 메서드로 분해. 동작 보존 리팩터로 트리거 처리·매핑·버퍼링·검증 책임 분리.
+- `UpdateService.replaceApp` 의 `xattr -cr` 자동 호출 제거 — quarantine은 Ed25519 서명 검증으로 충분히 신뢰가 형성된 자산에 대해서만 사용자가 의도적으로 해제할 일.
+- `UpdateService.relaunchApp` 을 `/bin/sh -c "open \"...\""` shell interpolation 에서 `Process` + `/usr/bin/open` 인자 배열로 교체.
+
+### Removed
+- `WinMacKey.entitlements` 에서 `com.apple.security.cs.allow-unsigned-executable-memory` 와 `com.apple.security.cs.disable-library-validation` 제거. 코드 grep 결과 0건 사용 — 향후 notarize 단계에서도 안전.
+
+---
+
+## [1.3.0] — Skipped (consolidated into v1.3.1)
+
+내부 빌드만 진행되고 외부로 릴리스되지 않음. 아래 변경 사항은 모두 v1.3.1에 포함됨.
 
 ### Added
 - **F16 HID remap 아키텍처**: `hidutil`로 Right Command를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
@@ -14,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **IOKit 기반 외장 키보드 자동 감지**: `IOHIDManager`로 연결된 키보드를 VendorID/ProductID로 식별
 - **디바이스별 프로필 자동 전환**: 외장 키보드 입력 시 할당된 프로필로 즉시 전환 (디바이스 > 앱 > 기본 우선순위)
 - **Profiles 탭**: "키보드 할당" 버튼으로 키보드 디바이스별 프로필 할당
+- **재부팅 후 자동 실행 옵션**: 로그인 항목 등록과 앱 실행 후 엔진 자동 시작 토글 추가
 - **CHANGELOG.md**: 프로젝트 변경 이력 문서화
 
 ### Fixed
@@ -24,7 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Ghostty / Claude Code terminal regression 1차 안정화**: `[57379u]` raw sequence, Command shortcut 누출(`Cmd+N`, `Cmd+D`, 검색 UI`), `pasting text` 오버레이가 사라지는 단계까지 확인
 - **진단/런타임 정렬**: Caps Lock 설명과 F16 기반 트리거 경로를 현재 동작에 맞게 정리
 - **권한 안내 개선**: 손쉬운 사용 상태 확인과 설치 후 권한 재부여 흐름 정리
-- **검증 베이스라인 추가**: 스모크 테스트 스크립트와 버전 메타데이터를 0.1.1 (build 2)로 정리
+- **검증 베이스라인 추가**: 스모크 테스트 스크립트와 버전 메타데이터를 1.3.0 (build 5)로 정리
 
 ### Changed
 - **트리거 표면 단순화**: Right Option 선택지를 제거하고 Right Command 단일 트리거 모델로 정리

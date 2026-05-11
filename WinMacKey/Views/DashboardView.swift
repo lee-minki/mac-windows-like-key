@@ -142,6 +142,58 @@ struct DashboardView: View {
                         ModifierLayoutView()
                     }
                 }
+
+                // Startup Card
+                cardView(title: "Startup", icon: "power.circle") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("로그인 시 자동 실행")
+                                    .font(.subheadline)
+                                Text(appState.launchAtLoginService.statusDetail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { appState.launchAtLoginService.isEnabled },
+                                set: { appState.launchAtLoginService.setEnabled($0) }
+                            ))
+                            .toggleStyle(.switch)
+                        }
+
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("앱 실행 후 엔진 자동 시작")
+                                    .font(.subheadline)
+                                Text("재부팅 후 바로 Right Command 전환을 쓰려면 함께 켜두세요. 손쉬운 사용 권한이 없으면 시작만 보류됩니다.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $appState.startEngineOnAppLaunch)
+                                .toggleStyle(.switch)
+                        }
+
+                        if appState.launchAtLoginService.requiresApproval {
+                            Button("로그인 항목 설정 열기") {
+                                appState.launchAtLoginService.openLoginItemsSettings()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        } else if appState.launchAtLoginService.shouldShowSettingsButton {
+                            Button("로그인 항목 설정 열기") {
+                                appState.launchAtLoginService.openLoginItemsSettings()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
                 
                 // Permission Status
                 if !appState.hasAccessibilityPermission {

@@ -28,10 +28,12 @@ class HIDRemapper {
         0x3C: 0x7000000E5, // kVK_RightShift      → Right Shift
         0x39: 0x700000039, // kVK_CapsLock        → Caps Lock
         
-        // Function keys (IME / VDI relay용)
-        0x6A: 0x70000006B, // kVK_F16             → F16 (IME toggle / VDI relay)
-        0x4F: 0x70000006D, // kVK_F18             → F18
-        0x50: 0x70000006E,
+        // Function keys
+        0x6A: 0x70000006B, // kVK_F16 → F16 (active IME trigger / VDI relay)
+        // F18/F19는 v1.3 이전 릴레이 실험의 historical 매핑. 현재 트리거 경로에서는 사용하지 않으나
+        // 외부 프로필이 참조할 가능성을 대비해 변환 테이블에 유지.
+        0x4F: 0x70000006D, // kVK_F18 → F18 (historical, unused after v1.3)
+        0x50: 0x70000006E, // kVK_F19 → F19 (historical, unused after v1.3)
         
         // Fn/Globe key (Apple 전용)
         0x3F: 0xFF00000003 // kVK_Function        → Fn (Apple vendor-specific)

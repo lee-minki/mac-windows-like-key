@@ -27,6 +27,7 @@
 - **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
 - **🧩 Keyboard Profiles**: 현재 입력을 실키로 감지하고 `Mac 로컬` / `VDI` 목표 배치를 따로 저장
+- **🔁 Login Startup**: 재부팅 후 자동 실행과 앱 실행 시 엔진 자동 시작 옵션 제공
 - **📍 Menu Bar Utility**: 상태 확인, 로그, Doctor, 업데이트 창에 빠르게 접근
 
 ---
@@ -37,7 +38,11 @@
 
 1. [Releases](https://github.com/lee-minki/mac-windows-like-key/releases)에서 최신 DMG 또는 ZIP 다운로드
 2. WinMac Key.app을 Applications 폴더로 드래그
-3. 앱 실행 후 손쉬운 사용 권한 허용
+3. **최초 실행만**: Applications에서 `WinMacKey.app` 우클릭 → "열기" → 한 번 더 "열기"
+   (또는 터미널: `xattr -dr com.apple.quarantine /Applications/WinMacKey.app`)
+4. 앱 실행 후 손쉬운 사용 권한 허용
+
+> 현재 Apple Developer ID 서명이 없는 빌드라 최초 실행 시 Gatekeeper 경고가 뜹니다. 위 절차로 한 번만 허용해주면 이후엔 일반 앱처럼 더블클릭으로 실행됩니다.
 
 ### Build From Source
 
@@ -97,7 +102,8 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 - `Caps Lock 키로 ABC 입력 소스 전환`은 로컬 macOS에서 순수 Caps Lock을 쓰려면 꺼두는 것을 권장합니다
 - Windows VDI를 사용한다면 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요
-- Ghostty, Terminal.app, iTerm2 같은 터미널류 앱 경로는 현재 재설계 중입니다. `[57379u` 같은 raw sequence나 `Cmd+N` 같은 shortcut 누출이 보이면 terminal regression으로 보고 확인이 필요합니다.
+- 재부팅 후 바로 쓰려면 `설정 → General → Startup`에서 `로그인 시 자동 실행`과 `앱 실행 후 엔진 자동 시작`을 함께 켜세요
+- Ghostty, Terminal.app, iTerm2 같은 터미널류 앱 경로는 F16 노출과 Command shortcut 누출을 막기 위한 별도 경로가 적용되어 있습니다. 1차 안정화는 되었지만 broader verification 전까지 `[57379u` raw sequence나 `Cmd+N` shortcut 누출이 보이면 terminal regression으로 기록해 확인하세요.
 
 ---
 

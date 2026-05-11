@@ -127,13 +127,14 @@ section h2 .emoji{font-size:28px}
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <h1>⌨️ WinMac Key</h1>
-    <p>v1.3 사용 매뉴얼</p>
+    <p>v1.3.0 사용 매뉴얼</p>
   </div>
   <nav id="nav">
     <a href="#intro" class="active"><span class="icon">👋</span>소개</a>
     <a href="#install"><span class="icon">📦</span>설치하기</a>
     <a href="#setup"><span class="icon">⚙️</span>초기 설정</a>
     <a href="#keymapping"><span class="icon">🎹</span>키 매핑</a>
+    <a href="#startup"><span class="icon">🔁</span>자동 실행</a>
     <a href="#vdi"><span class="icon">🖥️</span>VDI 환경 설정</a>
     <a href="#migration"><span class="icon">🔄</span>기존 도구 전환</a>
     <a href="#profiles"><span class="icon">📋</span>외장 키보드</a>
@@ -162,7 +163,7 @@ section h2 .emoji{font-size:28px}
       <tr><td style="width:140px;color:var(--text2)">평균 지연 시간</td><td><span class="badge b-green">&lt; 0.5ms</span></td></tr>
       <tr><td style="color:var(--text2)">CPU 사용률</td><td><span class="badge b-green">&lt; 0.5%</span></td></tr>
       <tr><td style="color:var(--text2)">메모리</td><td><span class="badge b-green">&lt; 20MB</span></td></tr>
-      <tr><td style="color:var(--text2)">지원 OS</td><td>macOS 13.0 (Ventura) 이상</td></tr>
+      <tr><td style="color:var(--text2)">지원 OS</td><td>macOS 14.0 (Sonoma) 이상</td></tr>
       <tr><td style="color:var(--text2)">아키텍처</td><td>Apple Silicon &amp; Intel 유니버설</td></tr>
     </table>
   </div>
@@ -183,6 +184,15 @@ section h2 .emoji{font-size:28px}
       <div class="warn">⚠️ Downloads 폴더에서 직접 실행하면 Spotlight에 중복 표시될 수 있습니다. 반드시 Applications로 이동하세요.</div>
     </div></div>
     <div class="step"><div class="step-num">3</div><div class="step-body">
+      <h3>최초 실행 (Gatekeeper 우회)</h3>
+      <p>현재 빌드는 <strong>Apple Developer ID 서명이 없는 ad-hoc 빌드</strong>입니다. 처음 실행할 때 <em>"확인되지 않은 개발자"</em> 경고가 뜰 수 있습니다. 둘 중 한 가지 방법으로 한 번만 허용하면 됩니다.</p>
+      <ol class="step-list">
+        <li>Applications 폴더에서 <code>WinMacKey.app</code> <strong>우클릭 → 열기</strong> → 팝업의 <strong>"열기"</strong> 클릭</li>
+        <li>또는 터미널에서 <code>xattr -dr com.apple.quarantine /Applications/WinMacKey.app</code></li>
+      </ol>
+      <div class="info-box">ℹ️ Gatekeeper는 인터넷에서 받은 새 앱에 quarantine 속성을 붙입니다. 위 두 방법은 모두 이 속성을 제거하는 같은 효과이며, 이후엔 더블클릭으로 정상 실행됩니다.</div>
+    </div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body">
       <h3>앱 실행</h3>
       <p>Launchpad 또는 Spotlight(⌘+Space)에서 <strong>"WinMac Key"</strong>를 검색하여 실행합니다. 메뉴바(화면 우측 상단)에 <code style="color:var(--text2)">wm</code> 아이콘이 나타나면 성공입니다.</p>
     </div></div>
@@ -251,6 +261,21 @@ section h2 .emoji{font-size:28px}
   </div>
 </section>
 
+<!-- STARTUP -->
+<section id="startup">
+  <h2><span class="emoji">🔁</span> 재부팅 후 자동 실행</h2>
+  <p class="section-desc">매번 앱과 엔진을 직접 켜지 않도록 로그인 항목과 엔진 자동 시작을 따로 설정합니다.</p>
+  <div class="card">
+    <ol class="step-list">
+      <li>메뉴바의 <code>wm/WM</code> 아이콘을 클릭한 뒤 <strong>설정...</strong>을 엽니다.</li>
+      <li><strong>General → Startup</strong> 카드에서 <strong>로그인 시 자동 실행</strong>을 켭니다.</li>
+      <li>재부팅 후 바로 Right Command 전환을 쓰려면 <strong>앱 실행 후 엔진 자동 시작</strong>도 함께 켭니다.</li>
+      <li>상태가 <strong>승인 필요</strong>로 표시되면 <strong>로그인 항목 설정 열기</strong>를 눌러 macOS 시스템 설정에서 WinMac Key를 허용합니다.</li>
+    </ol>
+    <div class="warn">⚠️ 손쉬운 사용 권한이 없으면 앱은 자동 실행되어도 엔진 시작은 보류됩니다.</div>
+  </div>
+</section>
+
 <!-- KEY MAPPING -->
 <section id="keymapping">
   <h2><span class="emoji">🎹</span> 키 매핑 이해하기</h2>
@@ -314,13 +339,16 @@ section h2 .emoji{font-size:28px}
   <div class="card">
     <h3>🔄 동작 원리</h3>
     <div class="code-block">
-[로컬 Mac / 원격 Mac]
+[로컬 Mac]
   Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → 입력소스 전환
+
+[원격 Mac / 화면 공유]
+  별도 검증 전입니다. 로컬 macOS와 동일 동작을 보장하지 않습니다.
 
 [VDI 앱 포커스] (자동 전환)
   Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon: F16 → Right Alt
     </div>
-    <p style="font-size:13px;color:var(--text2);margin-top:8px">hidutil로 Right Cmd를 F16(<ub2c8씨 modifier가 아닌 일반 키)로 변환하여 modifier flag 오염을 원천 차단합니다. VDI 앱이 포커스되면 F16이 Horizon에 그대로 전달됩니다.</p>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">hidutil로 Right Cmd를 F16(modifier가 아닌 일반 키)로 변환하여 modifier flag 오염을 원천 차단합니다. VDI 앱이 포커스되면 F16이 Horizon에 그대로 전달됩니다.</p>
   </div>
 
   <div class="card">
@@ -338,18 +366,19 @@ section h2 .emoji{font-size:28px}
   </div>
 
   <div class="card">
-    <h3>📋 자동 감지 앱 목록</h3>
+    <h3>📋 VDI 앱 상태</h3>
     <table class="tbl">
-      <thead><tr><th>앱 이름</th><th>Bundle ID</th></tr></thead>
+      <thead><tr><th>구분</th><th>앱 이름</th><th>Bundle ID</th></tr></thead>
       <tbody>
-        <tr><td>Omnissa Horizon Client</td><td><code>com.omnissa.horizon.client.mac</code></td></tr>
-        <tr><td>Omnissa Horizon Protocol</td><td><code>com.omnissa.horizon.protocol</code></td></tr>
-        <tr><td>VMware Horizon (Legacy)</td><td><code>com.vmware.horizon</code></td></tr>
-        <tr><td>VMware Fusion</td><td><code>com.vmware.fusion</code></td></tr>
-        <tr><td>Parallels Desktop</td><td><code>com.parallels.desktop.console</code></td></tr>
-        <tr><td>Microsoft RDP</td><td><code>com.microsoft.rdc.macos</code></td></tr>
+        <tr><td><span class="badge b-green">검증됨</span></td><td>Omnissa Horizon Client</td><td><code>com.omnissa.horizon.client.mac</code></td></tr>
+        <tr><td><span class="badge b-blue">자동 감지 / 미검증</span></td><td>Omnissa Horizon Protocol</td><td><code>com.omnissa.horizon.protocol</code></td></tr>
+        <tr><td><span class="badge b-blue">자동 감지 / 미검증</span></td><td>VMware Horizon (Legacy)</td><td><code>com.vmware.horizon</code></td></tr>
+        <tr><td><span class="badge b-blue">자동 감지 / 미검증</span></td><td>VMware Fusion</td><td><code>com.vmware.fusion</code></td></tr>
+        <tr><td><span class="badge b-blue">자동 감지 / 미검증</span></td><td>Parallels Desktop</td><td><code>com.parallels.desktop.console</code></td></tr>
+        <tr><td><span class="badge b-blue">자동 감지 / 미검증</span></td><td>Microsoft RDP</td><td><code>com.microsoft.rdc.macos</code></td></tr>
       </tbody>
     </table>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">자동 감지는 포커스 분기만 의미합니다. 실제 한/영 전환은 각 VDI 클라이언트의 F16 → Right Alt 설정과 별도 검증이 필요합니다.</p>
   </div>
 </section>
 

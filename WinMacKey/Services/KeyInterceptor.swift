@@ -36,7 +36,7 @@ class KeyInterceptor: ObservableObject {
     private var bufferedReplayWindow: BufferedReplayWindow = .none
     private var bufferedReplayStartedAt: UInt64 = 0
 
-    /// 트리거 키 릴리즈 후 VDI 쇀틀 을다운
+    /// 트리거 키 릴리즈 후 버퍼링된 키 이벤트 (VDI 릴레이 쿨다운 / 입력소스 commit 윈도우 동안 보관)
     private var bufferedKeyEvents: [CGEvent] = []
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
@@ -344,6 +344,8 @@ class KeyInterceptor: ObservableObject {
         }
     }
     
+    /// C-style CGEventTap 콜백.
+    /// 탭/합성-이벤트 admin만 처리하고, 실제 로직은 interceptor 인스턴스 메서드에 위임한다.
     private static func handleEvent(
         proxy: CGEventTapProxy,
         type: CGEventType,
@@ -351,7 +353,7 @@ class KeyInterceptor: ObservableObject {
         refcon: UnsafeMutableRawPointer?
     ) -> Unmanaged<CGEvent>? {
         let startTime = DispatchTime.now()
-        
+
         // 탭 재활성화 (콜백 내 즉시 처리)
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = shared?.eventTap {
@@ -360,7 +362,7 @@ class KeyInterceptor: ObservableObject {
             }
             return Unmanaged.passUnretained(event)
         }
-        
+
         // 합성 이벤트(자신이 주입한 이벤트)는 재처리 없이 통과
         if event.getIntegerValueField(.eventSourceUserData) == syntheticEventMarker {
             return Unmanaged.passUnretained(event)
@@ -369,114 +371,162 @@ class KeyInterceptor: ObservableObject {
         guard let interceptor = shared else {
             return Unmanaged.passUnretained(event)
         }
-        
+
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        var mappedKeyCode = keyCode
-        var finalEvent = event
-        
-        let triggerKey = interceptor.triggerKeyCode
 
-        // ====== 트리거 키 처리 (F16 기반 한영 전환 / VDI 패스스루) ======
-        // F16은 modifier가 아니므로 keyDown/keyUp으로 도달.
-        // → modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
-        // VDI 모드: F16 패스스루 → Horizon이 Right Alt로 직접 변환
-        // 로컬 Mac: F16 suppress → Control+Space 합성
-
-        if keyCode == triggerKey && (type == .keyDown || type == .keyUp) {
-            if type == .keyDown {
-                let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-                if !isRepeat && !interceptor.triggerKeyPressed {
-                    interceptor.triggerKeyPressed = true
-                    interceptor.logger.info("⚡️ Trigger key (F16) detected (VDI=\(interceptor.isVdiAppFocused))")
-                    interceptor.onInputSourceToggle?()
-                }
-            } else {
-                // keyUp
-                interceptor.triggerKeyPressed = false
-            }
-
-            interceptor.logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
-
-            if interceptor.isVdiAppFocused {
-                // VDI: F16 패스스루 — Horizon이 F16 → Right Alt로 직접 변환
-                return Unmanaged.passUnretained(event)
-            } else {
-                // 로컬 Mac: suppress — Control+Space를 합성하여 입력소스 전환
-                return nil
-            }
+        // 트리거 키(F16)는 매핑/버퍼링과 무관한 별도 경로
+        if keyCode == interceptor.triggerKeyCode && (type == .keyDown || type == .keyUp) {
+            return interceptor.handleTriggerKey(event: event, type: type, startTime: startTime, keyCode: keyCode)
         }
-        
-        
-        // ====== 일반 매핑 처리 ======
-        // 이중 매핑 방지: modifier-to-modifier 매핑은 HIDRemapper(hidutil)가 이미 처리하므로
-        // CGEventTap에서는 HID가 처리할 수 없는 매핑만 수행합니다.
 
-        if keyCode != triggerKey, let newKeyCode = interceptor.keyMappings[keyCode] {
-            let isSourceModifier = interceptor.modifierKeyToFlag[keyCode] != nil
-            let isDestModifier = interceptor.modifierKeyToFlag[newKeyCode] != nil
+        return interceptor.handleMappedKey(event: event, type: type, startTime: startTime, keyCode: keyCode)
+    }
 
-            // HID가 이미 처리한 modifier→modifier 매핑은 스킵 (이중 변환 방지)
-            let hidCanHandle = isSourceModifier && isDestModifier
-                && HIDRemapper.keycodeToHIDUsage[keyCode] != nil
-                && HIDRemapper.keycodeToHIDUsage[newKeyCode] != nil
+    // MARK: - Event Handling Pipeline (split from handleEvent)
 
-            if !hidCanHandle {
-                mappedKeyCode = newKeyCode
-
-                if type == .flagsChanged {
-                    if isSourceModifier && !isDestModifier {
-                        // Modifier → General Key
-                        if let srcFlag = interceptor.modifierKeyToFlag[keyCode] {
-                            let isDown = event.flags.contains(srcFlag)
-                            if let newEvent = CGEvent(keyboardEventSource: CGEventSource(event: event),
-                                                       virtualKey: CGKeyCode(newKeyCode),
-                                                       keyDown: isDown) {
-                                var newFlags = event.flags
-                                newFlags.remove(srcFlag)
-                                newEvent.flags = newFlags
-                                finalEvent = newEvent
-                            }
-                        }
-                    }
-                    // modifier→modifier는 HID가 처리, 여기서는 패스
-                } else {
-                    // keyDown / keyUp: 일반 키코드 교체
-                    event.setIntegerValueField(.keyboardEventKeycode, value: newKeyCode)
-                }
+    /// F16 트리거 키 처리.
+    /// VDI 모드: 패스스루 → Horizon이 Right Alt로 변환.
+    /// 로컬 Mac:  suppress → 외부에서 Control+Space 합성으로 입력소스 전환.
+    private func handleTriggerKey(
+        event: CGEvent,
+        type: CGEventType,
+        startTime: DispatchTime,
+        keyCode: Int64
+    ) -> Unmanaged<CGEvent>? {
+        if type == .keyDown {
+            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            if !isRepeat && !triggerKeyPressed {
+                triggerKeyPressed = true
+                logger.info("⚡️ Trigger key (F16) detected (VDI=\(self.isVdiAppFocused))")
+                onInputSourceToggle?()
             }
+        } else {
+            // keyUp
+            triggerKeyPressed = false
         }
-        
-        // 로깅
-        interceptor.logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
 
-        if interceptor.bufferedReplayWindow != .none && keyCode != triggerKey {
-            interceptor.bufferKeyEvent(finalEvent)
+        logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
+
+        if isVdiAppFocused {
+            return Unmanaged.passUnretained(event)
+        } else {
             return nil
         }
-        
-        // 검증 콜백 호출 (Step 1 키 감지 / Step 3 실시간 확인용)
-        if let verify = interceptor.onVerifyKeyEvent {
-            let isDown: Bool
-            if type == .flagsChanged {
-                if let flag = interceptor.modifierKeyToFlag[keyCode] {
-                    isDown = event.flags.contains(flag)
-                } else {
-                    isDown = true
-                }
-            } else {
-                isDown = (type == .keyDown)
+    }
+
+    /// 일반 키 매핑 + 버퍼링 + 검증 콜백 디스패치.
+    private func handleMappedKey(
+        event: CGEvent,
+        type: CGEventType,
+        startTime: DispatchTime,
+        keyCode: Int64
+    ) -> Unmanaged<CGEvent>? {
+        var mappedKeyCode = keyCode
+        var finalEvent = event
+
+        if let newKeyCode = keyMappings[keyCode] {
+            let (translated, newMapped) = translateMapping(
+                event: event,
+                type: type,
+                sourceKey: keyCode,
+                destKey: newKeyCode
+            )
+            if let translated {
+                finalEvent = translated
             }
-            if isDown {
-                DispatchQueue.main.async {
-                    verify(keyCode, mappedKeyCode, true)
-                }
-            }
+            mappedKeyCode = newMapped
         }
-        
+
+        logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
+
+        if bufferedReplayWindow != .none {
+            bufferKeyEvent(finalEvent)
+            return nil
+        }
+
+        dispatchVerificationCallback(
+            event: finalEvent,
+            type: type,
+            originalKey: keyCode,
+            mappedKey: mappedKeyCode
+        )
+
         if finalEvent !== event {
             return Unmanaged.passRetained(finalEvent)
         }
         return Unmanaged.passUnretained(finalEvent)
+    }
+
+    /// HID가 처리할 수 없는 매핑만 CGEventTap 레벨에서 변환.
+    /// - Returns: (재구성된 이벤트 or nil, 매핑된 키코드).
+    ///   nil이면 원본 이벤트를 그대로 사용해야 한다.
+    private func translateMapping(
+        event: CGEvent,
+        type: CGEventType,
+        sourceKey: Int64,
+        destKey: Int64
+    ) -> (event: CGEvent?, mappedKeyCode: Int64) {
+        let isSourceModifier = modifierKeyToFlag[sourceKey] != nil
+        let isDestModifier = modifierKeyToFlag[destKey] != nil
+
+        // HID가 이미 처리한 modifier→modifier 매핑은 스킵 (이중 변환 방지)
+        let hidCanHandle = isSourceModifier && isDestModifier
+            && HIDRemapper.keycodeToHIDUsage[sourceKey] != nil
+            && HIDRemapper.keycodeToHIDUsage[destKey] != nil
+
+        guard !hidCanHandle else {
+            return (nil, sourceKey)
+        }
+
+        if type == .flagsChanged {
+            // Modifier → General Key: 새 keyDown/keyUp 이벤트로 변환
+            if isSourceModifier && !isDestModifier,
+               let srcFlag = modifierKeyToFlag[sourceKey],
+               let newEvent = CGEvent(
+                    keyboardEventSource: CGEventSource(event: event),
+                    virtualKey: CGKeyCode(destKey),
+                    keyDown: event.flags.contains(srcFlag)
+               )
+            {
+                var newFlags = event.flags
+                newFlags.remove(srcFlag)
+                newEvent.flags = newFlags
+                return (newEvent, destKey)
+            }
+            // modifier→modifier는 HID가 처리, 여기서는 패스
+            return (nil, sourceKey)
+        }
+
+        // keyDown / keyUp: 원본 이벤트의 키코드 in-place 교체
+        event.setIntegerValueField(.keyboardEventKeycode, value: destKey)
+        return (nil, destKey)
+    }
+
+    /// 위저드 Step 1/Step 3에서 사용하는 검증 콜백 디스패치.
+    private func dispatchVerificationCallback(
+        event: CGEvent,
+        type: CGEventType,
+        originalKey: Int64,
+        mappedKey: Int64
+    ) {
+        guard let verify = onVerifyKeyEvent else { return }
+
+        let isDown: Bool
+        if type == .flagsChanged {
+            if let flag = modifierKeyToFlag[originalKey] {
+                isDown = event.flags.contains(flag)
+            } else {
+                isDown = true
+            }
+        } else {
+            isDown = (type == .keyDown)
+        }
+
+        if isDown {
+            DispatchQueue.main.async {
+                verify(originalKey, mappedKey, true)
+            }
+        }
     }
 
     private func bufferKeyEvent(_ event: CGEvent) {

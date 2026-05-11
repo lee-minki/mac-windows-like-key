@@ -120,7 +120,8 @@ class DoctorService: ObservableObject {
             "eventViewerAlwaysOnTop",
             "savedKeyboardProfiles",
             "languagePairSource1",
-            "languagePairSource2"
+            "languagePairSource2",
+            "startEngineOnAppLaunch"
         ]
         for key in keys {
             UserDefaults.standard.removeObject(forKey: key)

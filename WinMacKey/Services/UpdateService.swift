@@ -1,30 +1,42 @@
 import Foundation
 import AppKit
+import CryptoKit
 
 /// GitHub Releases 기반 업데이트 서비스
-/// .zip 다운로드 → 압축 해제 → 앱 교체 → 재시작
+/// .zip/.dmg + .sig 다운로드 → Ed25519 서명 검증 → 압축 해제 → 앱 교체 → 재시작
 class UpdateService: ObservableObject {
     // MARK: - Configuration
-    
+
     /// GitHub 저장소 정보
     private let githubOwner = "lee-minki"
     private let githubRepo = "mac-windows-like-key"
-    
+
+    /// Ed25519 public key for verifying update assets (raw 32 bytes, base64 encoded).
+    /// `scripts/setup-update-signing.sh` 가 키 생성 시 이 라인을 자동 갱신합니다.
+    /// 빈 문자열이면 서명 검증이 비활성화됨 (개발 빌드용 폴백).
+    static let updateSigningPublicKeyBase64: String = "ajQV1+y6XqbUoNPM2xP/ATAEQpgrLuC9bXnmY6Tq+9A="
+
     /// 현재 앱 버전 (Bundle에서 가져옴)
     var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }
-    
+
+    /// 서명 검증이 활성화되어 있는지 여부
+    var signatureVerificationEnabled: Bool {
+        !Self.updateSigningPublicKeyBase64.isEmpty
+    }
+
     // MARK: - Published Properties
-    
+
     @Published var isCheckingForUpdates = false
     @Published var updateAvailable = false
     @Published var latestVersion: String?
     @Published var releaseNotes: String?
     @Published var downloadURL: URL?
+    @Published var signatureURL: URL?
     @Published var lastCheckDate: Date?
     @Published var error: UpdateError?
-    
+
     // 다운로드 진행 상태
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0
@@ -81,17 +93,26 @@ class UpdateService: ObservableObject {
             releaseNotes = release.body
             
             // .zip 또는 .dmg 파일 찾기 (zip 우선)
-            if let zipAsset = release.assets.first(where: { $0.name.hasSuffix(".zip") }) {
-                downloadURL = URL(string: zipAsset.browserDownloadURL)
-            } else if let dmgAsset = release.assets.first(where: { $0.name.hasSuffix(".dmg") }) {
-                downloadURL = URL(string: dmgAsset.browserDownloadURL)
+            // 동일 파일명에 .sig 가 추가된 자산을 함께 찾음 (예: WinMacKey-v1.3.1.zip.sig)
+            downloadURL = nil
+            signatureURL = nil
+
+            let chosenAsset: GitHubAsset? = release.assets.first(where: { $0.name.hasSuffix(".zip") })
+                ?? release.assets.first(where: { $0.name.hasSuffix(".dmg") })
+
+            if let asset = chosenAsset {
+                downloadURL = URL(string: asset.browserDownloadURL)
+                let sigName = asset.name + ".sig"
+                if let sig = release.assets.first(where: { $0.name == sigName }) {
+                    signatureURL = URL(string: sig.browserDownloadURL)
+                }
             }
-            
+
             updateAvailable = isNewerVersion(latestVersionString, than: currentVersion)
             
         } catch {
             self.error = .networkError
-            print("[UpdateService] Error checking for updates: \(error)")
+            LogService.shared.error("Update check failed: \(error.localizedDescription)", category: "Update")
         }
     }
     
@@ -116,11 +137,19 @@ class UpdateService: ObservableObject {
     /// 앱 다운로드 → 교체 → 재시작
     @MainActor
     func downloadAndInstall() async {
+        // 위치 가드: /Applications/ 안에서만 자동 업데이트 허용
+        // 다른 위치(Downloads, Desktop 등)에서 실행 중이면 업데이트 후에도 표준 위치에 중복본이 남음
+        let bundlePath = Bundle.main.bundleURL.path
+        guard bundlePath.hasPrefix("/Applications/") else {
+            error = .notInApplicationsFolder(bundlePath)
+            return
+        }
+
         guard let url = downloadURL else {
             error = .noDownloadURL
             return
         }
-        
+
         isDownloading = true
         downloadProgress = 0
         updateStatus = "다운로드 준비 중..."
@@ -134,8 +163,15 @@ class UpdateService: ObservableObject {
             // 1. 다운로드
             updateStatus = "다운로드 중..."
             let (tempFileURL, _) = try await downloadWithProgress(url: url)
-            
-            // 2. 압축 해제
+
+            // 2. 서명 검증 (public key가 임베드된 경우에만)
+            if signatureVerificationEnabled {
+                updateStatus = "서명 검증 중..."
+                downloadProgress = 0.78
+                try await verifyDownloadSignature(assetURL: tempFileURL)
+            }
+
+            // 3. 압축 해제
             updateStatus = "압축 해제 중..."
             downloadProgress = 0.8
             let extractedAppURL = try extractUpdate(from: tempFileURL)
@@ -158,6 +194,55 @@ class UpdateService: ObservableObject {
         }
     }
     
+    /// 다운로드된 자산이 임베드된 Ed25519 public key로 서명되었는지 검증
+    /// 실패 시 throw — 검증 실패한 자산은 절대 설치하지 않음
+    private func verifyDownloadSignature(assetURL: URL) async throws {
+        guard let sigURL = signatureURL else {
+            throw UpdateError.signatureMissing
+        }
+
+        // .sig 파일 다운로드 (작아서 한 번에)
+        let (sigData, sigResponse) = try await URLSession.shared.data(from: sigURL)
+        guard let http = sigResponse as? HTTPURLResponse, http.statusCode == 200 else {
+            throw UpdateError.signatureMissing
+        }
+
+        // .sig 파일이 base64 텍스트로 저장된 경우 디코드 시도 — 아니면 raw bytes 그대로
+        let signatureBytes: Data
+        if let asString = String(data: sigData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let decoded = Data(base64Encoded: asString) {
+            signatureBytes = decoded
+        } else {
+            signatureBytes = sigData
+        }
+
+        // Ed25519 signature는 정확히 64바이트
+        guard signatureBytes.count == 64 else {
+            throw UpdateError.signatureInvalid("signature 크기 오류 (\(signatureBytes.count) bytes)")
+        }
+
+        // Public key 파싱
+        guard let pubKeyData = Data(base64Encoded: Self.updateSigningPublicKeyBase64),
+              pubKeyData.count == 32 else {
+            throw UpdateError.signatureInvalid("public key 파싱 실패")
+        }
+
+        let publicKey: Curve25519.Signing.PublicKey
+        do {
+            publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData)
+        } catch {
+            throw UpdateError.signatureInvalid("public key 형식 오류: \(error.localizedDescription)")
+        }
+
+        // 자산 파일 전체를 메모리에 로드 (수 MB 수준이라 OK)
+        let assetData = try Data(contentsOf: assetURL)
+
+        let valid = publicKey.isValidSignature(signatureBytes, for: assetData)
+        guard valid else {
+            throw UpdateError.signatureInvalid("서명 검증 실패")
+        }
+    }
+
     /// URLSession으로 파일 다운로드 (진행률 추적)
     private func downloadWithProgress(url: URL) async throws -> (URL, URLResponse) {
         let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
@@ -297,21 +382,23 @@ class UpdateService: ObservableObject {
     }
     
     /// 현재 앱을 새 버전으로 교체
+    /// quarantine 속성은 의도적으로 건드리지 않음 — Ed25519 서명 검증으로 무결성을 보장하므로
+    /// Gatekeeper의 user-acknowledgment를 강제 해제할 이유가 없다.
     private func replaceApp(currentApp: URL, newApp: URL) throws {
         let fm = FileManager.default
         let backupURL = currentApp.deletingLastPathComponent()
             .appendingPathComponent("WinMacKey.app.bak")
-        
+
         // 백업 (기존 백업 제거)
         try? fm.removeItem(at: backupURL)
-        
+
         // 현재 앱 → 백업
         try fm.moveItem(at: currentApp, to: backupURL)
-        
+
         do {
             // 새 앱 → 현재 위치로 이동
             try fm.moveItem(at: newApp, to: currentApp)
-            
+
             // 성공 시 백업 제거
             try? fm.removeItem(at: backupURL)
         } catch {
@@ -319,30 +406,18 @@ class UpdateService: ObservableObject {
             try? fm.moveItem(at: backupURL, to: currentApp)
             throw UpdateError.installFailed("앱 교체 실패: \(error.localizedDescription)")
         }
-        
-        // Gatekeeper quarantine 속성 제거 (서명 없는 앱용)
-        let xattrTask = Process()
-        xattrTask.launchPath = "/usr/bin/xattr"
-        xattrTask.arguments = ["-cr", currentApp.path]
-        xattrTask.standardOutput = Pipe()
-        xattrTask.standardError = Pipe()
-        try? xattrTask.run()
-        xattrTask.waitUntilExit()
     }
-    
-    /// 앱 재시작
+
+    /// 앱 재시작 — 인자 배열로 /usr/bin/open 직접 호출 (shell interpolation 회피)
     private func relaunchApp(at appURL: URL) {
-        // 0.5초 후 새 앱 실행 (현재 프로세스가 종료될 시간)
-        let script = """
-        sleep 0.5
-        open "\(appURL.path)"
-        """
-        
         let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", script]
+        task.launchPath = "/usr/bin/open"
+        task.arguments = [appURL.path]
+
+        // 현재 프로세스가 종료될 약간의 시간을 확보 — open은 비동기이므로
+        // 종료 sequence 와 동시에 실행되어도 새 인스턴스가 안전하게 launch됨.
         try? task.run()
-        
+
         // HID 매핑 해제 후 종료
         HIDRemapper.shared.clearMappingsSync()
         NSApplication.shared.terminate(nil)
@@ -389,7 +464,10 @@ enum UpdateError: LocalizedError {
     case appNotFoundInArchive
     case unsupportedArchiveFormat(String)
     case installFailed(String)
-    
+    case notInApplicationsFolder(String)
+    case signatureMissing
+    case signatureInvalid(String)
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -412,6 +490,12 @@ enum UpdateError: LocalizedError {
             return "자동 설치를 지원하지 않는 업데이트 형식입니다. (\(ext))"
         case .installFailed(let reason):
             return "설치 실패: \(reason)"
+        case .notInApplicationsFolder(let path):
+            return "자동 업데이트는 /Applications/ 폴더에서 실행 중일 때만 가능합니다. 현재 위치: \(path) — 앱을 /Applications/로 옮긴 뒤 다시 시도하세요."
+        case .signatureMissing:
+            return "이 릴리스에 서명 파일(.sig)이 없습니다. 검증 없이 설치하지 않습니다."
+        case .signatureInvalid(let reason):
+            return "업데이트 서명 검증에 실패했습니다 (\(reason)). 자산이 변조되었을 수 있어 설치를 중단합니다."
         }
     }
 }

@@ -29,8 +29,8 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 ## Source-of-Truth Rules
 - Keep local Mac behavior and VDI behavior distinct.
-- `docs/SETUP_GUIDE.md` and `docs/VDI_SETUP.md` are the user-facing source of truth for setup.
-- Preserve the F16/F18 relay model unless there is a clear reason to change it.
+- `docs/SETUP_GUIDE.md` and `docs/VDI_SETUP.md` are the user-facing source of truth for setup; `docs/manual.html` must either mirror them or clearly point back to them.
+- Preserve the current F16 relay model. F18 is historical unless explicitly reintroduced with code and runtime evidence.
 - Treat device/profile auto switching as behavior-critical.
 
 ## Agent Rules

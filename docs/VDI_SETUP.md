@@ -31,9 +31,10 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 
 ### 1. Mac 로컬 설정
 
-- 로컬 macOS 및 원격 Mac 세션을 쓸 예정이라면,
+- 로컬 macOS에서 Control+Space를 쓰려면
   `시스템 설정` > `키보드` > `키보드 단축키...` > `입력 소스`에서
   **이전 입력 소스 선택**이 `^ Space` (Control+Space)로 설정되어 있는지 확인합니다.
+- 원격 Mac / 화면 공유 세션은 아직 별도 검증 전이므로 로컬 macOS와 동일하게 동작한다고 가정하지 않습니다.
 
 ### 2. Omnissa Horizon Client 설정
 
@@ -99,8 +100,8 @@ A. v1.3.0 이상으로 업데이트하세요. F16 HID remap 아키텍처로 modi
 A.
 
 1. Horizon Client에 `F16 → Right Alt` 매핑이 정확히 들어가 있는지 확인하세요.
-2. WinMac Key의 Dashboard 메뉴에서 "트리거 키"가 본인이 누르는 키(`rightCmd` 등)로 잘 설정되어 있는지 확인하세요.
-3. Karabiner-Elements에서 Complex Rules (특히 Right Command -> F16/F18, 한/영 등)가 켜져 있다면, **WinMac Key와 충돌하므로 반드시 꺼야 합니다.**
+2. WinMac Key는 Right Command 단일 트리거 모델입니다. 메뉴바가 `WM` 상태인지, 손쉬운 사용 권한이 허용되어 있는지 확인하세요.
+3. Karabiner-Elements에서 Complex Rules (특히 Right Command -> F16/F18, 한/영 등)가 켜져 있다면, **WinMac Key와 충돌하므로 반드시 꺼야 합니다.** F18은 과거 relay 실험/외부 규칙 잔재로만 취급하세요.
 
 ### Q. 글자가 밀리거나 씹히는 현상은 없나요?
 

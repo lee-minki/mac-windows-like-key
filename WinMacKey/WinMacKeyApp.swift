@@ -106,6 +106,7 @@ class AppState: ObservableObject {
     let permissionService = PermissionService()
     let contextManager = ContextManager()
     let updateService = UpdateService()
+    let launchAtLoginService = LaunchAtLoginService()
     let stateManager = StateManager()
     let resetService = ResetService()
     let profileStore = KeyboardProfileStore()
@@ -113,6 +114,9 @@ class AppState: ObservableObject {
 
     @Published var showResetConfirmation: Bool = false
     @Published var lastActiveKeyboard: KeyboardDeviceIdentifier?
+    @Published var duplicateInstallations: [URL] = []
+
+    @AppStorage("startEngineOnAppLaunch") var startEngineOnAppLaunch: Bool = false
 
     private var permissionObserver: NSObjectProtocol?
     private var activationObserver: NSObjectProtocol?
@@ -139,6 +143,9 @@ class AppState: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
         updateService.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        launchAtLoginService.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
         keyboardDeviceManager.objectWillChange
@@ -225,10 +232,12 @@ class AppState: ObservableObject {
 
         checkPermissions()
         bootstrapPermissionPromptsIfNeeded()
+        startEngineOnLaunchIfNeeded()
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
         keyboardDeviceManager.startMonitoring()
+        checkForDuplicateInstallations()
 
         setupActivationObserver()
 
@@ -248,6 +257,17 @@ class AppState: ObservableObject {
             LogService.shared.warning("Bootstrap: requested Accessibility permission", category: "App")
         }
     }
+
+    private func startEngineOnLaunchIfNeeded() {
+        guard startEngineOnAppLaunch else { return }
+
+        if hasAccessibilityPermission {
+            toggleEngine()
+            LogService.shared.info("Bootstrap: started engine from launch preference", category: "App")
+        } else {
+            LogService.shared.warning("Bootstrap: launch engine preference blocked by missing Accessibility permission", category: "App")
+        }
+    }
     
     private func setupPermissionObserver() {
         permissionObserver = NotificationCenter.default.addObserver(
@@ -255,10 +275,12 @@ class AppState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self = self else { return }
-            self.checkPermissions()
-            if self.hasAccessibilityPermission && !self.isEngineRunning {
-                self.toggleEngine()
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.checkPermissions()
+                if self.startEngineOnAppLaunch && self.hasAccessibilityPermission && !self.isEngineRunning {
+                    self.toggleEngine()
+                }
             }
         }
     }
@@ -269,7 +291,10 @@ class AppState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.checkPermissions()
+            Task { @MainActor in
+                self?.checkPermissions()
+                self?.launchAtLoginService.refreshStatus()
+            }
         }
     }
     
@@ -402,6 +427,7 @@ class AppState: ObservableObject {
                 self?.currentLatencyMs = 0.0
                 self?.stateManager.switchCount = 0
                 self?.stateManager.refreshCurrentSource()
+                self?.launchAtLoginService.unregisterForReset()
                 LogService.shared.info("Reset completed", category: "App")
             }
         }
@@ -423,6 +449,70 @@ class AppState: ObservableObject {
         }
         if let observer = activationObserver {
             NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    // MARK: - Duplicate Installation Detection
+
+    /// mdfind로 동일 bundle ID를 가진 모든 .app 위치를 찾고,
+    /// 표준 설치 위치(/Applications)가 아닌 추가 인스턴스가 있으면 사용자에게 알림.
+    /// build/DerivedData, /Volumes(마운트된 DMG), 휴지통 등은 제외.
+    func checkForDuplicateInstallations() {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let currentURL = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
+
+        DispatchQueue.global(qos: .utility).async {
+            let allInstalls = Self.findAllInstallations(bundleID: bundleID)
+            let others = allInstalls.filter { $0 != currentURL }
+
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.duplicateInstallations = others
+                if !others.isEmpty {
+                    let pathList = others.map(\.path).joined(separator: ", ")
+                    LogService.shared.warning(
+                        "Duplicate installations detected: \(pathList)",
+                        category: "Install"
+                    )
+                }
+            }
+        }
+    }
+
+    private static func findAllInstallations(bundleID: String) -> [URL] {
+        let task = Process()
+        task.launchPath = "/usr/bin/mdfind"
+        task.arguments = ["kMDItemCFBundleIdentifier == '\(bundleID)'"]
+
+        let outPipe = Pipe()
+        task.standardOutput = outPipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+
+            guard let output = String(data: data, encoding: .utf8) else { return [] }
+            let fm = FileManager.default
+
+            return output.split(whereSeparator: \.isNewline)
+                .compactMap { line -> URL? in
+                    let path = String(line)
+                    // 빌드 산출물 / 휴지통 / 마운트된 DMG / 임시 경로 제외
+                    let excluded = [
+                        "/build/", "/DerivedData/", "/Caches/",
+                        "/.Trashes/", "/.Trash/",
+                        "/Volumes/", "/private/var/folders/",
+                        "/tmp/", "/private/tmp/",
+                        "/Backups.backupdb/"
+                    ]
+                    if excluded.contains(where: { path.contains($0) }) { return nil }
+                    let url = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+                    return fm.fileExists(atPath: url.path) ? url : nil
+                }
+        } catch {
+            return []
         }
     }
 

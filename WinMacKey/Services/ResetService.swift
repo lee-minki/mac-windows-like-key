@@ -13,12 +13,14 @@ class ResetService {
         "LastUpdateCheck",
         "AutoCheckUpdates",
         "CustomVirtualizationApps",
+        "CustomTerminalApps",
         "activeMappingProfileId",
         "visualCustomMappings",
         "eventViewerAlwaysOnTop",
         "savedKeyboardProfiles",
         "languagePairSource1",
-        "languagePairSource2"
+        "languagePairSource2",
+        "startEngineOnAppLaunch"
     ]
     
     /// 모든 앱 설정을 초기화합니다.

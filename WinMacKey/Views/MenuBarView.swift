@@ -15,9 +15,15 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             // 헤더 - 앱 상태
             headerSection
-            
+
             Divider()
-            
+
+            // 중복 설치 경고 (있을 때만)
+            if !appState.duplicateInstallations.isEmpty {
+                duplicateInstallSection
+                Divider()
+            }
+
             // 권한이 없으면 권한 가이드 표시
             if !appState.hasAccessibilityPermission {
                 permissionWarningSection
@@ -104,21 +110,78 @@ struct MenuBarView: View {
     
     private var permissionWarningSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("권한이 필요합니다", systemImage: "exclamationmark.triangle.fill")
+            let isStale = appState.permissionService.isStaleGrantDetected
+
+            Label(isStale ? "권한 등록이 무효화되었습니다" : "권한이 필요합니다",
+                  systemImage: isStale ? "exclamationmark.shield.fill" : "exclamationmark.triangle.fill")
                 .font(.subheadline)
                 .foregroundStyle(.orange)
-            
+
             if !appState.hasAccessibilityPermission {
-                Text("손쉬운 사용 권한을 허용해주세요")
+                Text(isStale
+                     ? "이전 버전의 권한 등록(csreq)이 남아 동작하지 않을 수 있습니다. 아래 명령으로 초기화 후 다시 허용해주세요."
+                     : "손쉬운 사용 권한을 허용해주세요")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Button("손쉬운 사용 설정 열기") {
-                    appState.permissionService.openAccessibilitySettings()
+                if isStale {
+                    HStack(spacing: 6) {
+                        Button("터미널에서 초기화") {
+                            appState.permissionService.runTccutilResetInTerminal()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+
+                        Button("명령 복사") {
+                            appState.permissionService.copyTccutilCommandToClipboard()
+                        }
+                        .controlSize(.small)
+                    }
+
+                    Text(appState.permissionService.tccutilResetCommand)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .textSelection(.enabled)
                 }
-                .buttonStyle(.borderedProminent)
+
+                Group {
+                    if isStale {
+                        Button("손쉬운 사용 설정 열기") {
+                            appState.permissionService.openAccessibilitySettings()
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button("손쉬운 사용 설정 열기") {
+                            appState.permissionService.openAccessibilitySettings()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
                 .controlSize(.small)
             }
+        }
+        .padding(12)
+    }
+
+    private var duplicateInstallSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("WinMac Key가 \(appState.duplicateInstallations.count + 1)곳에 설치됨",
+                  systemImage: "square.on.square.dashed")
+                .font(.subheadline)
+                .foregroundStyle(.orange)
+
+            Text("권한·업데이트가 꼬일 수 있어 한 곳에서만 사용을 권장합니다. 다른 위치의 앱을 휴지통으로 옮기세요.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button("Finder에서 다른 위치 보기") {
+                for url in appState.duplicateInstallations {
+                    NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")
+                }
+            }
+            .controlSize(.small)
         }
         .padding(12)
     }
@@ -250,6 +313,17 @@ struct MenuBarView: View {
                     .foregroundStyle(.red)
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+
+            Toggle(isOn: Binding(
+                get: { appState.launchAtLoginService.isEnabled },
+                set: { appState.launchAtLoginService.setEnabled($0) }
+            )) {
+                Label("로그인 시 자동 실행", systemImage: "power.circle")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .toggleStyle(.checkbox)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             
