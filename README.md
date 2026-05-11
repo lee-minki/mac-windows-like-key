@@ -44,6 +44,8 @@
 
 > 현재 Apple Developer ID 서명이 없는 빌드라 최초 실행 시 Gatekeeper 경고가 뜹니다. 위 절차로 한 번만 허용해주면 이후엔 일반 앱처럼 더블클릭으로 실행됩니다.
 
+이미 사용 중이라면 → **[재설치 가이드](docs/REINSTALL_GUIDE.md)** (업그레이드 / 클린 재설치 / 자동 업데이트가 막혔을 때)
+
 ### Build From Source
 
 ```bash
