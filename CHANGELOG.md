@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **프로필 위자드 Step 2 ("현재 입력 감지") 에서 modifier 키가 감지되지 않던 회귀** (`WinMacKey/Services/KeyInterceptor.swift`): "새 프로필 만들기" 진입 시 `applyCustomMappingsSync([:])` 로 매핑을 비우면서, `updateNeedsFlagsChangedProcessing()` 의 Caps Lock 보호 최적화가 EventTap 의 eventMask 에서 `flagsChanged` 를 제외. 그 결과 Ctrl/Opt/Cmd/Fn 키 이벤트가 tap 에 도달하지 못해 슬롯이 영구 "대기" 상태였음. `onVerifyKeyEvent` 에 didSet 을 달아 검증 모드가 켜진 동안에는 flagsChanged 구독을 강제로 유지하도록 수정. 검증 콜백 해제 시 원래 최적화로 자동 복귀하므로 일반 동작의 Caps Lock 보호는 그대로 유지.
+
+---
+
 ## [1.3.7] — 2026-05-11
 
 ### Fixed

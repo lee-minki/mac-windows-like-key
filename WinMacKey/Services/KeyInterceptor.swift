@@ -74,7 +74,14 @@ class KeyInterceptor: ObservableObject {
     
     // 키 감지/검증 콜백 (ModifierLayoutView 마법사용)
     // (originalKeyCode, mappedKeyCode, isDown)
-    var onVerifyKeyEvent: ((Int64, Int64, Bool) -> Void)?
+    //
+    // 콜백이 nil → non-nil 로 바뀌면 flagsChanged 구독을 강제로 켠다.
+    // 위자드는 빈 매핑으로 진입하기 때문에 keyMappings 기반 최적화만으로는
+    // modifier 키 이벤트가 tap 에 들어오지 않는다. nil 로 돌아오면 다시
+    // 매핑 기반 최적화 결과로 복귀.
+    var onVerifyKeyEvent: ((Int64, Int64, Bool) -> Void)? {
+        didSet { updateNeedsFlagsChangedProcessing() }
+    }
 
     // ContextManager가 앱 전환 시 갱신 — 콜백 내 NSWorkspace 동기 호출 제거용
     var cachedBundleId: String? = nil
@@ -208,16 +215,23 @@ class KeyInterceptor: ObservableObject {
     /// 현재 매핑 테이블에서 modifier→비modifier 변환이 있는지 계산합니다.
     /// 이런 매핑이 없으면 CGEventTap에서 flagsChanged를 이벤트 마스크에서 제외하여
     /// Caps Lock 등 시스템 modifier 동작 간섭을 원천 방지합니다.
+    ///
+    /// 단, 위저드 검증 모드(onVerifyKeyEvent != nil)일 때는 빈 매핑이라도
+    /// modifier 키 이벤트를 받아야 하므로 강제로 켭니다.
     private func updateNeedsFlagsChangedProcessing() {
-        var needed = false
-        for (src, dst) in keyMappings {
-            guard src != dst else { continue }
-            let srcIsModifier = modifierKeyToFlag[src] != nil
-            let dstIsModifier = modifierKeyToFlag[dst] != nil
-            if srcIsModifier && !dstIsModifier {
-                needed = true
-                logger.info("flagsChanged processing ENABLED (modifier→key mapping found: \(src)→\(dst))")
-                break
+        var needed = (onVerifyKeyEvent != nil)
+        if needed {
+            logger.info("flagsChanged processing ENABLED (verify mode active)")
+        } else {
+            for (src, dst) in keyMappings {
+                guard src != dst else { continue }
+                let srcIsModifier = modifierKeyToFlag[src] != nil
+                let dstIsModifier = modifierKeyToFlag[dst] != nil
+                if srcIsModifier && !dstIsModifier {
+                    needed = true
+                    logger.info("flagsChanged processing ENABLED (modifier→key mapping found: \(src)→\(dst))")
+                    break
+                }
             }
         }
         if !needed {
