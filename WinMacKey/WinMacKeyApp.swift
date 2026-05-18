@@ -118,6 +118,11 @@ class AppState: ObservableObject {
     @Published var lastActiveKeyboard: KeyboardDeviceIdentifier?
     @Published var duplicateInstallations: [URL] = []
 
+    /// P2 — 미등록 외장 키보드가 처음 입력을 보낸 직후 set 된다.
+    /// M3 의 first-seen sheet 가 이 값을 watch 해 prompt 띄움.
+    /// sheet 가 닫히면 nil 로 reset.
+    @Published var firstSeenKeyboardCandidate: KeyboardDeviceIdentifier?
+
     @AppStorage("startEngineOnAppLaunch") var startEngineOnAppLaunch: Bool = false
 
     private var permissionObserver: NSObjectProtocol?
@@ -239,12 +244,15 @@ class AppState: ObservableObject {
             self.resolveActiveProfile()
         }
 
-        // 키보드 디바이스 전환 시 프로필 자동 전환
+        // P2 — 키보드 디바이스 전환. 정책:
+        //   - ignored 디바이스: 무시 (자동 전환 / prompt 둘 다 X)
+        //   - 외장 → 내장: 자동 전환 OK (안전 fallback)
+        //   - 외장 → 외장: 자동 전환 X — 마지막 활성 프로필 유지, 미등록이면 prompt
+        //   - 첫 디바이스: bound 면 적용, 아니면 prompt
+        //   - 동일 디바이스 (재방문): no-op
         keyboardDeviceManager.onActiveDeviceChanged = { [weak self] device in
             guard let self = self else { return }
-            self.lastActiveKeyboard = device
-            self.resolveActiveProfile()
-            LogService.shared.info("Active keyboard: \(device.displayName)", category: "Device")
+            self.handleActiveDeviceChanged(device)
         }
 
         checkPermissions()
@@ -345,6 +353,61 @@ class AppState: ObservableObject {
         if let data = try? JSONEncoder().encode(stringKeyDict) {
             UserDefaults.standard.set(data, forKey: "visualCustomMappings")
         }
+    }
+
+    // MARK: - P2 Device-Change Policy
+
+    /// 키보드 active 디바이스가 바뀌었을 때 호출. P2 plan §3.1 의사코드.
+    /// resolveActiveProfile 호출 여부를 좁혀서 사용자 합의된 시나리오만 자동 전환.
+    private func handleActiveDeviceChanged(_ newDevice: KeyboardDeviceIdentifier) {
+        let prevDevice = lastActiveKeyboard
+        lastActiveKeyboard = newDevice
+        LogService.shared.info("Active keyboard: \(newDevice.displayName)", category: "Device")
+
+        // Ignored 디바이스: 자동 전환 / prompt 모두 차단.
+        if profileStore.isIgnored(newDevice) {
+            LogService.shared.info(
+                "Active keyboard ignored by user policy: \(newDevice.displayName)",
+                category: "Device"
+            )
+            return
+        }
+
+        if newDevice.isInternal {
+            // 외장 → 내장 (또는 첫 디바이스가 내장): 안전 fallback 자동 전환 OK.
+            // 내장 → 내장 (같은 디바이스) 은 의미 없지만, 시스템이 그렇게 보고하면 일관성 유지를 위해 허용.
+            let cameFromExternal = (prevDevice?.isInternal == false)
+            if prevDevice == nil || cameFromExternal {
+                resolveActiveProfile()
+            }
+            return
+        }
+
+        // newDevice 가 외장.
+        let hasBoundProfile = profileStore.profile(forDevice: newDevice) != nil
+
+        if prevDevice == nil {
+            // 첫 디바이스. bound 면 적용, 아니면 prompt.
+            if hasBoundProfile {
+                resolveActiveProfile()
+            } else {
+                firstSeenKeyboardCandidate = newDevice
+            }
+            return
+        }
+
+        if prevDevice == newDevice {
+            // 동일 디바이스 재방문. no-op.
+            return
+        }
+
+        // 외장 → 외장 swap.
+        //   - 사용자 합의: 자동 전환 안 함 (마지막 활성 프로필 유지)
+        //   - 미등록 디바이스면 prompt
+        if !hasBoundProfile {
+            firstSeenKeyboardCandidate = newDevice
+        }
+        // bound 라도 자동 전환 X — 메뉴에서 사용자 명시 선택.
     }
 
     // MARK: - Unified Profile Resolution

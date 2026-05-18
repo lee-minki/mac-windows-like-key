@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- **키보드 자동 프로필 전환 정책 보수화 (P2 / M2)** (`WinMacKey/WinMacKeyApp.swift`): 이전엔 active 키보드 디바이스가 바뀌면 무조건 `resolveActiveProfile` 를 호출해 자동 전환했음. 이제 사용자 합의된 시나리오만 자동 전환:
+  - 외장 → 내장 전환 시: 자동 전환 OK (안전 fallback)
+  - 외장 → 외장 swap 시: **자동 전환 안 함** — 마지막 활성 프로필 유지 (사용자 명시로만 변경)
+  - 첫 디바이스: bound 프로필 있으면 적용, 없으면 first-seen 후보로 등록
+  - 같은 디바이스 재방문: no-op
+  - `ignoredDevices` 에 등록된 디바이스: 자동 전환 / prompt 모두 차단
+- 자동 전환 표면이 좁아져 외장 키보드 swap 시 의도하지 않은 매핑 변화 (False Positive) 가 줄어듦. UX 차이가 큰 변경이라 plan doc [P2_PER_KEYBOARD_BINDING_PLAN](docs/tasks/P2_PER_KEYBOARD_BINDING_PLAN.md) 참고.
+
+### Added
+- **`IgnoredDevices` 모델 + `KeyboardProfileStore` ignore/unignore/isIgnored API (P2 / M1)** (`WinMacKey/Models/Profile.swift`): 사용자가 명시적으로 자동 전환 대상에서 제외한 키보드 VID:PID 영구 set. UserDefaults `ignoredKeyboardDevices` 키로 저장. M2/M3 에서 호출.
+- **`AppState.firstSeenKeyboardCandidate` @Published 상태 (P2 / M2)**: 미등록 외장 키보드가 처음 입력하면 set. M3 의 first-seen sheet 가 이 값을 watch.
+
 ### Fixed
 - **프로필 위자드 Step 2 ("현재 입력 감지") 에서 modifier 키가 감지되지 않던 회귀** (`WinMacKey/Services/KeyInterceptor.swift`): "새 프로필 만들기" 진입 시 `applyCustomMappingsSync([:])` 로 매핑을 비우면서, `updateNeedsFlagsChangedProcessing()` 의 Caps Lock 보호 최적화가 EventTap 의 eventMask 에서 `flagsChanged` 를 제외. 그 결과 Ctrl/Opt/Cmd/Fn 키 이벤트가 tap 에 도달하지 못해 슬롯이 영구 "대기" 상태였음. `onVerifyKeyEvent` 에 didSet 을 달아 검증 모드가 켜진 동안에는 flagsChanged 구독을 강제로 유지하도록 수정. 검증 콜백 해제 시 원래 최적화로 자동 복귀하므로 일반 동작의 Caps Lock 보호는 그대로 유지.
 
