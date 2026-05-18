@@ -134,7 +134,7 @@ extension KeyboardProfileStore {
 
 - [x] **M1.** `IgnoredDevices` struct + `KeyboardProfileStore` 에 ignore/unignore/isIgnored API 추가 (구현 결정: 별도 파일 대신 `Models/Profile.swift` 에 함께 둠 — pbxproj churn 최소화, KeyboardProfileStore 와 강결합이라 자연스러움) — commit c941722
 - [x] **M2.** `WinMacKeyApp.onActiveDeviceChanged` 핸들러를 §3.1 의사코드 그대로 보수화. `handleActiveDeviceChanged` 신설, `firstSeenKeyboardCandidate` @Published 상태 추가. `resolveActiveProfile` 자체는 그대로 (다른 호출부 보존). — commit (this)
-- [ ] **M3.** `Views/FirstSeenKeyboardPromptView.swift` (가칭) 신설 — 새 키보드 감지 sheet
+- [x] **M3.** `Views/FirstSeenKeyboardPromptView.swift` 신설 — 새 키보드 감지 sheet. `MenuBarView` + `DashboardView` 양쪽에 attach. `KeyboardDeviceIdentifier` Identifiable 채택. Bind 액션은 Settings 윈도우 띄움 (jump-to-bind 자동화는 follow-up). — commit (this)
 - [ ] **M4.** Profiles 탭 (`Views/DashboardView.swift` profiles tab) 에 "Ignored devices" 섹션 + remove 버튼
 - [ ] **M5.** `MANUAL_TEST_PLAN.md` 에 시나리오 추가:
   - S-KB1. 외장 → 내장 전환 시 자동 프로필 복귀 (사용자 합의 case)

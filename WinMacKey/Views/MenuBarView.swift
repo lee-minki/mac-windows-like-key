@@ -48,6 +48,13 @@ struct MenuBarView: View {
             appMenuSection
         }
         .frame(width: 280)
+        // P2 / M3 — 미등록 외장 키보드 first-seen prompt.
+        // appState.firstSeenKeyboardCandidate 가 non-nil 이면 sheet 표시.
+        // DashboardView 도 동일 binding 으로 sheet attach (보조 — Settings 윈도우 열려 있을 때 노출).
+        .sheet(item: $appState.firstSeenKeyboardCandidate) { device in
+            FirstSeenKeyboardPromptView(device: device)
+                .environmentObject(appState)
+        }
     }
     
     // MARK: - Sections

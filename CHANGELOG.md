@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 - **`IgnoredDevices` 모델 + `KeyboardProfileStore` ignore/unignore/isIgnored API (P2 / M1)** (`WinMacKey/Models/Profile.swift`): 사용자가 명시적으로 자동 전환 대상에서 제외한 키보드 VID:PID 영구 set. UserDefaults `ignoredKeyboardDevices` 키로 저장. M2/M3 에서 호출.
 - **`AppState.firstSeenKeyboardCandidate` @Published 상태 (P2 / M2)**: 미등록 외장 키보드가 처음 입력하면 set. M3 의 first-seen sheet 가 이 값을 watch.
+- **First-seen keyboard prompt sheet (P2 / M3)** (`WinMacKey/Views/FirstSeenKeyboardPromptView.swift`): 미등록 외장 키보드가 처음 입력하면 자동으로 modal sheet 가 떠 사용자에게 [프로필 바인딩… / 이 키보드 무시 / 나중에] 중 하나를 묻는다. 10초 timeout 자동 닫힘. "이 키보드 무시" 는 영구 등록 (M1 의 `ignore` API 호출, UserDefaults 보존). `MenuBarView` 와 `DashboardView` 양쪽에 sheet attach 되어 어디서든 응답 가능. `KeyboardDeviceIdentifier` 가 `Identifiable` 채택 (VID:PID = id).
 
 ### Fixed
 - **프로필 위자드 Step 2 ("현재 입력 감지") 에서 modifier 키가 감지되지 않던 회귀** (`WinMacKey/Services/KeyInterceptor.swift`): "새 프로필 만들기" 진입 시 `applyCustomMappingsSync([:])` 로 매핑을 비우면서, `updateNeedsFlagsChangedProcessing()` 의 Caps Lock 보호 최적화가 EventTap 의 eventMask 에서 `flagsChanged` 를 제외. 그 결과 Ctrl/Opt/Cmd/Fn 키 이벤트가 tap 에 도달하지 못해 슬롯이 영구 "대기" 상태였음. `onVerifyKeyEvent` 에 didSet 을 달아 검증 모드가 켜진 동안에는 flagsChanged 구독을 강제로 유지하도록 수정. 검증 콜백 해제 시 원래 최적화로 자동 복귀하므로 일반 동작의 Caps Lock 보호는 그대로 유지.

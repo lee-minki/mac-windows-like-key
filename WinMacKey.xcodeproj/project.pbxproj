@@ -35,6 +35,7 @@
 		III00001 /* KeyboardDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = III00002 /* KeyboardDeviceManager.swift */; };
 		JJJ00001 /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = JJJ00002 /* LaunchAtLoginService.swift */; };
 		KKK00001 /* KeyboardBindingCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KKK00002 /* KeyboardBindingCaptureView.swift */; };
+		MMM00001 /* FirstSeenKeyboardPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MMM00002 /* FirstSeenKeyboardPromptView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +70,7 @@
 		III00002 /* KeyboardDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDeviceManager.swift; sourceTree = "<group>"; };
 		JJJ00002 /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
 		KKK00002 /* KeyboardBindingCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBindingCaptureView.swift; sourceTree = "<group>"; };
+		MMM00002 /* FirstSeenKeyboardPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstSeenKeyboardPromptView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,6 +166,7 @@
 				FFF00004 /* DoctorView.swift */,
 				GGG00004 /* LogView.swift */,
 				KKK00002 /* KeyboardBindingCaptureView.swift */,
+				MMM00002 /* FirstSeenKeyboardPromptView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -272,6 +275,7 @@
 				III00001 /* KeyboardDeviceManager.swift in Sources */,
 				JJJ00001 /* LaunchAtLoginService.swift in Sources */,
 				KKK00001 /* KeyboardBindingCaptureView.swift in Sources */,
+				MMM00001 /* FirstSeenKeyboardPromptView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

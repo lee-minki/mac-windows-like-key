@@ -4,7 +4,7 @@ import IOKit.hid
 import os.log
 
 /// 연결된 키보드 디바이스를 식별하는 구조체
-struct KeyboardDeviceIdentifier: Codable, Equatable, Hashable {
+struct KeyboardDeviceIdentifier: Codable, Equatable, Hashable, Identifiable {
     let vendorId: Int
     let productId: Int
     let productName: String
@@ -24,6 +24,9 @@ struct KeyboardDeviceIdentifier: Codable, Equatable, Hashable {
     var matchingKey: String {
         "\(vendorId):\(productId)"
     }
+
+    /// SwiftUI Identifiable 용 — VID:PID 가 stable unique id (P2 first-seen sheet 등에서 사용).
+    var id: String { matchingKey }
 }
 
 /// IOHIDManager 기반 키보드 디바이스 열거/모니터링 서비스
