@@ -132,7 +132,7 @@ extension KeyboardProfileStore {
 
 ### MVP — 반드시 들어가야 할 것
 
-- [ ] **M1.** `Models/IgnoredDevices.swift` 신설 + `KeyboardProfileStore` 에 ignore/unignore/isIgnored API 추가
+- [ ] **M1.** `IgnoredDevices` struct + `KeyboardProfileStore` 에 ignore/unignore/isIgnored API 추가 (구현 결정: 별도 파일 대신 `Models/Profile.swift` 에 함께 둠 — pbxproj churn 최소화, KeyboardProfileStore 와 강결합이라 자연스러움)
 - [ ] **M2.** `WinMacKeyApp.resolveActiveProfile()` + `onActiveDeviceChanged` 핸들러를 §3.1 의사코드 그대로 보수화
 - [ ] **M3.** `Views/FirstSeenKeyboardPromptView.swift` (가칭) 신설 — 새 키보드 감지 sheet
 - [ ] **M4.** Profiles 탭 (`Views/DashboardView.swift` profiles tab) 에 "Ignored devices" 섹션 + remove 버튼
@@ -215,7 +215,7 @@ extension KeyboardProfileStore {
 |---|---|
 | 1. ROADMAP 등록 | ✓ P2 |
 | 2. Plan doc 합의 | ⏳ 본 doc 합의 대기 |
-| 3. 영향 받는 Matrix 행 식별 | ⚠️ 없음 — Behavior Matrix 는 trigger/transport 관점이라 키보드 디바이스 자동 전환 행이 따로 없음. M1 진행 전 03_BEHAVIOR_MATRIX 에 행 추가 필요할지 점검 |
+| 3. 영향 받는 Matrix 행 식별 | ✓ **추가 불필요** — P2 는 IME trigger/transport 가 아닌 profile 자동 전환 정책. Behavior Matrix 의 추상 단위와 어긋남. 결정: row 추가 안 함, 회귀 가드는 MANUAL_TEST_PLAN S-KB1~7 로만 |
 | 4. 회귀 가드 식별 | ✓ MANUAL_TEST_PLAN S-KB1~7 |
 | 5. Rollback 전략 | ✓ §6 |
 
@@ -226,3 +226,4 @@ extension KeyboardProfileStore {
 ## 10. Changelog of this doc
 
 - 2026-05-18 v0.1 초안 작성. 인터뷰 sealed 그대로 반영. §3.1 의사코드로 정책 명시. P3 와 정렬 phase 분리.
+- 2026-05-18 v0.1.1 구현 결정 — §9 Matrix row 추가 안 함 (P2 는 IME trigger/transport 아님), M1 의 IgnoredDevices 는 Profile.swift 에 함께 둠 (pbxproj churn 회피).

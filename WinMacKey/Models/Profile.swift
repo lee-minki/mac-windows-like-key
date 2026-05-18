@@ -157,12 +157,25 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+/// P2 — 사용자가 명시적으로 자동 전환 / first-seen prompt 대상에서 제외한
+/// 키보드 식별자 집합. 영구 저장 (UserDefaults). VID:PID 기준.
+struct IgnoredDevices: Codable, Equatable {
+    var devices: Set<KeyboardDeviceIdentifier> = []
+
+    static let empty = IgnoredDevices()
+}
+
 /// Profile storage (UserDefaults-backed)
 class KeyboardProfileStore: ObservableObject {
     @Published var profiles: [SavedKeyboardProfile] = []
+    @Published var ignoredDevices: IgnoredDevices = .empty
     private let storageKey = "savedKeyboardProfiles"
+    private let ignoredDevicesKey = "ignoredKeyboardDevices"
 
-    init() { load() }
+    init() {
+        load()
+        loadIgnoredDevices()
+    }
 
     func load() {
         if let data = UserDefaults.standard.data(forKey: storageKey),
@@ -211,5 +224,37 @@ class KeyboardProfileStore: ObservableObject {
             guard let device = $0.deviceIdentifier else { return false }
             return device.vendorId == identifier.vendorId && device.productId == identifier.productId
         }
+    }
+
+    // MARK: - Ignored devices (P2)
+
+    private func loadIgnoredDevices() {
+        if let data = UserDefaults.standard.data(forKey: ignoredDevicesKey),
+           let decoded = try? JSONDecoder().decode(IgnoredDevices.self, from: data) {
+            ignoredDevices = decoded
+        }
+    }
+
+    private func saveIgnoredDevices() {
+        if let data = try? JSONEncoder().encode(ignoredDevices) {
+            UserDefaults.standard.set(data, forKey: ignoredDevicesKey)
+        }
+    }
+
+    /// 사용자가 first-seen prompt 에서 "Ignore this keyboard" 선택 시.
+    /// 같은 VID:PID 가 다시 입력해도 prompt / 자동 전환 모두 하지 않는다.
+    func ignore(_ device: KeyboardDeviceIdentifier) {
+        ignoredDevices.devices.insert(device)
+        saveIgnoredDevices()
+    }
+
+    /// "Ignored devices" 메뉴에서 사용자가 명시적으로 해제할 때.
+    func unignore(_ device: KeyboardDeviceIdentifier) {
+        ignoredDevices.devices.remove(device)
+        saveIgnoredDevices()
+    }
+
+    func isIgnored(_ device: KeyboardDeviceIdentifier) -> Bool {
+        ignoredDevices.devices.contains(device)
     }
 }
