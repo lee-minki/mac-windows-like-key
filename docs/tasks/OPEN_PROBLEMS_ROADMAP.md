@@ -1,23 +1,24 @@
 # Open Problems Roadmap
 
-> Status: **v0.2 — P1 / P2 sealed, P3 미합의**
-> 작성: 2026-05-16, 갱신: 2026-05-18
+> Status: **v0.3 — P7 신규 등록 (P2 paused), P1 sealed, P3 미합의**
+> 작성: 2026-05-16, 갱신: 2026-05-20
 > 작성자: Claude + lee-minki
 >
 > 이 문서가 합의된 후에만 새 코드 변경 가능.
 > 합의되지 않은 문제는 plan doc 없이 손대지 않는다.
 
-## TL;DR (2026-05-18 snapshot)
+## TL;DR (2026-05-20 snapshot)
 
 | Track | Status | 다음 단계 | 동시 진행 |
 |---|---|---|---|
 | **P1** CapsLock VDI sync | Sealed, severity **medium** (사용자 본인 자체 평가 — "지금도 쓸 만함") | plan doc 작성 | P2 와 병렬 가능 |
-| **P2** Per-keyboard binding | Sealed | plan doc 작성 | P1 과 병렬 가능 |
+| **P2** Per-keyboard binding (단일 active 모델) | **Paused** — P7 검토 후 흡수/폐기 결정 | 보류 | — |
 | **P3** Profile Legend Refactor | plan v0.2 합의 7항목 미답변 | 인터뷰 또는 합의 | 독립 |
 | **P4** Wizard flagsChanged 회귀 | Done (commit 9fe9c2a) | F4-1 follow-up | — |
 | **P5/P6** 오타/공백 사라짐 | Out-of-scope (윈맥키 책임 아님) | 등록 안 함 | — |
+| **P7** 디바이스별 독립 매핑 (동시 active) | **신규**, 인터뷰 미진행 | 인터뷰 라운드 1 | P2 흡수 가능 |
 
-**권장 다음 행동**: P1 plan doc + P2 plan doc 을 **병렬로 작성** (별도 doc, 별도 PR). P3 합의는 별개 트랙.
+**권장 다음 행동**: P7 인터뷰 진행 → 동시 active 모델 합의 → plan doc 작성. P2 의 M1-M3 commit 들은 보존 (P7 토대로 활용 가능). P1 / P3 는 별개 트랙.
 
 ---
 
@@ -208,6 +209,64 @@
 
 ---
 
+### P7. 디바이스별 독립 매핑 (동시 active 모델)
+
+| | |
+|---|---|
+| Severity | high (사용자 직관과 현 모델의 갭) |
+| Confidence | medium (사용자 시연 + 코드 확인) |
+| Status | **신규 등록**, 인터뷰 미진행 |
+| 충돌 | P2 의 단일 active 모델 가정 — P7 합의 후 P2 흡수/폐기 결정 |
+
+**증상 / 발견 경위 (2026-05-20)**
+
+P2 의 M1-M3 구현을 사용자가 테스트하던 중 발견. 회사키보드(외장) 와 맥북키보드(내장) 둘 다 프로필을 만들고 binding 했지만, 한 번에 하나만 active 되어 다른 키보드의 매핑이 자기 프로필대로 동작하지 않음.
+
+> "이상한게 지금 바인딩을 로컬키보드에 하고 치고있는데 fn키 위취가 커맨드로 바뀌지 않네 설정과 달라"
+>
+> "솔직히 맥북키보드랑 외장키보드를 각각 실행시키는건 안어려울것같은데 왜 이러지 / 왜 하나만 액티브 되는거야"
+
+**현 모델의 한계 (코드 확인)**
+
+- `KeyInterceptor` + `HIDRemapper.applyMappings` 는 `hidutil property --set` 글로벌 적용. 단 한 시점에 한 set 의 매핑만.
+- 예외: `HIDRemapper.applyMappingsForInternalKeyboardSync` 는 `--matching Product:"Apple Internal Keyboard / Trackpad"` 로 내장 키보드만 매칭 — 이건 디바이스별 매핑이 hidutil 차원에서 가능하다는 증거.
+- 그러나 외장 키보드는 글로벌 set 한 개 only.
+- AppState 의 `activeMappingProfileId` 도 한 번에 하나만 표현 가능.
+
+**사용자가 기대한 모델**
+
+- 각 SavedKeyboardProfile 이 자기 deviceIdentifier 의 VID:PID 매칭으로 hidutil 적용
+- 모든 bound 프로필이 동시 active — 키보드 누르는 순간 그 디바이스 매핑이 적용
+- "active profile" 이라는 글로벌 개념 폐기 또는 보조 표시로만
+- swap / 전환 / fallback 개념 자체가 디바이스 단위로 분리되어 의미 약화
+
+**P2 와의 관계**
+
+P2 sealed 합의 (단일 active 모델 전제) 는 잘못된 출발점. P7 합의 후 P2 의 다음 부분 재검토:
+- M1 IgnoredDevices: **유지** (디바이스별 매핑 모델에서도 "이 키보드는 무시" 는 유의미)
+- M2 외장→내장 자동 전환 정책: **의미 변경** — 동시 active 면 전환 개념이 사라짐. 코드는 안전하게 남아 있지만 사용자 체감에 큰 영향 없어짐
+- M3 first-seen prompt: **유지** (새 디바이스 → 매핑 만들지 묻기는 여전히 유효)
+- M4 ignored devices UI: 보류 → P7 의 UI 안에 흡수 가능
+- M5 manual test plan: 보류 → P7 의 시나리오로 재작성
+
+**해결 방향 후보 (인터뷰 전, 가설만)**
+
+| 옵션 | 요약 | 비고 |
+|---|---|---|
+| **α. Full device-bound** | 각 bound 프로필이 자기 VID:PID 매칭으로 hidutil 적용. unbound 디바이스는 평문 또는 글로벌 기본 매핑 | 사용자 직관에 가장 가까움. 같은 VID:PID 두 대는 구별 불가 (한계) |
+| **β. Hybrid** | 내장 키보드는 디바이스별 매핑 (이미 있음), 외장은 여전히 글로벌 + auto-switch 강화 | 변경 부담 작음. 외장 여러 대 시나리오 미해결 |
+| **γ. 글로벌 + Layered** | 글로벌 매핑 위에 디바이스별 override layer | 가장 유연하지만 구현 복잡. hidutil 의 layering 지원 불명확 |
+
+**미해결 의문 (인터뷰 1라운드 대상)**
+
+- Q1. 정말 "동시 active" 가 핵심 요구사항인지, 아니면 "사용자가 키보드 누를 때 그 키보드 프로필이 적용된다" 정도면 OK 인지 (현 P2 + 강한 auto-switch 로도 후자는 달성 가능)
+- Q2. 같은 VID:PID 두 대 (예: 회사 키보드 두 개) — 어떻게 처리할지 (구분 불가가 release blocker 인지)
+- Q3. unbound 외장 키보드는 평문 / 기본 프로필 / 가장 최근 활성 프로필 중 어느 쪽?
+- Q4. VDI 모드의 내장 키보드 Fn↔Ctrl swap 은 디바이스별 매핑과 어떻게 정렬?
+- Q5. 사용자가 명시적으로 active 프로필을 메뉴에서 "선택" 하는 옵션은 여전히 필요한가, 아니면 폐기?
+
+---
+
 ### P5 / P6. (out-of-scope, 인터뷰로 진단)
 
 | | |
@@ -296,6 +355,7 @@ P3 (PROFILE_LEGEND_REFACTOR) ─── 합의 7항목 ── M1~M5 ── (이�
 | 2026-05-18 | P5 / P6 등록 안 함 | OFF 해도 동일 증상 발생 확인. 윈맥키 책임 밖. |
 | 2026-05-18 | P1 severity high → medium | 사용자 본인 자체 평가 — "캡스락 쓰다보니까 걍 지금도 쓸 만한것같아". 작업은 계속 진행하되 시급도 down. |
 | 2026-05-18 | P1 / P2 병렬 진행 가능 명시 | 코드 표면 분리 (P1=KeyInterceptor/CapsLockSyncService, P2=KeyboardDeviceManager/IgnoredDevices). |
+| 2026-05-20 | P2 paused, P7 신규 등록 | 사용자 P2 M1-M3 테스트 중 "동시 active" 기대 발견. P2 의 단일 active 가정이 잘못된 출발점이었음. P7 인터뷰로 모델 재정의. M1-M3 commit 들은 보존 (P7 토대로 활용). |
 
 ---
 
@@ -354,3 +414,4 @@ P3 (PROFILE_LEGEND_REFACTOR) ─── 합의 7항목 ── M1~M5 ── (이�
 - 2026-05-16 v0.1 초안. P1 / P2 / P3 / P4 인벤토리, 하네스 갭, 합의 게이트 정의.
 - 2026-05-18 v0.2 P1 / P2 인터뷰 라운드 1-3 완료, sealed 합의 반영. P5 / P6 out-of-scope 로 명시.
 - 2026-05-18 v0.2.1 TL;DR snapshot 추가. P1 severity high → medium (사용자 자체 평가). P1+P2 병렬 진행 가능 명시 + 코드 표면 분리 표.
+- 2026-05-20 v0.3 P7 (디바이스별 독립 매핑 / 동시 active) 신규 등록. P2 paused (P7 검토 후 결정). 사용자 시연 + 코드 확인으로 모델 갭 식별.
