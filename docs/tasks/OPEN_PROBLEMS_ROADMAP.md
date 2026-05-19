@@ -1,6 +1,6 @@
 # Open Problems Roadmap
 
-> Status: **v0.3 — P7 신규 등록 (P2 paused), P1 sealed, P3 미합의**
+> Status: **v0.3.1 — P7 sealed + plan v0.1, P1 sealed, P3 미합의, P2 paused (P7 흡수)**
 > 작성: 2026-05-16, 갱신: 2026-05-20
 > 작성자: Claude + lee-minki
 >
@@ -16,7 +16,7 @@
 | **P3** Profile Legend Refactor | plan v0.2 합의 7항목 미답변 | 인터뷰 또는 합의 | 독립 |
 | **P4** Wizard flagsChanged 회귀 | Done (commit 9fe9c2a) | F4-1 follow-up | — |
 | **P5/P6** 오타/공백 사라짐 | Out-of-scope (윈맥키 책임 아님) | 등록 안 함 | — |
-| **P7** 디바이스별 독립 매핑 (동시 active) | **신규**, 인터뷰 미진행 | 인터뷰 라운드 1 | P2 흡수 가능 |
+| **P7** 디바이스별 독립 매핑 (동시 active) | **Sealed** (인터뷰 1-3 완료) | plan doc 작성 | P2 흡수 결정됨 |
 
 **권장 다음 행동**: P7 인터뷰 진행 → 동시 active 모델 합의 → plan doc 작성. P2 의 M1-M3 commit 들은 보존 (P7 토대로 활용 가능). P1 / P3 는 별개 트랙.
 
@@ -214,9 +214,31 @@
 | | |
 |---|---|
 | Severity | high (사용자 직관과 현 모델의 갭) |
-| Confidence | medium (사용자 시연 + 코드 확인) |
-| Status | **신규 등록**, 인터뷰 미진행 |
+| Confidence | high (사용자 인터뷰 round 1-3 완료) |
+| Status | **요구사항 sealed (2026-05-20)**, plan doc 미작성 |
 | 충돌 | P2 의 단일 active 모델 가정 — P7 합의 후 P2 흡수/폐기 결정 |
+
+**사용자 인터뷰 sealed 합의 (2026-05-20)**
+
+| 항목 | 합의 |
+|---|---|
+| 핵심 모델 | **디바이스별 동시 active** — 모든 bound 프로필이 자기 VID:PID 매칭으로 hidutil 적용. 단일 active 폐기 |
+| 같은 VID:PID 두 대 | 한계 수용 (구분 안 함, 사용자 시나리오 없음) |
+| Unbound 외장 동작 | 평문 (매핑 적용 X). 사용자가 매핑 필요 인지 → 프로필 만들어 bind. M3 first-seen prompt 가 트리거 |
+| VDI 모드 정렬 | 프로필의 vdiDesiredKeys 그대로 사용. 별도 `switchToVdiMapping` override 제거 가능 |
+| 글로벌 트리거 (한영 등) | 디바이스 레이어와 별도 글로벌 레이어로 분리 유지 |
+| UI "Active" 배지 | "마지막 입력 사용 키보드" 정보성 표시로 강등 |
+| MVP 우선순위 | (a) 외장 디바이스별 동시 active 가 먼저, UI 는 그 뒤 |
+| Migration | 자동 — deviceIdentifier 있으면 동시 active, 없으면 글로벌 레이어 |
+| Release Gate | 매핑이 잘못된 키보드에 적용 = OUT, 한영 트리거 / 글로벌 동작 깨짐 = OUT |
+
+**다음 단계**: P7 plan doc 작성 → 5-조건 harness gate 통과 → Phase A (외장 디바이스별 동시 active 코어) 구현 시작.
+
+**P2 흡수/폐기 결정**
+- M1 IgnoredDevices: **유지** — P7 모델에서도 "이 키보드 매핑 만들지 마라" 의미 유효
+- M2 외장→내장 자동 전환: **의미 약화** — 동시 active 면 전환 개념이 사라짐. 코드는 유지하되 사용자 체감 영향 minimal
+- M3 first-seen prompt: **유지** — unbound 외장 첫 입력 시 prompt 가 P7 의 sealed 흐름 ("사용자 인지 → 매핑 만들기") 트리거
+- M4 ignored devices UI / M5 manual test: 보류 → P7 plan 안에서 재배치
 
 **증상 / 발견 경위 (2026-05-20)**
 
@@ -356,6 +378,7 @@ P3 (PROFILE_LEGEND_REFACTOR) ─── 합의 7항목 ── M1~M5 ── (이�
 | 2026-05-18 | P1 severity high → medium | 사용자 본인 자체 평가 — "캡스락 쓰다보니까 걍 지금도 쓸 만한것같아". 작업은 계속 진행하되 시급도 down. |
 | 2026-05-18 | P1 / P2 병렬 진행 가능 명시 | 코드 표면 분리 (P1=KeyInterceptor/CapsLockSyncService, P2=KeyboardDeviceManager/IgnoredDevices). |
 | 2026-05-20 | P2 paused, P7 신규 등록 | 사용자 P2 M1-M3 테스트 중 "동시 active" 기대 발견. P2 의 단일 active 가정이 잘못된 출발점이었음. P7 인터뷰로 모델 재정의. M1-M3 commit 들은 보존 (P7 토대로 활용). |
+| 2026-05-20 | P7 요구사항 sealed | 인터뷰 라운드 1-3. 동시 active, 같은 VID:PID 한계 수용, unbound 평문, VDI = vdiDesiredKeys 그대로, 글로벌 레이어 분리, "Active" 배지 정보성으로 강등, MVP = 외장 코어 먼저, migration 자동, gate = 잘못된 디바이스 적용 / 글로벌 깨짐. |
 
 ---
 
@@ -415,3 +438,4 @@ P3 (PROFILE_LEGEND_REFACTOR) ─── 합의 7항목 ── M1~M5 ── (이�
 - 2026-05-18 v0.2 P1 / P2 인터뷰 라운드 1-3 완료, sealed 합의 반영. P5 / P6 out-of-scope 로 명시.
 - 2026-05-18 v0.2.1 TL;DR snapshot 추가. P1 severity high → medium (사용자 자체 평가). P1+P2 병렬 진행 가능 명시 + 코드 표면 분리 표.
 - 2026-05-20 v0.3 P7 (디바이스별 독립 매핑 / 동시 active) 신규 등록. P2 paused (P7 검토 후 결정). 사용자 시연 + 코드 확인으로 모델 갭 식별.
+- 2026-05-20 v0.3.1 P7 인터뷰 라운드 1-3 완료, sealed 합의 반영. [[P7_DEVICE_SCOPED_MAPPING_PLAN]] v0.1 작성. P2 M1-M3 흡수 결정 명시.
