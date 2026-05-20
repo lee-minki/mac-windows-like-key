@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **First-seen keyboard prompt sheet (P2 / M3)** (`WinMacKey/Views/FirstSeenKeyboardPromptView.swift`): 미등록 외장 키보드가 처음 입력하면 자동으로 modal sheet 가 떠 사용자에게 [프로필 바인딩… / 이 키보드 무시 / 나중에] 중 하나를 묻는다. 10초 timeout 자동 닫힘. "이 키보드 무시" 는 영구 등록 (M1 의 `ignore` API 호출, UserDefaults 보존). `MenuBarView` 와 `DashboardView` 양쪽에 sheet attach 되어 어디서든 응답 가능. `KeyboardDeviceIdentifier` 가 `Identifiable` 채택 (VID:PID = id).
 
 ### Fixed
+- **권한 부여 후 재실행 시 DEBUG 빌드 크래시 (lifecycle invariant 위반)** (`WinMacKey/WinMacKeyApp.swift`): `AppState.init` 이 `startEngineOnLaunchIfNeeded()` 를 동기 호출 → 엔진 자동시작 → `toggleEngine` → `refreshActiveProfileForCurrentContext` → `HIDRemapper.applyMappings` 가 **init 도중** 실행. "init 은 HID 비간섭" invariant 를 깨고 DEBUG assertion (`applyCount == 0`) 이 crash 유발. Accessibility 권한이 없을 때 첫 실행은 early-return 으로 우회되다가, 권한 부여 후 재실행 시 재현. 엔진 자동시작을 `DispatchQueue.main.async` 로 init 완료 후로 defer 하여 invariant 준수. RELEASE 빌드는 assertion 이 컴파일아웃되어 crash 는 없었지만 invariant 위반은 동일하게 존재했음.
 - **프로필 위자드 Step 2 ("현재 입력 감지") 에서 modifier 키가 감지되지 않던 회귀** (`WinMacKey/Services/KeyInterceptor.swift`): "새 프로필 만들기" 진입 시 `applyCustomMappingsSync([:])` 로 매핑을 비우면서, `updateNeedsFlagsChangedProcessing()` 의 Caps Lock 보호 최적화가 EventTap 의 eventMask 에서 `flagsChanged` 를 제외. 그 결과 Ctrl/Opt/Cmd/Fn 키 이벤트가 tap 에 도달하지 못해 슬롯이 영구 "대기" 상태였음. `onVerifyKeyEvent` 에 didSet 을 달아 검증 모드가 켜진 동안에는 flagsChanged 구독을 강제로 유지하도록 수정. 검증 콜백 해제 시 원래 최적화로 자동 복귀하므로 일반 동작의 Caps Lock 보호는 그대로 유지.
 
 ---

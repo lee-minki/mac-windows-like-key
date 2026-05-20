@@ -257,7 +257,14 @@ class AppState: ObservableObject {
 
         checkPermissions()
         bootstrapPermissionPromptsIfNeeded()
-        startEngineOnLaunchIfNeeded()
+        // 엔진 자동 시작은 init 완료 후로 defer.
+        // toggleEngine → refreshActiveProfileForCurrentContext → applyMappings 가
+        // init 중 HID 를 건드리면 lifecycle invariant (init 은 HID 비간섭) 위반.
+        // DEBUG 빌드에서는 line ~290 의 assertion 이 crash 를 유발한다.
+        // 권한이 이미 있고 startEngineOnAppLaunch 가 켜진 상태에서 재실행 시 재현.
+        DispatchQueue.main.async { [weak self] in
+            self?.startEngineOnLaunchIfNeeded()
+        }
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
