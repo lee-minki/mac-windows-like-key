@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased]
+## [1.3.8] — 2026-05-27
 
 ### Changed
 - **키보드 자동 프로필 전환 정책 보수화 (P2 / M2)** (`WinMacKey/WinMacKeyApp.swift`): 이전엔 active 키보드 디바이스가 바뀌면 무조건 `resolveActiveProfile` 를 호출해 자동 전환했음. 이제 사용자 합의된 시나리오만 자동 전환:
@@ -21,10 +21,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`IgnoredDevices` 모델 + `KeyboardProfileStore` ignore/unignore/isIgnored API (P2 / M1)** (`WinMacKey/Models/Profile.swift`): 사용자가 명시적으로 자동 전환 대상에서 제외한 키보드 VID:PID 영구 set. UserDefaults `ignoredKeyboardDevices` 키로 저장. M2/M3 에서 호출.
 - **`AppState.firstSeenKeyboardCandidate` @Published 상태 (P2 / M2)**: 미등록 외장 키보드가 처음 입력하면 set. M3 의 first-seen sheet 가 이 값을 watch.
 - **First-seen keyboard prompt sheet (P2 / M3)** (`WinMacKey/Views/FirstSeenKeyboardPromptView.swift`): 미등록 외장 키보드가 처음 입력하면 자동으로 modal sheet 가 떠 사용자에게 [프로필 바인딩… / 이 키보드 무시 / 나중에] 중 하나를 묻는다. 10초 timeout 자동 닫힘. "이 키보드 무시" 는 영구 등록 (M1 의 `ignore` API 호출, UserDefaults 보존). `MenuBarView` 와 `DashboardView` 양쪽에 sheet attach 되어 어디서든 응답 가능. `KeyboardDeviceIdentifier` 가 `Identifiable` 채택 (VID:PID = id).
+- **글로벌 단축키 우회 진입 (`Cmd+Shift+Opt+D` → Doctor)** (`WinMacKey/Services/GlobalHotKeyService.swift`): 메뉴바 popover 가 응답하지 않을 때를 대비한 Carbon `RegisterEventHotKey` 기반 우회로. `MenuBarLabelView` 가 SwiftUI `openWindow` 를 capture 해 콜백으로 Doctor 윈도우를 연다.
+- **배포 빌드 서명·공증** (`scripts/release.sh`): Developer ID 서명 + Hardened Runtime + 앱/DMG notarization + staple → Gatekeeper 경고 없이 설치.
+
+### 메뉴바 아이콘 ON/OFF 명확화
+- **엔진 상태 가독성 개선** (`WinMacKey/WinMacKeyApp.swift` `MenuBarLabelView`): ON = 채운 글리프(풀 불투명), OFF = 아웃라인 + opacity 0.45. 메뉴바가 색을 단색 강제해도 채움·불투명도 대비로 한눈에 구분된다.
 
 ### Fixed
 - **권한 부여 후 재실행 시 DEBUG 빌드 크래시 (lifecycle invariant 위반)** (`WinMacKey/WinMacKeyApp.swift`): `AppState.init` 이 `startEngineOnLaunchIfNeeded()` 를 동기 호출 → 엔진 자동시작 → `toggleEngine` → `refreshActiveProfileForCurrentContext` → `HIDRemapper.applyMappings` 가 **init 도중** 실행. "init 은 HID 비간섭" invariant 를 깨고 DEBUG assertion (`applyCount == 0`) 이 crash 유발. Accessibility 권한이 없을 때 첫 실행은 early-return 으로 우회되다가, 권한 부여 후 재실행 시 재현. 엔진 자동시작을 `DispatchQueue.main.async` 로 init 완료 후로 defer 하여 invariant 준수. RELEASE 빌드는 assertion 이 컴파일아웃되어 crash 는 없었지만 invariant 위반은 동일하게 존재했음.
 - **프로필 위자드 Step 2 ("현재 입력 감지") 에서 modifier 키가 감지되지 않던 회귀** (`WinMacKey/Services/KeyInterceptor.swift`): "새 프로필 만들기" 진입 시 `applyCustomMappingsSync([:])` 로 매핑을 비우면서, `updateNeedsFlagsChangedProcessing()` 의 Caps Lock 보호 최적화가 EventTap 의 eventMask 에서 `flagsChanged` 를 제외. 그 결과 Ctrl/Opt/Cmd/Fn 키 이벤트가 tap 에 도달하지 못해 슬롯이 영구 "대기" 상태였음. `onVerifyKeyEvent` 에 didSet 을 달아 검증 모드가 켜진 동안에는 flagsChanged 구독을 강제로 유지하도록 수정. 검증 콜백 해제 시 원래 최적화로 자동 복귀하므로 일반 동작의 Caps Lock 보호는 그대로 유지.
+- **중복 설치 경고가 stale 하게 남던 문제 + Finder 우회** (`WinMacKey/Views/MenuBarView.swift`): 중복 탐지를 시작 시 1회만 수행해 그 사이 중복본을 지워도 경고가 남았음. 이제 popover 열 때마다 재탐지하고, "Finder에서 보기" 는 `activateFileViewerSelecting` 로 LSUIElement 앱에서도 Finder 를 전면화한다. 삭제된 경로는 클릭 시 다시 거른다.
 
 ---
 

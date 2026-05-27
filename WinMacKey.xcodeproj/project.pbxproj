@@ -35,6 +35,7 @@
 		III00001 /* KeyboardDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = III00002 /* KeyboardDeviceManager.swift */; };
 		JJJ00001 /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = JJJ00002 /* LaunchAtLoginService.swift */; };
 		KKK00001 /* KeyboardBindingCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KKK00002 /* KeyboardBindingCaptureView.swift */; };
+		LLL00001 /* GlobalHotKeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = LLL00002 /* GlobalHotKeyService.swift */; };
 		MMM00001 /* FirstSeenKeyboardPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MMM00002 /* FirstSeenKeyboardPromptView.swift */; };
 /* End PBXBuildFile section */
 
@@ -70,6 +71,7 @@
 		III00002 /* KeyboardDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDeviceManager.swift; sourceTree = "<group>"; };
 		JJJ00002 /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
 		KKK00002 /* KeyboardBindingCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBindingCaptureView.swift; sourceTree = "<group>"; };
+		LLL00002 /* GlobalHotKeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyService.swift; sourceTree = "<group>"; };
 		MMM00002 /* FirstSeenKeyboardPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstSeenKeyboardPromptView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -149,6 +151,7 @@
 				HHH00002 /* HIDRemapper.swift */,
 				III00002 /* KeyboardDeviceManager.swift */,
 				JJJ00002 /* LaunchAtLoginService.swift */,
+				LLL00002 /* GlobalHotKeyService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -275,6 +278,7 @@
 				III00001 /* KeyboardDeviceManager.swift in Sources */,
 				JJJ00001 /* LaunchAtLoginService.swift in Sources */,
 				KKK00001 /* KeyboardBindingCaptureView.swift in Sources */,
+				LLL00001 /* GlobalHotKeyService.swift in Sources */,
 				MMM00001 /* FirstSeenKeyboardPromptView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -408,7 +412,7 @@
 				CODE_SIGN_ENTITLEMENTS = WinMacKey/WinMacKey.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -419,7 +423,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.7;
+				MARKETING_VERSION = 1.3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.winmackey.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -435,7 +439,7 @@
 				CODE_SIGN_ENTITLEMENTS = WinMacKey/WinMacKey.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -446,7 +450,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.7;
+				MARKETING_VERSION = 1.3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.winmackey.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

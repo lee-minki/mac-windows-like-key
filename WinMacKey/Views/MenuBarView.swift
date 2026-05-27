@@ -48,6 +48,13 @@ struct MenuBarView: View {
             appMenuSection
         }
         .frame(width: 280)
+        // popover 가 열릴 때마다 중복 설치를 재탐지한다. 탐지는 시작 시 1회만
+        // 수행돼서, 그 사이 중복본을 지워도 경고가 stale 하게 남아 있었다
+        // (mdfind background queue 라 비용 작음). 이제 매 popover open 마다 갱신 →
+        // 중복이 사라지면 경고도 자동으로 사라진다.
+        .onAppear {
+            appState.checkForDuplicateInstallations()
+        }
         // P2 / M3 — 미등록 외장 키보드 first-seen prompt.
         // appState.firstSeenKeyboardCandidate 가 non-nil 이면 sheet 표시.
         // DashboardView 도 동일 binding 으로 sheet attach (보조 — Settings 윈도우 열려 있을 때 노출).
@@ -186,9 +193,20 @@ struct MenuBarView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button("Finder에서 다른 위치 보기") {
-                for url in appState.duplicateInstallations {
-                    NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")
+                // activateFileViewerSelecting 은 파일 선택 + Finder 활성화(전면)를
+                // 한 번에 보장한다. 이전 selectFile(_:inFileViewerRootedAtPath:) 는
+                // LSUIElement 앱에서 Finder 를 전면으로 가져오지 못해 "반응 없음" 으로
+                // 보였다 (다른 메뉴 버튼은 NSApp.activate 로 우회).
+                // 탐지 후 삭제됐을 수 있어 클릭 시점에 존재 경로만 다시 거른다.
+                let existing = appState.duplicateInstallations.filter {
+                    FileManager.default.fileExists(atPath: $0.path)
                 }
+                guard !existing.isEmpty else {
+                    // 전부 stale → 경고 자체가 false positive. 재탐지로 정리.
+                    appState.checkForDuplicateInstallations()
+                    return
+                }
+                NSWorkspace.shared.activateFileViewerSelecting(existing)
             }
             .controlSize(.small)
         }

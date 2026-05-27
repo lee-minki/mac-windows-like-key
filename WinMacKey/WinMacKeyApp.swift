@@ -22,14 +22,10 @@ struct WinMacKeyApp: App {
             MenuBarView()
                 .environmentObject(appState)
         } label: {
-            if appState.isEngineRunning {
-                Text("WM")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-            } else {
-                Text("wm")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
+            // 라벨은 항상 mount 되어 있으므로, 글로벌 단축키가 사용할
+            // openWindow capture point 로도 함께 활용.
+            MenuBarLabelView()
+                .environmentObject(appState)
         }
         .menuBarExtraStyle(.window)
         
@@ -113,6 +109,11 @@ class AppState: ObservableObject {
     let resetService = ResetService()
     let profileStore = KeyboardProfileStore()
     let keyboardDeviceManager = KeyboardDeviceManager()
+    let globalHotKeyService = GlobalHotKeyService()
+
+    /// MenuBarLabelView 가 SwiftUI 의 `openWindow` 를 capture 해 세팅한다.
+    /// 글로벌 단축키 콜백에서 호출되어 메뉴바 우회로 Doctor 윈도우를 연다.
+    var doctorWindowOpener: (() -> Void)?
 
     @Published var showResetConfirmation: Bool = false
     @Published var lastActiveKeyboard: KeyboardDeviceIdentifier?
@@ -270,6 +271,13 @@ class AppState: ObservableObject {
         contextManager.startMonitoring()
         keyboardDeviceManager.startMonitoring()
         checkForDuplicateInstallations()
+
+        // 글로벌 단축키 (Cmd+Shift+Opt+D) → Doctor 윈도우.
+        // 메뉴바 popover 가 stuck 됐을 때의 우회 진입.
+        globalHotKeyService.onTriggered = { [weak self] in
+            self?.doctorWindowOpener?()
+        }
+        globalHotKeyService.register()
 
         setupActivationObserver()
 
@@ -574,6 +582,7 @@ class AppState: ObservableObject {
         if let observer = activationObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        globalHotKeyService.unregister()
     }
 
     // MARK: - Duplicate Installation Detection
@@ -665,5 +674,39 @@ class AppState: ObservableObject {
 
         guard numbers.count >= 4 else { return nil }
         return CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
+    }
+}
+
+// MARK: - Menu Bar Label
+
+/// MenuBarExtra 의 `label:` 슬롯은 popover 가 닫혀 있어도 항상 mount 되어 있다.
+/// 이 특성을 이용해 SwiftUI 의 `openWindow` 액션을 capture 하여 AppState 에 보관해
+/// 글로벌 단축키 (GlobalHotKeyService) 가 메뉴를 거치지 않고 Doctor 윈도우를 열 수
+/// 있게 한다.
+struct MenuBarLabelView: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Group {
+            if appState.isEngineRunning {
+                // 활성: 채운 글리프 + 초록 틴트 → 한눈에 "켜짐".
+                Image(systemName: "command.square.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.green)
+            } else {
+                // 비활성: 아웃라인 + 불투명도 낮춤. 메뉴바가 색을 단색으로 강제해도
+                // opacity 는 적용되므로 "흐릿한 빈 사각형" 으로 확실히 구분된다.
+                Image(systemName: "command.square")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .opacity(0.45)
+            }
+        }
+        .onAppear {
+            appState.doctorWindowOpener = {
+                openWindow(id: "doctor-window")
+            }
+        }
     }
 }
