@@ -25,7 +25,7 @@
 
 1. 메뉴바 `WM` → 종료
 2. 새 DMG 다운로드 → `Applications` 에 덮어쓰기
-3. 첫 실행: Finder 에서 **우클릭 → 열기** (Gatekeeper 1회 우회)
+3. 첫 실행: 더블클릭 (v1.3.8+ 공증 빌드는 경고 없이 바로 열림 / 구버전·미서명 빌드만 우클릭 → 열기)
 4. 손쉬운 사용 권한이 풀려있으면 **다시 체크**
 5. 메뉴바 `wm` → 엔진 ON → `WM`
 
@@ -139,11 +139,13 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' \
 3. DMG 더블클릭 → `WinMacKey.app` 을 **Applications** 폴더로 드래그
 4. DMG 언마운트 (Finder 사이드바에서 ⏏)
 
-### 8. Gatekeeper 1회 우회
+### 8. Gatekeeper (v1.3.8+ 공증 빌드는 불필요)
 
-현재 빌드는 Apple Developer ID 서명이 없는 ad-hoc 빌드라 최초 실행 시 경고가 뜹니다.
+**v1.3.8 부터 Apple 공증(notarized)** 빌드라, DMG 를 열고 드래그한 뒤 더블클릭하면 **경고 없이 바로 실행**됩니다. 이 단계는 건너뛰어도 됩니다.
 
-**방법 A (권장)**: Applications 에서 `WinMacKey.app` **우클릭 → 열기 → "열기"** 한 번 더.
+> 아래는 **v1.3.7 이하 구버전이거나 직접 빌드한 미서명 빌드**에서 "확인되지 않은 개발자" 경고가 뜰 때만 필요합니다.
+
+**방법 A**: Applications 에서 `WinMacKey.app` **우클릭 → 열기 → "열기"** 한 번 더.
 
 **방법 B (터미널)**:
 

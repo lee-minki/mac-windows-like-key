@@ -31,7 +31,16 @@ BUILD_DIR="/tmp/WinMacKey-release"
 SCHEME="WinMacKey"
 PRODUCT_NAME="WinMacKey"
 
-: "${SIGN_IDENTITY:=WinMacKey Self-Signed}"
+# Developer ID Application 인증서가 있으면 우선 사용 (notarization 가능), 없으면 self-signed fallback.
+if [ -z "${SIGN_IDENTITY:-}" ]; then
+    DEV_ID_LINE="$(security find-identity -v -p codesigning 2>/dev/null | grep 'Developer ID Application' | head -1)"
+    if [ -n "$DEV_ID_LINE" ]; then
+        SIGN_IDENTITY="$(printf '%s\n' "$DEV_ID_LINE" | sed -E 's/^[^"]*"([^"]*)".*$/\1/')"
+    else
+        SIGN_IDENTITY="WinMacKey Self-Signed"
+    fi
+fi
+: "${NOTARY_PROFILE:=winmackey-notary}"
 : "${UPDATE_SIGN_KEY:=$HOME/.config/winmackey/update-signing.key}"
 
 # ── 버전 일관성 가드 ───────────────────────────────────────────────────────────
@@ -98,18 +107,38 @@ verify_sign_identity() {
 }
 
 SIGN_FLAGS=()
+IS_DEVELOPER_ID=0
+case "$SIGN_IDENTITY" in
+    "Developer ID Application:"*) IS_DEVELOPER_ID=1 ;;
+esac
+
 if verify_sign_identity; then
-    SIGN_FLAGS=(
-        CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
-        CODE_SIGN_STYLE=Manual
-        OTHER_CODE_SIGN_FLAGS="--timestamp=none"
-    )
-    SIGN_MODE="stable (identity: $SIGN_IDENTITY)"
+    if [ "$IS_DEVELOPER_ID" -eq 1 ]; then
+        # Developer ID: notarization 필수 조건 — Hardened Runtime + secure timestamp.
+        # CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO 로 get-task-allow 자동 주입 차단
+        # (커맨드라인 `build` 는 Release 여도 디버그용 get-task-allow 를 넣어 공증이 거부됨).
+        SIGN_FLAGS=(
+            CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
+            CODE_SIGN_STYLE=Manual
+            ENABLE_HARDENED_RUNTIME=YES
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
+            OTHER_CODE_SIGN_FLAGS="--timestamp --options runtime"
+        )
+        SIGN_MODE="Developer ID + Hardened Runtime ($SIGN_IDENTITY)"
+    else
+        SIGN_FLAGS=(
+            CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
+            CODE_SIGN_STYLE=Manual
+            OTHER_CODE_SIGN_FLAGS="--timestamp=none"
+        )
+        SIGN_MODE="stable (identity: $SIGN_IDENTITY)"
+    fi
 else
     SIGN_FLAGS=(
         CODE_SIGN_IDENTITY="-"
         CODE_SIGN_STYLE=Manual
     )
+    IS_DEVELOPER_ID=0
     SIGN_MODE="ad-hoc (권한 매 빌드마다 재요청됨 — 영구 셋업: ./scripts/setup-signing.sh)"
 fi
 
@@ -154,6 +183,26 @@ echo "      Authority:              ${APP_AUTHORITY:-<none — ad-hoc>}"
 echo "      Designated Requirement: ${APP_DR:-<unknown>}"
 echo ""
 
+# ── 공증 — 앱 (Developer ID 빌드만) ──────────────────────────────────────────
+# notarytool 은 .app 직접 제출 불가 → 임시 zip 제출 후 ticket 을 .app 에 staple.
+# 이후 ZIP/DMG 는 staple 된 .app 으로 만들어진다.
+if [ "$IS_DEVELOPER_ID" -eq 1 ]; then
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+        echo "🍎 공증 제출 중 — 앱 (profile: $NOTARY_PROFILE, 수 분 소요)..."
+        NOTARY_ZIP="${BUILD_DIR}/notary-app.zip"
+        ditto -c -k --keepParent "$APP_PATH" "$NOTARY_ZIP"
+        xcrun notarytool submit "$NOTARY_ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+        xcrun stapler staple "$APP_PATH"
+        rm -f "$NOTARY_ZIP"
+        echo "   ✅ 앱 공증 + staple 완료"
+        echo ""
+    else
+        echo "⚠️  공증 프로필 '$NOTARY_PROFILE' 없음 — 서명만 하고 공증 건너뜀"
+        echo ""
+        IS_DEVELOPER_ID=0
+    fi
+fi
+
 # ── ZIP 생성 (자동 업데이트 채널용) ─────────────────────────────────────────────
 ZIP_NAME="${PRODUCT_NAME}-v${VERSION}.zip"
 ZIP_PATH="${BUILD_DIR}/${ZIP_NAME}"
@@ -186,6 +235,16 @@ hdiutil create \
 
 echo "   ✅ ${DMG_NAME} ($(du -h "${DMG_PATH}" | cut -f1))"
 echo ""
+
+# ── 공증 — DMG (Developer ID 빌드만) ─────────────────────────────────────────
+# DMG 자체도 공증+staple → 다운로드 후 오프라인에서도 Gatekeeper 통과.
+if [ "$IS_DEVELOPER_ID" -eq 1 ]; then
+    echo "🍎 공증 제출 중 — DMG (수 분 소요)..."
+    xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$DMG_PATH"
+    echo "   ✅ DMG 공증 + staple 완료"
+    echo ""
+fi
 
 # ── Ed25519 서명 (자동 업데이트 무결성 검증용) ────────────────────────────────
 # LibreSSL은 Ed25519 미지원 — OpenSSL 3.x (brew) 사용
@@ -256,6 +315,25 @@ for sig in "${SIG_FILES[@]:-}"; do
     [ -n "$sig" ] && RELEASE_ASSETS+=("$sig")
 done
 
+# Gatekeeper 안내 — 공증 빌드면 경고 없음, 아니면 우회 안내.
+if [ "$IS_DEVELOPER_ID" -eq 1 ]; then
+    GATEKEEPER_NOTE="### ✅ 설치 안내
+
+이 빌드는 Apple 공증(notarized)되어 별도 경고 없이 바로 열립니다.
+DMG 를 열고 \`WinMacKey.app\` 을 Applications 로 드래그한 뒤 실행하세요."
+else
+    GATEKEEPER_NOTE="### ⚠️ 최초 실행 안내 (Apple 미서명 빌드)
+
+이 빌드는 Apple 서명/공증이 없습니다.
+처음 실행할 때 macOS Gatekeeper 가 \"확인되지 않은 개발자\" 경고를 띄울 수 있습니다.
+
+**해결 방법 (둘 중 하나, 한 번만):**
+1. Applications 에서 \`WinMacKey.app\` **우클릭 → 열기 → 다시 \"열기\"** 클릭
+2. 또는 터미널에서: \`xattr -dr com.apple.quarantine /Applications/WinMacKey.app\`
+
+한 번 허용하면 이후 실행은 정상 동작합니다."
+fi
+
 # 현재 HEAD를 명시적으로 target으로 지정 — gh release create는 기본적으로
 # default branch (main)에 tag를 생성하므로 feature 브랜치에서 release할 때 필수.
 RELEASE_TARGET="$(git rev-parse HEAD)"
@@ -273,16 +351,7 @@ gh release create "v${VERSION}" \
 - \`${DMG_NAME}\` : 일반 사용자 (드래그 & 드롭 설치)
 - \`${ZIP_NAME}\` : 앱 내 자동 업데이트용
 
-### ⚠️ 최초 실행 안내 (Apple 미서명 빌드)
-
-이 빌드는 Apple Developer ID 서명이 없습니다.
-처음 실행할 때 macOS Gatekeeper가 \"확인되지 않은 개발자\" 경고를 띄울 수 있습니다.
-
-**해결 방법 (둘 중 하나, 한 번만):**
-1. Applications에서 \`WinMacKey.app\` **우클릭 → 열기 → 다시 \"열기\"** 클릭
-2. 또는 터미널에서: \`xattr -dr com.apple.quarantine /Applications/WinMacKey.app\`
-
-한 번 허용하면 이후 실행은 정상 동작합니다."
+${GATEKEEPER_NOTE}"
 
 echo ""
 echo "🎉 릴리스 v${VERSION} 완료!"
