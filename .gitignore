@@ -38,3 +38,6 @@ MapFile.txt
 KarabinerHelper/vendor/
 KarabinerHelper/build/
 KarabinerHelper/*.xcodeproj
+
+# Monetization / Pro 전략 (비공개 — 공개 repo 에 push 금지)
+docs/private/
