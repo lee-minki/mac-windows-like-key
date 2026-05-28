@@ -55,6 +55,7 @@
   - 기대: 둘 다 채워짐 — *실제:* ______
 - [ ] **D3** **Fn(🌐)** 누름 — *v1.4.0 IOHID 감지 핵심 검증*
   - 기대: 슬롯이 Fn 으로 채워짐 (IOHID 0x00FF 경로). 채워지면 신규 맥북 Fn 감지 수정 확인 — *실제:* ______
+  - 객관 확인: `~/Library/Application Support/WinMacKey/winmackey.log` 에 `Fn(🌐) detected via IOHID (AppleVendorTopCase 0x00FF/0x03)` 가 찍히면 IOHID 경로 발화 확정 (위자드 Step 2 활성 시에만 기록)
 - [ ] **D4** (D3 가 안 채워질 때) **"+ Fn 🌐" 버튼** 클릭 — *보장 폴백*
   - 기대: Fn 슬롯이 좌측 끝에 추가됨 (감지 없이도). 이후 Space → 4키 확정 가능 — *실제:* ______
 - [ ] **D5** D3·D4 로 4키 구성 후 Space → 다음 단계 → 저장 → 실제 타이핑에서 Fn 리맵 동작 확인

@@ -277,9 +277,12 @@ class KeyboardDeviceManager: ObservableObject {
     }
 
     /// Fn/Globe 키 눌림 → onFnKeyDown 발화 (메인 스레드).
+    /// 구독자(위자드)가 있을 때만 로그를 남겨 일상 Fn 사용(밝기/볼륨 등) 노이즈를 피한다.
     private func handleFnKeyDown() {
         DispatchQueue.main.async { [weak self] in
-            self?.onFnKeyDown?()
+            guard let self, let callback = self.onFnKeyDown else { return }
+            LogService.shared.info("Fn(🌐) detected via IOHID (AppleVendorTopCase 0x00FF/0x03)", category: "Device")
+            callback()
         }
     }
 

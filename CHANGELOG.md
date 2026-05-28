@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 - **위자드 Step 2 "+ Fn 🌐" 버튼** (`WinMacKey/Views/ModifierLayoutView.swift`): 좌측 끝에 Fn 이 있는 4키 키보드인데 감지가 안 될 때를 위한 보장 폴백. 누르면 Fn 슬롯을 좌측 끝에 추가한다. 런타임 리맵은 hidutil(HID)로 적용되므로 감지 여부와 무관하게 정상 동작한다.
 - **기능 명세서·검증 체크리스트** (`docs/FEATURE_SPEC.md`, `docs/FRESH_INSTALL_CHECKLIST.md`): 전체 기능 명세 + 신규 맥북 설치 검증 체크리스트. 위자드의 기능 축은 표기(Mac/Win)가 아니라 **좌측 3키 vs 4키 + Space** 임을 명문화.
+- **진단 로그** (`WinMacKey/Services/KeyboardDeviceManager.swift`): 위자드 활성 시 Fn/Globe IOHID 감지 발화를 `Fn(🌐) detected via IOHID` 로 기록 — 신규 맥북에서 감지 동작을 객관 확인하는 용도(일상 Fn 사용은 노이즈 없이 미기록).
 
 ### Changed
 - **인앱 도움말(HelpView) 을 실제 UI 와 동기화** (`WinMacKey/Views/HelpView.swift`): "키 매핑" 탭과 FAQ 가 구버전 **"Assign current keyboard"** 흐름을 안내하던 것을 v1.3.6 의 **"Bind keyboard…" (Press-to-bind)**, v1.3.8 의 first-seen 프롬프트·자동전환 보수화 동작으로 정정. 위자드 Fn 감지·"+ Fn" 버튼·3키/4키 모델 설명 추가.
