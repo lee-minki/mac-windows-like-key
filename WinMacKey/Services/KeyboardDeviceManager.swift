@@ -51,6 +51,11 @@ class KeyboardDeviceManager: ObservableObject {
     var onDeviceConnected: ((KeyboardDeviceIdentifier) -> Void)?
     var onDeviceDisconnected: ((KeyboardDeviceIdentifier) -> Void)?
 
+    /// Fn/Globe 키 눌림 신호. Fn 은 표준 키보드 usage page(0x07) 가 아니라
+    /// Apple Vendor Top Case(0x00FF / usage 0x03) 로 보고되어 CGEventTap 으로는
+    /// 신뢰성 있게 받지 못한다. 위자드 Step 2 가 이 신호를 구독해 4번째(Fn) 슬롯을 감지한다.
+    var onFnKeyDown: (() -> Void)?
+
     // MARK: - Capture Mode
     //
     // "Press-to-bind" UX 를 위한 일회성 capture.
@@ -196,17 +201,37 @@ class KeyboardDeviceManager: ObservableObject {
         manager.handleDeviceRemoved(device)
     }
 
+    /// Apple Vendor Top Case 페이지의 Fn/Globe 키 (hidutil 표기로 0xFF00000003).
+    private static let appleFnUsagePage: UInt32 = 0x00FF  // kHIDPage_AppleVendorTopCase
+    private static let appleFnUsage: UInt32 = 0x0003       // kHIDUsage_AV_TopCase_KeyboardFn
+
     private static let inputValueCallback: IOHIDValueCallback = { context, result, sender, value in
         guard let context = context else { return }
         let manager = Unmanaged<KeyboardDeviceManager>.fromOpaque(context).takeUnretainedValue()
 
         let element = IOHIDValueGetElement(value)
         let usagePage = IOHIDElementGetUsagePage(element)
-
-        // 키보드 키 이벤트만 처리 (Usage Page 7 = Keyboard/Keypad)
-        guard usagePage == kHIDPage_KeyboardOrKeypad else { return }
-
+        let usage = IOHIDElementGetUsage(element)
         let device = IOHIDElementGetDevice(element)
+
+        // Fn / Globe 키: 표준 키보드 페이지(0x07)가 아니라 Apple Vendor Top Case(0x00FF / usage 0x03).
+        // 눌림 시 onFnKeyDown 발화 (위자드 Step 2 검증용). 디바이스 식별에도 유효한 입력.
+        if usagePage == appleFnUsagePage && usage == appleFnUsage {
+            if IOHIDValueGetIntegerValue(value) != 0 {
+                manager.handleFnKeyDown()
+            }
+            manager.handleInputValue(from: device)
+            return
+        }
+
+        // 캡처 모드(press-to-bind): 디바이스 식별만 필요하므로 usage page 무관하게 허용.
+        if manager.isCapturing {
+            manager.handleInputValue(from: device)
+            return
+        }
+
+        // 일반 활성-키보드 추적: 표준 키보드 키(0x07)만 — 미디어/밝기 키 오탐 방지.
+        guard usagePage == kHIDPage_KeyboardOrKeypad else { return }
         manager.handleInputValue(from: device)
     }
 
@@ -248,6 +273,13 @@ class KeyboardDeviceManager: ObservableObject {
             }
             self.onDeviceDisconnected?(identifier)
             LogService.shared.info("Keyboard disconnected: \(identifier.displayName)", category: "Device")
+        }
+    }
+
+    /// Fn/Globe 키 눌림 → onFnKeyDown 발화 (메인 스레드).
+    private func handleFnKeyDown() {
+        DispatchQueue.main.async { [weak self] in
+            self?.onFnKeyDown?()
         }
     }
 

@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.4.0] — 2026-05-28
+
+### Fixed
+- **프로필 위자드 Step 2 "현재 입력 감지" 에서 내장 맥북 Fn(🌐) 키가 감지되지 않던 문제** (`WinMacKey/Services/KeyboardDeviceManager.swift`, `WinMacKey/Views/ModifierLayoutView.swift`): Fn/Globe 키는 표준 키보드 HID usage page(0x07)가 아니라 **Apple Vendor Top Case 페이지(0x00FF / usage 0x03, hidutil 표기 `0xFF00000003`)** 로 보고된다. 위자드는 CGEventTap 의 `flagsChanged`(keycode 63)에 의존했는데, lone Fn/Globe 이벤트는 시스템 "🌐 키를 다음 용도로 사용" 설정에 따라 OS 가 먼저 소비해 tap 에 도달하지 않는 맥(특히 신규 맥북)이 있었다. 그 결과 4키 키보드의 네 번째(좌측 끝) 키 = Fn 을 등록하지 못해 **4키 구성이 3키로 주저앉았다**.
+  - `KeyboardDeviceManager` 가 IOHID 레벨에서 Fn(0x00FF/0x03)을 직접 감지해 `onFnKeyDown` 신호를 발화하고, 위자드가 이를 구독해 "🌐 키 용도" 설정과 무관하게 Fn 입력을 인식하도록 함.
+  - Press-to-bind / first-seen 캡처 모드에서 usage-page 필터를 완화해 Fn 단독 입력으로도 키보드 디바이스가 식별되도록 함.
+
+### Added
+- **위자드 Step 2 "+ Fn 🌐" 버튼** (`WinMacKey/Views/ModifierLayoutView.swift`): 좌측 끝에 Fn 이 있는 4키 키보드인데 감지가 안 될 때를 위한 보장 폴백. 누르면 Fn 슬롯을 좌측 끝에 추가한다. 런타임 리맵은 hidutil(HID)로 적용되므로 감지 여부와 무관하게 정상 동작한다.
+- **기능 명세서·검증 체크리스트** (`docs/FEATURE_SPEC.md`, `docs/FRESH_INSTALL_CHECKLIST.md`): 전체 기능 명세 + 신규 맥북 설치 검증 체크리스트. 위자드의 기능 축은 표기(Mac/Win)가 아니라 **좌측 3키 vs 4키 + Space** 임을 명문화.
+
+### Changed
+- **인앱 도움말(HelpView) 을 실제 UI 와 동기화** (`WinMacKey/Views/HelpView.swift`): "키 매핑" 탭과 FAQ 가 구버전 **"Assign current keyboard"** 흐름을 안내하던 것을 v1.3.6 의 **"Bind keyboard…" (Press-to-bind)**, v1.3.8 의 first-seen 프롬프트·자동전환 보수화 동작으로 정정. 위자드 Fn 감지·"+ Fn" 버튼·3키/4키 모델 설명 추가.
+- **외부 문서를 공증(notarized) 빌드 기준으로 동기화** (`docs/manual.html`, `README.md`, `docs/SETUP_GUIDE.md`): ad-hoc 미서명/우클릭→열기/`xattr` 우회 안내를 **더블클릭 실행(서명+공증 완료, v1.3.8+)** 으로 정정, 메뉴바 아이콘 ON/OFF·Press-to-bind·first-seen 프롬프트·자동전환 정책·Mac→Mac 원격(로컬 입력소스 토글)·`Cmd+Shift+Opt+D` Doctor 우회 단축키 반영.
+
+### Note
+- build 16. 미출시 문서 릴리스였던 v1.3.9 의 문서·도움말 동기화 작업을 본 릴리스에 통합.
+
+---
+
 ## [1.3.8] — 2026-05-27
 
 ### Changed

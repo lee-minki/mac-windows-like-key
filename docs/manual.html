@@ -127,7 +127,7 @@ section h2 .emoji{font-size:28px}
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <h1>⌨️ WinMac Key</h1>
-    <p>v1.3.0 사용 매뉴얼</p>
+    <p>v1.4.0 사용 매뉴얼</p>
   </div>
   <nav id="nav">
     <a href="#intro" class="active"><span class="icon">👋</span>소개</a>
@@ -184,17 +184,13 @@ section h2 .emoji{font-size:28px}
       <div class="warn">⚠️ Downloads 폴더에서 직접 실행하면 Spotlight에 중복 표시될 수 있습니다. 반드시 Applications로 이동하세요.</div>
     </div></div>
     <div class="step"><div class="step-num">3</div><div class="step-body">
-      <h3>최초 실행 (Gatekeeper 우회)</h3>
-      <p>현재 빌드는 <strong>Apple Developer ID 서명이 없는 ad-hoc 빌드</strong>입니다. 처음 실행할 때 <em>"확인되지 않은 개발자"</em> 경고가 뜰 수 있습니다. 둘 중 한 가지 방법으로 한 번만 허용하면 됩니다.</p>
-      <ol class="step-list">
-        <li>Applications 폴더에서 <code>WinMacKey.app</code> <strong>우클릭 → 열기</strong> → 팝업의 <strong>"열기"</strong> 클릭</li>
-        <li>또는 터미널에서 <code>xattr -dr com.apple.quarantine /Applications/WinMacKey.app</code></li>
-      </ol>
-      <div class="info-box">ℹ️ Gatekeeper는 인터넷에서 받은 새 앱에 quarantine 속성을 붙입니다. 위 두 방법은 모두 이 속성을 제거하는 같은 효과이며, 이후엔 더블클릭으로 정상 실행됩니다.</div>
+      <h3>최초 실행 (서명·공증 완료)</h3>
+      <p>v1.3.8 이후 빌드는 <strong>Apple Developer ID 서명 + 공증(Notarization)</strong>을 거쳤습니다. 별도의 우회 절차 없이 <strong>더블클릭으로 바로 실행</strong>됩니다.</p>
+      <div class="info-box">ℹ️ 이전 버전(~v1.3.7)은 서명이 없어 <em>"확인되지 않은 개발자"</em> 경고가 떴고 우클릭→열기 또는 <code>xattr</code> 우회가 필요했습니다. v1.3.8부터 Apple 공증을 통과해 Gatekeeper 경고 없이 설치됩니다. 예전 버전을 이미 허용해 쓰던 분도 그대로 업데이트하면 됩니다.</div>
     </div></div>
     <div class="step"><div class="step-num">4</div><div class="step-body">
       <h3>앱 실행</h3>
-      <p>Launchpad 또는 Spotlight(⌘+Space)에서 <strong>"WinMac Key"</strong>를 검색하여 실행합니다. 메뉴바(화면 우측 상단)에 <code style="color:var(--text2)">wm</code> 아이콘이 나타나면 성공입니다.</p>
+      <p>Launchpad 또는 Spotlight(⌘+Space)에서 <strong>"WinMac Key"</strong>를 검색하여 실행합니다. 메뉴바(화면 우측 상단)에 WinMac Key 아이콘이 나타나면 성공입니다. (엔진이 꺼져 있을 땐 <strong>흐릿한 외곽선</strong>으로 표시됩니다.)</p>
     </div></div>
   </div>
 </section>
@@ -252,11 +248,12 @@ section h2 .emoji{font-size:28px}
       <h3>🚀 엔진 활성화</h3>
       <p>설정이 끝나면 WinMac Key 엔진을 켭니다.</p>
       <ol class="step-list">
-        <li>메뉴바(화면 우측 상단)에서 <code style="color:var(--text2)">wm</code> 아이콘을 클릭합니다.</li>
+        <li>메뉴바(화면 우측 상단)에서 WinMac Key 아이콘을 클릭합니다.</li>
         <li><strong>"엔진 상태"</strong> 토글을 켭니다.</li>
-        <li>아이콘이 <code style="color:var(--green);font-weight:700">WM</code>으로 바뀌면 활성화 완료!</li>
+        <li>아이콘이 <strong>또렷하게 채워진(불투명)</strong> 모양으로 바뀌면 활성화 완료! (꺼짐 = 흐릿한 외곽선)</li>
         <li>Right Command 키를 눌러 한/영 전환이 되는지 테스트합니다.</li>
       </ol>
+      <div class="info-box">ℹ️ v1.3.8부터 엔진 ON/OFF를 <strong>아이콘 채움·불투명도</strong>로 구분합니다. 메뉴바가 아이콘 색을 단색으로 강제해도 채워진 정도와 진하기로 켜짐 여부를 한눈에 알 수 있습니다.</div>
     </div></div>
   </div>
 </section>
@@ -267,7 +264,7 @@ section h2 .emoji{font-size:28px}
   <p class="section-desc">매번 앱과 엔진을 직접 켜지 않도록 로그인 항목과 엔진 자동 시작을 따로 설정합니다.</p>
   <div class="card">
     <ol class="step-list">
-      <li>메뉴바의 <code>wm/WM</code> 아이콘을 클릭한 뒤 <strong>설정...</strong>을 엽니다.</li>
+      <li>메뉴바의 WinMac Key 아이콘을 클릭한 뒤 <strong>설정...</strong>을 엽니다.</li>
       <li><strong>General → Startup</strong> 카드에서 <strong>로그인 시 자동 실행</strong>을 켭니다.</li>
       <li>재부팅 후 바로 Right Command 전환을 쓰려면 <strong>앱 실행 후 엔진 자동 시작</strong>도 함께 켭니다.</li>
       <li>상태가 <strong>승인 필요</strong>로 표시되면 <strong>로그인 항목 설정 열기</strong>를 눌러 macOS 시스템 설정에서 WinMac Key를 허용합니다.</li>
@@ -342,13 +339,27 @@ section h2 .emoji{font-size:28px}
 [로컬 Mac]
   Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → 입력소스 전환
 
-[원격 Mac / 화면 공유]
-  별도 검증 전입니다. 로컬 macOS와 동일 동작을 보장하지 않습니다.
+[Mac → Mac 원격 / 화면 공유] (v1.3.5+)
+  Right Cmd → 로컬 맥북 입력소스 토글 → 변환된 문자를 Screen Sharing이 원격 화면에 forward
+  (로컬 맥북에만 설치하면 됨)
 
 [VDI 앱 포커스] (자동 전환)
   Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon: F16 → Right Alt
     </div>
-    <p style="font-size:13px;color:var(--text2);margin-top:8px">hidutil로 Right Cmd를 F16(modifier가 아닌 일반 키)로 변환하여 modifier flag 오염을 원천 차단합니다. VDI 앱이 포커스되면 F16이 Horizon에 그대로 전달됩니다.</p>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">hidutil로 Right Cmd를 F16(modifier가 아닌 일반 키)로 변환하여 modifier flag 오염을 원천 차단합니다. VDI 앱이 포커스되면 F16이 Horizon에 그대로 전달됩니다. Mac→Mac 원격은 아래 별도 카드를 참고하세요.</p>
+  </div>
+
+  <div class="card">
+    <h3>🖥️ Mac → Mac 원격접속 (Screen Sharing)</h3>
+    <p style="font-size:13px;color:var(--text2)">맥북에서 맥미니·맥스튜디오 등에 Apple 화면 공유로 접속할 때의 한/영 전환입니다.</p>
+    <ol class="step-list">
+      <li><strong>로컬 맥북에만 WinMac Key 설치</strong> — 원격 Mac에는 설치 불필요</li>
+      <li>화면 공유로 원격 Mac에 연결한 뒤 원격 창에 포커스</li>
+      <li>맥북의 <strong>Right Command</strong>를 누르면 <strong>맥북 메뉴바의 입력소스</strong>가 토글됩니다 (EN ↔ 한)</li>
+      <li>이후 타이핑하면 맥북에서 변환된 문자가 원격 화면에 그대로 입력됩니다</li>
+    </ol>
+    <div class="info-box">ℹ️ Apple 화면 공유는 키 스캔코드가 아니라 <strong>변환된 문자(Unicode)</strong>를 원격에 전달합니다. 그래서 한/영 처리는 로컬 맥북에서 끝나면 충분하고, 원격 Mac의 입력소스 상태는 결과에 영향을 주지 않습니다. (VDI와 동작 모델이 다릅니다 — VDI는 F16 패스스루, Mac 원격은 로컬 토글.)</div>
+    <div class="warn">⚠️ Jump Desktop · AnyDesk · RealVNC · TeamViewer 등 타사 도구는 키 forwarding 방식이 달라 동작이 보장되지 않습니다. 실측을 권장합니다.</div>
   </div>
 
   <div class="card">
@@ -417,8 +428,10 @@ section h2 .emoji{font-size:28px}
 <!-- PROFILES -->
 <section id="profiles">
   <h2><span class="emoji">📋</span> 외장 키보드 프로필</h2>
-  <p class="section-desc">외장 키보드나 특수 배치를 사용한다면 위저드로 프로필을 만들 수 있습니다.</p>
+  <p class="section-desc">외장 키보드나 특수 배치를 사용한다면 프로필을 만들어 키보드별로 자동 전환할 수 있습니다.</p>
+
   <div class="card">
+    <h3>1️⃣ 프로필 만들기 (위저드)</h3>
     <ol class="step-list">
       <li>설정 → General Settings → <strong>"새 프로필 만들기"</strong> 클릭</li>
       <li>Step 1: 키캡 프린팅이 <span class="badge b-blue">Mac 키보드</span>인지 <span class="badge b-purple">Windows 키보드</span>인지 선택</li>
@@ -430,7 +443,48 @@ section h2 .emoji{font-size:28px}
       <li>3키 키보드라면 <code>RCtrl</code>/<code>Caps</code>/<code>RShift</code>를 보조 Fn 키로 지정 가능</li>
       <li>Step 5: 프로필을 검증한 뒤 저장</li>
     </ol>
-    <div class="info-box">ℹ️ 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환합니다.</div>
+    <div class="info-box">ℹ️ 저장된 프로필은 현재 앱 컨텍스트에 따라 로컬 Mac과 VDI 사이를 자동 전환합니다.</div>
+  </div>
+
+  <div class="card">
+    <h3>2️⃣ 키보드에 프로필 바인딩 (Press-to-bind)</h3>
+    <p style="font-size:13px;color:var(--text2)">v1.3.6부터 "직전에 어떤 키보드를 썼는지" 기억할 필요 없이, 바인딩할 키보드의 키를 직접 눌러 지정합니다.</p>
+    <ol class="step-list">
+      <li>Profiles 탭에서 프로필의 <strong>"Bind keyboard…"</strong> 버튼 클릭 → 모달이 열립니다</li>
+      <li>바인딩할 키보드에서 <strong>아무 키나 한 번</strong> 누릅니다 (10초 대기)</li>
+      <li>감지된 디바이스 정보(<strong>이름 · VID:PID · 내장/외장</strong>)를 확인하고 <strong>확인</strong>을 누릅니다</li>
+      <li>키 입력이 어려우면 모달 하단의 <strong>연결된 키보드 목록</strong>에서 직접 선택할 수도 있습니다</li>
+    </ol>
+    <div class="info-box">ℹ️ 한 키보드에는 하나의 프로필만 바인딩됩니다. 다른 프로필에 이미 바인딩된 키보드를 다시 바인딩하면 <strong>자동으로 이전</strong>됩니다.</div>
+  </div>
+
+  <div class="card">
+    <h3>3️⃣ 처음 보는 키보드 안내 (First-seen 프롬프트)</h3>
+    <p style="font-size:13px;color:var(--text2)">v1.3.8부터, 바인딩되지 않은 <strong>외장 키보드</strong>로 처음 입력하면 안내 창이 자동으로 떠 어떻게 처리할지 묻습니다.</p>
+    <table class="tbl">
+      <thead><tr><th>선택</th><th>동작</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge b-blue">프로필 바인딩…</span></td><td>위 Press-to-bind 화면으로 이동해 프로필 연결</td></tr>
+        <tr><td><span class="badge b-orange">이 키보드 무시</span></td><td>이 키보드를 자동 전환 대상에서 <strong>영구 제외</strong> (다시 묻지 않음)</td></tr>
+        <tr><td><span class="badge b-green">나중에</span></td><td>이번엔 그냥 닫기 (다음에 다시 안내)</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">10초 동안 응답이 없으면 자동으로 닫힙니다. "이 키보드 무시"는 설정에 영구 저장되어 이후 자동 전환·안내 모두 차단합니다.</p>
+  </div>
+
+  <div class="card">
+    <h3>🔄 자동 전환 정책 (v1.3.8 보수화)</h3>
+    <p style="font-size:13px;color:var(--text2)">의도하지 않은 매핑 변화를 줄이기 위해, 자동 전환은 아래 경우에만 일어납니다.</p>
+    <table class="tbl">
+      <thead><tr><th>상황</th><th>동작</th></tr></thead>
+      <tbody>
+        <tr><td>외장 → 내장 키보드로 전환</td><td><span class="badge b-green">자동 전환</span> (안전한 기본값으로 복귀)</td></tr>
+        <tr><td>외장 → 다른 외장 키보드로 교체</td><td><span class="badge b-orange">자동 전환 안 함</span> — 마지막 프로필 유지 (직접 선택해야 변경)</td></tr>
+        <tr><td>바인딩된 키보드 첫 연결</td><td>해당 프로필 적용</td></tr>
+        <tr><td>"무시"로 등록한 키보드</td><td>자동 전환·안내 모두 차단</td></tr>
+      </tbody>
+    </table>
+    <div class="info-box">ℹ️ 우선순위는 <strong>디바이스 프로필 &gt; 앱 프로필 &gt; 기본 프로필</strong> 순입니다. 외장 키보드끼리 바꿀 때 매핑이 멋대로 바뀌지 않으니, 원하는 프로필은 메뉴에서 직접 선택하면 됩니다.</div>
   </div>
 </section>
 
@@ -461,8 +515,17 @@ section h2 .emoji{font-size:28px}
   <p class="section-desc">설정이 꼬였거나 앱이 비정상 종료된 경우 사용하세요.</p>
 
   <div class="card">
+    <h3>⌨️ 메뉴바가 응답하지 않을 때 (글로벌 단축키)</h3>
+    <p style="font-size:13px;color:var(--text2)">메뉴바 아이콘을 눌러도 팝오버가 안 뜨면, v1.3.8부터 추가된 우회 단축키로 <strong>Doctor(진단·복구)</strong> 창을 바로 열 수 있습니다.</p>
+    <div class="kbd-row" style="margin:12px 0">
+      <div class="key k-purple" style="min-width:120px">⌘⇧⌥ D<span class="key-sub">Doctor 열기</span></div>
+    </div>
+    <p style="font-size:13px;color:var(--text2)"><code>Command + Shift + Option + D</code> — Doctor에서 엔진 재시작·정지·긴급 복구를 실행할 수 있습니다.</p>
+  </div>
+
+  <div class="card">
     <h3>🔧 방법 1: 앱 내 초기화</h3>
-    <p style="font-size:13px;color:var(--text2)">메뉴바 WM 아이콘 → "설정 초기화..." 클릭</p>
+    <p style="font-size:13px;color:var(--text2)">메뉴바 아이콘 → "설정 초기화..." 클릭</p>
   </div>
 
   <div class="card">
@@ -490,7 +553,7 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 </section>
 
 <footer style="text-align:center;padding:40px 0 20px;color:var(--text2);font-size:12px;border-top:1px solid var(--border)">
-  <p>WinMac Key v1.3 · Made with ❤️ for Windows → Mac 전환 사용자</p>
+  <p>WinMac Key v1.4.0 · Made with ❤️ for Windows → Mac 전환 사용자</p>
   <p style="margin-top:4px"><a href="https://github.com/lee-minki/mac-windows-like-key" style="color:var(--accent);text-decoration:none">GitHub</a></p>
 </footer>
 

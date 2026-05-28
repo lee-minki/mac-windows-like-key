@@ -1,13 +1,14 @@
-# WinMac Key v1.3.0 설정 가이드
+# WinMac Key v1.4.0 설정 가이드
 
 ## 변경 요약
 
 한영전환 방식이 다음처럼 분리되었습니다.
 - 로컬 macOS: `Control+Space 시스템 단축키 주입`
 - Windows VDI: `F16 릴레이 키 주입`
-- 원격 Mac / 화면 공유: 별도 검증이 필요하며, 로컬 macOS와 동일하게 보장된다고 가정하지 않습니다.
+- Mac → Mac 원격 / 화면 공유: 로컬 맥북의 입력소스만 토글 → 변환된 문자가 원격 화면에 forward (원격 Mac 에는 설치 불필요, v1.3.5+)
 
 ### 개선된 점
+- **(v1.4.0) 프로필 위자드 Fn(🌐) 감지**: 내장 맥북의 Fn 키를 IOHID 레벨에서 직접 감지(Apple Vendor Top Case). 감지가 막히는 맥에서는 Step 2 의 `+ Fn 🌐` 버튼으로 4키 구성을 등록할 수 있습니다. (위자드의 핵심 구분은 표기가 아니라 좌측 3키 vs 4키)
 - **F16 HID remap 아키텍처**: `hidutil`로 Right Command를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
 - VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
 - 빠른 영문 대문자 입력 시 Windows 키 조합 오발 해결
@@ -18,28 +19,25 @@
 
 ---
 
-## STEP 0: 최초 실행 (Apple 미서명 빌드)
+## STEP 0: 최초 실행 (서명·공증 완료)
 
-현재 WinMac Key는 Apple Developer ID 서명이 없는 ad-hoc 빌드로 배포됩니다.
-첫 실행 시 macOS Gatekeeper가 **"확인되지 않은 개발자가 만든 앱입니다"** 경고를 띄울 수 있습니다.
-
-다음 두 방법 중 하나로 한 번만 허용해주면 이후 실행은 정상 동작합니다.
-
-### 방법 1: Finder에서 우클릭 → 열기 (권장)
+v1.3.8 이후 빌드는 **Apple Developer ID 서명 + 공증(Notarization)** 을 거쳐 배포됩니다.
 
 1. DMG를 마운트한 뒤 `WinMacKey.app`을 **Applications** 폴더로 드래그
-2. Applications 폴더에서 `WinMacKey.app` **우클릭 → 열기**
-3. 경고 팝업의 **"열기"** 버튼을 다시 한 번 클릭
+2. **더블클릭으로 바로 실행** — Gatekeeper 경고 없이 열립니다
 
-### 방법 2: 터미널에서 quarantine 속성 제거
-
-```bash
-xattr -dr com.apple.quarantine /Applications/WinMacKey.app
-```
-
-> Gatekeeper는 새 앱이 인터넷에서 받아진 경우 "quarantine" 속성을 붙입니다.
-> 위 두 방법은 모두 이 속성을 제거하는 같은 효과이며, 이후엔 일반 앱처럼 더블클릭으로 실행됩니다.
+> v1.3.8 부터 Apple 공증을 통과해 별도 우회 절차가 필요 없습니다.
 > WinMac Key는 `hidutil`/CGEventTap 기반 메뉴바 유틸리티이며 시스템 파일을 건드리지 않습니다.
+
+<details>
+<summary>v1.3.7 이하 구버전 또는 직접 빌드한 미서명 빌드를 쓸 때만</summary>
+
+미서명 빌드는 첫 실행 시 **"확인되지 않은 개발자"** 경고가 뜹니다. 둘 중 하나로 한 번만 허용하세요.
+
+- **방법 1**: Applications 에서 `WinMacKey.app` **우클릭 → 열기** → 팝업의 **"열기"** 다시 클릭
+- **방법 2**: 터미널에서 `xattr -dr com.apple.quarantine /Applications/WinMacKey.app`
+
+</details>
 
 ---
 

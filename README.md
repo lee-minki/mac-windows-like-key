@@ -38,11 +38,10 @@
 
 1. [Releases](https://github.com/lee-minki/mac-windows-like-key/releases)에서 최신 DMG 또는 ZIP 다운로드
 2. WinMac Key.app을 Applications 폴더로 드래그
-3. **최초 실행만**: Applications에서 `WinMacKey.app` 우클릭 → "열기" → 한 번 더 "열기"
-   (또는 터미널: `xattr -dr com.apple.quarantine /Applications/WinMacKey.app`)
+3. **더블클릭으로 바로 실행** (v1.3.8+ 는 Apple 공증 빌드라 Gatekeeper 경고 없음)
 4. 앱 실행 후 손쉬운 사용 권한 허용
 
-> 현재 Apple Developer ID 서명이 없는 빌드라 최초 실행 시 Gatekeeper 경고가 뜹니다. 위 절차로 한 번만 허용해주면 이후엔 일반 앱처럼 더블클릭으로 실행됩니다.
+> v1.3.8 부터 **Apple Developer ID 서명 + 공증(Notarization)** 을 거쳐 배포되므로 별도 우회 없이 더블클릭으로 실행됩니다. (v1.3.7 이하 구버전이나 직접 빌드한 미서명 빌드만 우클릭 → "열기" 또는 `xattr -dr com.apple.quarantine /Applications/WinMacKey.app` 가 한 번 필요합니다.)
 
 이미 사용 중이라면 → **[재설치 가이드](docs/REINSTALL_GUIDE.md)** (업그레이드 / 클린 재설치 / 자동 업데이트가 막혔을 때)
 
@@ -115,7 +114,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Command를 F16으로 HID 레벨 remap하여:
 - 로컬 macOS에서는 F16을 suppress하고 `Control+Space` 합성
 - Windows VDI 앱 포커스에서는 F16을 **패스스루** — Horizon이 Right Alt로 직접 변환
-- **Mac → Mac 원격접속** (Screen Sharing 등) 에서는 F16을 패스스루 — 원격 Mac 의 WinMacKey 가 자체 처리
+- **Mac → Mac 원격접속** (Screen Sharing 등) 에서는 로컬 맥북의 입력소스만 토글 — 변환된 문자가 원격 화면에 forward (원격 Mac 에는 설치 불필요, v1.3.5+)
 
 을 상황에 맞게 처리합니다.
 

@@ -107,6 +107,7 @@ struct HelpView: View {
                     steps: [
                         "메뉴바(화면 우측 상단)에서 WinMac Key 아이콘을 클릭합니다.",
                         "\"엔진 상태\" 토글을 켭니다.",
+                        "켜지면 메뉴바 아이콘이 또렷하게 채워지고, 꺼지면 흐릿한 외곽선으로 표시됩니다.",
                         "키보드를 눌러 정상 동작을 확인합니다."
                     ],
                     warning: nil
@@ -115,7 +116,7 @@ struct HelpView: View {
             .padding(24)
         }
     }
-    
+
     // MARK: - Key Mapping Tab
     
     private var keyMappingTab: some View {
@@ -174,16 +175,15 @@ struct HelpView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("1. 설정 → General Settings → \"새 프로필 만들기\"")
-                            Text("2. Step 1: 키캡 프린팅이 `Mac 키보드`인지 `Windows 키보드`인지 선택")
-                            Text("3. Step 2: 스페이스바 왼쪽 modifier를 실제로 누르고 마지막에 `Space`를 눌러 현재 입력 감지")
-                            Text("4. Windows 키보드라면 `키캡 기준`과 `macOS 입력`을 함께 보여줘 실제 입력 차이를 바로 확인")
-                            Text("5. `Space` 앞에 감지된 키 개수로 3키/4키 자동 판단")
-                            Text("6. Step 3: 로컬 macOS에서 `Fn / Ctrl / Cmd / Opt` 배치를 왼쪽부터 선택")
-                            Text("7. Step 4: VDI에서 `Ctrl / Win / Alt` 배치를 왼쪽부터 선택")
-                            Text("8. 슬롯을 직접 눌러 선택한 뒤 원하는 기능 키로 즉시 교체 가능")
-                            Text("9. 3키 키보드라면 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
-                            Text("10. Step 5: 현재 컨텍스트를 검증한 뒤 프로필 저장")
-                            Text("11. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환")
+                            Text("2. Step 1: 키캡 프린팅(`Mac`/`Windows`) 선택 — 라벨 표기일 뿐이며, 기능은 스페이스바 왼쪽 키 개수(3키/4키)로 결정됩니다.")
+                            Text("3. Step 2: 스페이스바 왼쪽 modifier를 왼쪽부터 누르고 마지막에 `Space`. 누른 개수로 3키/4키를 자동 판단합니다.")
+                            Text("4. Fn(🌐) 키가 눌러도 감지되지 않는 맥에서는 `+ Fn 🌐` 버튼으로 4번째(좌측 끝) 슬롯을 직접 추가하세요. (런타임 리맵은 동일하게 동작)")
+                            Text("5. Step 3: 로컬 macOS에서 `Fn / Ctrl / Cmd / Opt` 배치를 왼쪽부터 선택")
+                            Text("6. Step 4: VDI에서 `Ctrl / Win / Alt` 배치를 왼쪽부터 선택")
+                            Text("7. 슬롯을 직접 눌러 선택한 뒤 원하는 기능 키로 즉시 교체 가능")
+                            Text("8. 3키 키보드라면 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
+                            Text("9. Step 5: 현재 컨텍스트를 검증한 뒤 프로필 저장")
+                            Text("10. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -197,10 +197,11 @@ struct HelpView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("1. 위저드로 프로필을 만들고 저장합니다.")
-                            Text("2. Settings → Profiles 탭에서 해당 프로필 옆 \"Assign current keyboard\" 를 클릭합니다.")
-                            Text("3. 현재 타이핑 중인 키보드(VendorID/ProductID)가 프로필에 할당됩니다.")
-                            Text("4. 이후 해당 키보드에서 키를 누르면 자동으로 프로필이 전환됩니다.")
-                            Text("5. 내장 MacBook 키보드도 현재 활성 키보드일 때 할당하면 고정 프로필처럼 동작합니다.")
+                            Text("2. Settings → Profiles 탭에서 해당 프로필의 \"Bind keyboard…\" 버튼을 클릭합니다.")
+                            Text("3. 바인딩할 키보드에서 아무 키나 한 번 누르면 디바이스(이름·VID:PID·내장/외장)가 감지됩니다.")
+                            Text("4. 감지된 디바이스를 확인하고 \"바인딩\" 을 누릅니다. (키 입력이 어려우면 목록에서 직접 선택)")
+                            Text("5. 바인딩 안 된 외장 키보드로 처음 입력하면 안내 창이 떠 [프로필 바인딩 / 이 키보드 무시 / 나중에] 를 묻습니다.")
+                            Text("6. 내장 MacBook 키보드도 같은 방식으로 바인딩하면 고정 프로필처럼 동작합니다.")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -209,7 +210,7 @@ struct HelpView: View {
                             Image(systemName: "info.circle.fill")
                                 .foregroundStyle(.blue)
                                 .font(.caption)
-                            Text("프로필 우선순위: 키보드 디바이스 > 앱(Bundle ID) > 기본 프로필. 내장 키보드도 디바이스 프로필을 지정하면 그 프로필이 우선 적용됩니다.")
+                            Text("프로필 우선순위: 키보드 디바이스 > 앱(Bundle ID) > 기본 프로필. 자동 전환은 외장→내장 전환에서만 일어나고, 외장끼리 교체할 때는 마지막 프로필을 유지합니다 (원하는 프로필은 메뉴에서 직접 선택).")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -454,10 +455,10 @@ struct HelpView: View {
                     내장 키보드, USB 키보드, Bluetooth 키보드 모두에서 동작합니다.\n\n\
                     내장/외장 키보드 전용 프로필을 만들 수 있습니다:\n\
                     1. 위저드에서 키캡 프린팅(Mac/Windows)을 선택하고 실키 감지 후 프로필을 저장합니다.\n\
-                    2. Settings → Profiles 탭에서 "Assign current keyboard" 버튼을 누르면 현재 사용 중인 키보드에 프로필이 할당됩니다.\n\
-                    3. 이후 해당 키보드에서 타이핑하면 프로필이 자동으로 전환됩니다.\n\n\
+                    2. Settings → Profiles 탭에서 "Bind keyboard…" 버튼을 누른 뒤, 바인딩할 키보드에서 아무 키나 한 번 누르면 그 키보드에 프로필이 바인딩됩니다 (Press-to-bind).\n\
+                    3. 바인딩 안 된 외장 키보드로 처음 입력하면 안내 창이 떠 [프로필 바인딩 / 이 키보드 무시 / 나중에] 중에서 고를 수 있습니다.\n\n\
                     프로필 우선순위: 키보드 디바이스 프로필 > 앱 프로필 > 기본 프로필.\n\
-                    내장 키보드도 "Assign current keyboard"로 디바이스 프로필을 지정하면 항상 그 프로필이 우선 적용됩니다.
+                    자동 전환은 외장→내장 전환에서만 일어나고, 외장끼리 교체할 때는 마지막 프로필을 유지합니다.
                     """
                 )
 

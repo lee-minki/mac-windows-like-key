@@ -163,6 +163,7 @@ struct ModifierLayoutView: View {
         }
         .onDisappear {
             appState.keyInterceptor.onVerifyKeyEvent = nil
+            appState.keyboardDeviceManager.onFnKeyDown = nil
             if currentStep != 0 {
                 appState.refreshActiveProfileForCurrentContext()
             }
@@ -436,6 +437,15 @@ struct ModifierLayoutView: View {
                     auxiliaryFnKey = nil
                 }
                 .buttonStyle(.bordered)
+
+                Button("+ Fn 🌐") {
+                    registerPhysicalKey(Int64(kVK_Function), insertAtFront: true)
+                }
+                .buttonStyle(.bordered)
+                .disabled(didCaptureSpaceBoundary
+                    || physicalKeys.contains(Int64(kVK_Function))
+                    || physicalKeys.count >= maximumPhysicalKeyCount)
+                .help("좌측 끝에 Fn(🌐) 키가 있는 4키 키보드인데 눌러도 감지가 안 될 때 추가합니다. 런타임 리맵은 HID(hidutil)로 정상 동작합니다.")
 
                 Spacer()
 
@@ -1124,6 +1134,7 @@ struct ModifierLayoutView: View {
 
     private func cancelWizard() {
         appState.keyInterceptor.onVerifyKeyEvent = nil
+        appState.keyboardDeviceManager.onFnKeyDown = nil
         appState.refreshActiveProfileForCurrentContext()
         currentStep = 0
     }
@@ -1150,13 +1161,31 @@ struct ModifierLayoutView: View {
                 return
             }
 
-            guard physicalKeys.count < maximumPhysicalKeyCount else { return }
-            guard leftSideChoices.contains(originalKeyCode) else { return }
-            guard !physicalKeys.contains(originalKeyCode) else { return }
-
-            physicalKeys.append(originalKeyCode)
-            physicalCaptureNeedsMoreKeys = false
+            registerPhysicalKey(originalKeyCode)
         }
+
+        // IOHID 기반 Fn/Globe 감지 — CGEventTap 이 lone Fn 을 못 받는 맥에서도
+        // 실제 키 입력으로 검증되도록. (안 들어오면 "Fn 추가" 버튼이 보장 경로)
+        appState.keyboardDeviceManager.onFnKeyDown = { [self] in
+            registerPhysicalKey(Int64(kVK_Function))
+        }
+    }
+
+    /// Step 2 에서 감지(CGEventTap·IOHID) 또는 버튼으로 들어온 좌측 modifier 를 슬롯에 등록.
+    /// - insertAtFront: "Fn 추가" 버튼처럼 좌측 끝 키임이 분명할 때 맨 앞에 삽입.
+    @discardableResult
+    private func registerPhysicalKey(_ keyCode: Int64, insertAtFront: Bool = false) -> Bool {
+        guard currentStep == 2, !didCaptureSpaceBoundary else { return false }
+        guard physicalKeys.count < maximumPhysicalKeyCount else { return false }
+        guard leftSideChoices.contains(keyCode) else { return false }
+        guard !physicalKeys.contains(keyCode) else { return false }
+        if insertAtFront {
+            physicalKeys.insert(keyCode, at: 0)
+        } else {
+            physicalKeys.append(keyCode)
+        }
+        physicalCaptureNeedsMoreKeys = false
+        return true
     }
 
     private func syncSelectionBuffersWithPhysicalKeys() {
@@ -1299,6 +1328,9 @@ struct ModifierLayoutView: View {
         appState.persistCustomMappings(mappings)
         appState.keyInterceptor.activeProfileID = "visualCustomProfile"
         appState.keyInterceptor.applyCustomMappingsSync(mappings)
+
+        // Step 5 검증에서는 Fn 자동 추가 비활성 (물리키 구성은 이미 확정됨)
+        appState.keyboardDeviceManager.onFnKeyDown = nil
 
         verifyResults = [:]
         verifyLogs = []
