@@ -1,4 +1,4 @@
-# WinMac Key v1.4.0 설정 가이드
+# WinMac Key v1.5.0 설정 가이드
 
 ## 변경 요약
 

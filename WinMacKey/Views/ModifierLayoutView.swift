@@ -403,7 +403,9 @@ struct ModifierLayoutView: View {
                 displayStyle: selectedLegendStyle,
                 emptyTitle: "대기",
                 showSecondaryLabels: selectedLegendStyle == .windows,
-                spaceCaptured: didCaptureSpaceBoundary
+                spaceCaptured: didCaptureSpaceBoundary,
+                awaitingIndex: (didCaptureSpaceBoundary || physicalKeys.count >= maximumPhysicalKeyCount)
+                    ? nil : physicalKeys.count
             )
             Text(physicalCaptureHint)
                 .font(.caption)
@@ -829,7 +831,8 @@ struct ModifierLayoutView: View {
         showSecondaryLabels: Bool = false,
         selectedIndex: Int? = nil,
         onSelectSlot: ((Int) -> Void)? = nil,
-        spaceCaptured: Bool = false
+        spaceCaptured: Bool = false,
+        awaitingIndex: Int? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -843,7 +846,8 @@ struct ModifierLayoutView: View {
                 showSecondaryLabels: showSecondaryLabels,
                 selectedIndex: selectedIndex,
                 onSelectSlot: onSelectSlot,
-                spaceCaptured: spaceCaptured
+                spaceCaptured: spaceCaptured,
+                awaitingIndex: awaitingIndex
             )
         }
     }
@@ -856,12 +860,14 @@ struct ModifierLayoutView: View {
         showSecondaryLabels: Bool,
         selectedIndex: Int?,
         onSelectSlot: ((Int) -> Void)?,
-        spaceCaptured: Bool
+        spaceCaptured: Bool,
+        awaitingIndex: Int? = nil
     ) -> some View {
         HStack(spacing: 7) {
             ForEach(0..<total, id: \.self) { index in
                 let isFilled = index < selections.count
                 let isSelected = selectedIndex == index
+                let isAwaiting = (awaitingIndex == index) && !isFilled
                 let subtitle = showSecondaryLabels && isFilled
                     ? ModifierSlot.secondaryLabel(for: selections[index], style: displayStyle)
                     : nil
@@ -870,11 +876,13 @@ struct ModifierLayoutView: View {
                     onSelectSlot?(index)
                 } label: {
                     slotKeycap(
-                        title: isFilled ? ModifierSlot.label(for: selections[index], style: displayStyle) : emptyTitle,
+                        title: isFilled ? ModifierSlot.label(for: selections[index], style: displayStyle)
+                                        : (isAwaiting ? "여기" : emptyTitle),
                         subtitle: subtitle,
                         filled: isFilled,
                         selected: isSelected,
-                        slotNumber: index + 1
+                        slotNumber: index + 1,
+                        awaiting: isAwaiting
                     )
                 }
                 .buttonStyle(.plain)
@@ -983,14 +991,20 @@ struct ModifierLayoutView: View {
         subtitle: String?,
         filled: Bool,
         selected: Bool,
-        slotNumber: Int
+        slotNumber: Int,
+        awaiting: Bool = false
     ) -> some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 11)
-                .fill(filled ? Color.black.opacity(0.028) : Color.black.opacity(0.015))
+                .fill(awaiting ? Color.green.opacity(0.12)
+                               : (filled ? Color.black.opacity(0.028) : Color.black.opacity(0.015)))
 
             RoundedRectangle(cornerRadius: 11)
-                .stroke(selected ? Color.blue.opacity(0.82) : Color.black.opacity(filled ? 0.12 : 0.08), lineWidth: selected ? 1.4 : 1)
+                .stroke(
+                    awaiting ? Color.green.opacity(0.9)
+                             : (selected ? Color.blue.opacity(0.82) : Color.black.opacity(filled ? 0.12 : 0.08)),
+                    lineWidth: (awaiting || selected) ? 1.6 : 1
+                )
 
             Text("\(slotNumber)")
                 .font(.system(size: 8, weight: .semibold))

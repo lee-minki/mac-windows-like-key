@@ -324,6 +324,18 @@ struct MenuBarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             
+            // 설정 점검 버튼 (v1.4.1) — 권한·환경 점검 패널 재진입
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "setup-window")
+            }) {
+                Label("설정 점검", systemImage: "checklist")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+
             // Doctor 버튼
             Button(action: {
                 NSApp.activate(ignoringOtherApps: true)

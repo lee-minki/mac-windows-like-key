@@ -47,6 +47,22 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
    - **Windows 단축키 (To):** `Right Alt` (우측 Alt)
 6. 체크박스를 켜서 활성화(Enable) 상태로 만듭니다.
 
+> ✅ **한/영 전환에 필수인 매핑은 `F16 → Right Alt (AltGr)` 단 하나입니다.** 이 항목의 체크박스가 켜져 있어야 WinMac Key 의 VDI 한영이 동작합니다.
+
+#### (선택) Mac 단축키를 VDI 안에서도 쓰기
+
+Horizon 키 매핑 탭에서 아래 항목들을 추가·활성화하면, VDI 안의 Windows 에서도 Mac 손가락 습관(⌘ 기반)을 그대로 쓸 수 있습니다. **한/영 전환과 무관한 편의 설정이며, 필요 없으면 끄거나 추가하지 않아도 됩니다.**
+
+| Mac 단축키 | Windows 단축키 | 용도 |
+|---|---|---|
+| ⌘Z / ⌘X / ⌘C / ⌘V | Ctrl-Z / X / C / V | 실행취소·잘라내기·복사·붙여넣기 |
+| ⌘A / ⌘S / ⌘F / ⌘P | Ctrl-A / S / F / P | 전체선택·저장·찾기·인쇄 |
+| ⌘G | F3 | 다음 찾기 |
+| ⌘W | Alt-F4 | 창 닫기 |
+| Shift-Option-Tab | ⊞(Win)-Tab | 작업 보기(Task View) 창 전환 |
+
+> ⚠️ **`기본값 복원`(Restore Defaults) 버튼을 누르면 `F16 → Right Alt` 매핑도 함께 사라집니다.** 복원 후에는 F16 매핑을 다시 추가하세요.
+
 ### 3. WinMac Key 실행
 
 - WinMac Key를 실행한 뒤 메뉴바에서 엔진을 켭니다. (`WM` 상태)

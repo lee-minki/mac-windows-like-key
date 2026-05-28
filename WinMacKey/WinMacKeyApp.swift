@@ -4,6 +4,11 @@ import Carbon.HIToolbox
 import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // DMG/다운로드에서 실행됐으면 응용 프로그램 폴더로 이동 제안 (v1.5.0)
+        ApplicationMover.offerMoveToApplicationsIfNeeded()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // 앱 종료 시 cleanup — ownership 우회 path 사용.
         // Phase D 에서 pre-existing snapshot 복원 로직 추가 예정.
@@ -69,6 +74,22 @@ struct WinMacKeyApp: App {
             LogView()
         }
         .defaultSize(width: 700, height: 450)
+
+        // 설정 점검 Window (v1.4.1) — 첫 실행 / 권한·환경 점검 패널
+        Window("설정 점검", id: "setup-window") {
+            SetupCheckView()
+                .environmentObject(appState)
+        }
+        .defaultSize(width: 500, height: 440)
+        .windowResizability(.contentSize)
+
+        // 첫 실행 환영/라이선스 Window (v1.4.2)
+        Window("WinMac Key 시작하기", id: "firstrun-window") {
+            FirstRunView()
+                .environmentObject(appState)
+        }
+        .defaultSize(width: 500, height: 440)
+        .windowResizability(.contentSize)
     }
 }
 
@@ -114,6 +135,37 @@ class AppState: ObservableObject {
     /// MenuBarLabelView 가 SwiftUI 의 `openWindow` 를 capture 해 세팅한다.
     /// 글로벌 단축키 콜백에서 호출되어 메뉴바 우회로 Doctor 윈도우를 연다.
     var doctorWindowOpener: (() -> Void)?
+
+    /// 설정 점검 패널(SetupCheckView)을 여는 opener. MenuBarLabelView 가 capture.
+    var setupWindowOpener: (() -> Void)?
+    /// 첫 실행 환영/라이선스 패널(FirstRunView)을 여는 opener.
+    var firstRunWindowOpener: (() -> Void)?
+    private var didRunLaunchSetupCheck = false
+
+    /// 첫 실행 환영/라이선스 동의 완료 여부 (1회).
+    @AppStorage("hasCompletedFirstRunOnboarding") var hasCompletedFirstRun: Bool = false
+
+    /// 런치 시 1회 온보딩:
+    ///   - 첫 실행이면 환영/라이선스 패널을 띄운다.
+    ///   - 이후엔 권한/환경 이슈가 있을 때만 설정 점검 패널을 띄운다.
+    /// (init 중 권한 프롬프트는 LSUIElement 앱에서 표시되지 않으므로 실행 후 패널로 안내)
+    func runLaunchSetupCheckIfNeeded() {
+        guard !didRunLaunchSetupCheck else { return }
+        didRunLaunchSetupCheck = true
+
+        if !hasCompletedFirstRun {
+            firstRunWindowOpener?()
+            NSApp.activate(ignoringOtherApps: true)
+            LogService.shared.info("Launch onboarding: showing first-run welcome", category: "App")
+            return
+        }
+
+        let issues = SetupCheckService.detectIssues(using: permissionService)
+        guard !issues.isEmpty else { return }
+        setupWindowOpener?()
+        NSApp.activate(ignoringOtherApps: true)
+        LogService.shared.info("Launch setup check: \(issues.count) issue(s) — opened setup panel", category: "App")
+    }
 
     @Published var showResetConfirmation: Bool = false
     @Published var lastActiveKeyboard: KeyboardDeviceIdentifier?
@@ -257,7 +309,10 @@ class AppState: ObservableObject {
         }
 
         checkPermissions()
-        bootstrapPermissionPromptsIfNeeded()
+        // 권한 프롬프트는 init 에서 호출하지 않는다 — LSUIElement 앱은 실행 완료 전
+        // AXIsProcessTrustedWithOptions 프롬프트가 표시되지 않아 신규 사용자가 조용히 막혔다.
+        // 대신 런치 후 MenuBarLabelView.onAppear 에서 runLaunchSetupCheckIfNeeded() 가
+        // 설정 점검 패널을 띄워 권한·환경 이슈를 안내한다 (v1.4.1).
         // 엔진 자동 시작은 init 완료 후로 defer.
         // toggleEngine → refreshActiveProfileForCurrentContext → applyMappings 가
         // init 중 HID 를 건드리면 lifecycle invariant (init 은 HID 비간섭) 위반.
@@ -307,13 +362,6 @@ class AppState: ObservableObject {
     
     func checkPermissions() {
         hasAccessibilityPermission = permissionService.checkAccessibilityPermission()
-    }
-
-    private func bootstrapPermissionPromptsIfNeeded() {
-        if !hasAccessibilityPermission {
-            permissionService.requestAccessibilityPermission()
-            LogService.shared.warning("Bootstrap: requested Accessibility permission", category: "App")
-        }
     }
 
     private func startEngineOnLaunchIfNeeded() {
@@ -707,6 +755,14 @@ struct MenuBarLabelView: View {
             appState.doctorWindowOpener = {
                 openWindow(id: "doctor-window")
             }
+            appState.setupWindowOpener = {
+                openWindow(id: "setup-window")
+            }
+            appState.firstRunWindowOpener = {
+                openWindow(id: "firstrun-window")
+            }
+            // 런치 후 1회: 첫 실행이면 환영/라이선스, 이후엔 환경 이슈 있을 때 설정 점검 패널 표시
+            appState.runLaunchSetupCheckIfNeeded()
         }
     }
 }

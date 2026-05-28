@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.5.0] — 2026-05-29
+
+신규 맥 첫 설치 온보딩 개편. 권한·환경 설정을 실행 시 자동 점검·안내하고, 첫 실행 흐름과 위자드 사용성을 정리.
+
+### Fixed
+- **신규 설치에서 손쉬운 사용 권한 프롬프트가 뜨지 않던 문제** (`WinMacKey/WinMacKeyApp.swift`): 권한 요청을 `init` 에서 호출해 LSUIElement(메뉴바 전용) 앱이 실행 완료 전이라 시스템 프롬프트가 표시되지 않았고, 안내 UI 도 없어 신규 사용자가 조용히 막혔다(위자드에서 Ctrl/Opt/Cmd 미인식). 권한 요청을 init 밖으로 옮기고, 실행 후 **설정 점검 패널**로 안내하도록 변경.
+
+### Added
+- **설정 점검 패널 (SetupCheckView)** (`WinMacKey/Views/PermissionGuideView.swift`): 실행 시 환경을 점검해 이슈가 있으면 자동 표시 + 메뉴바 "설정 점검" 으로 재진입. 점검 항목:
+  - 손쉬운 사용 / 입력 모니터링 권한 (없으면 [요청/설정 열기])
+  - **Caps Lock → ABC 입력 소스 전환(SymbolicHotKey 162)** 켜짐 감지 → 대소문자 토글이 막히므로 끄도록 안내 (직접 끄는 공개 API 가 없어 감지+안내 방식)
+  - **⌃Space ‘이전 입력 소스 선택’(SymbolicHotKey 60)** 꺼짐 감지 → 한/영 합성에 필요하므로 켜도록 안내
+- **첫 실행 환영 + 라이선스 1회 동의 (FirstRunView)**: 앱 소개 + MIT 라이선스 동의 → 설정 점검으로 연결. `hasCompletedFirstRunOnboarding` 로 1회만.
+- **위자드 Step 2 슬롯 하이라이트** (`WinMacKey/Views/ModifierLayoutView.swift`): 다음에 입력해야 할 슬롯을 초록 "여기" 로 강조(awaiting), 선택 슬롯은 파랑 — 조작 순서를 명확히.
+- **"응용 프로그램으로 이동" (ApplicationMover)**: DMG/다운로드/데스크탑에서 처음 실행되면 /Applications 로 이동 제안 후 재실행(LetsMove 패턴, 비파괴적 — 실패 시 무시·원본 자동삭제 안 함).
+
+### Changed
+- **VDI 설정 가이드 보강** (`docs/VDI_SETUP.md`): `F16 → Right Alt` 가 한/영의 유일한 필수 매핑임을 명시 + 선택적 Mac 단축키(⌘C→Ctrl-C 등) 표 + ‘기본값 복원’ 시 F16 매핑이 사라지는 함정 경고.
+
+### Note
+- build 17. `.pkg`(모든 사용자용 설치 관리자)는 별도 — **‘Developer ID Installer’ 인증서**가 있어야 공증 배포 가능(현재 미보유, Apple Developer 에서 발급 필요).
+
+---
+
 ## [1.4.0] — 2026-05-28
 
 ### Fixed
