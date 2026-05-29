@@ -161,10 +161,11 @@ class AppState: ObservableObject {
         }
 
         let issues = SetupCheckService.detectIssues(using: permissionService)
-        guard !issues.isEmpty else { return }
+        // 이슈가 있거나(권한·설정) 프로필이 0개면(엔진 못 켬) 설정 점검 패널로 안내한다.
+        guard !issues.isEmpty || profileStore.profiles.isEmpty else { return }
         setupWindowOpener?()
         NSApp.activate(ignoringOtherApps: true)
-        LogService.shared.info("Launch setup check: \(issues.count) issue(s) — opened setup panel", category: "App")
+        LogService.shared.info("Launch setup check: \(issues.count) issue(s), profiles=\(profileStore.profiles.count) — opened setup panel", category: "App")
     }
 
     @Published var showResetConfirmation: Bool = false
@@ -324,7 +325,9 @@ class AppState: ObservableObject {
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
-        keyboardDeviceManager.startMonitoring()
+        // IOHIDManager 는 입력 모니터링 권한이 있을 때만 연다 — 없으면 첫 실행 환영 *전*에
+        // 권한 프롬프트가 떠 순서가 깨지므로. 권한 부여는 설정 점검 패널의 명시 버튼에서만.
+        beginKeyboardMonitoringIfPermitted()
         checkForDuplicateInstallations()
 
         // 글로벌 단축키 (Cmd+Shift+Opt+D) → Doctor 윈도우.
@@ -575,7 +578,18 @@ class AppState: ObservableObject {
                 return
             }
 
+            // 프로필 게이트: 저장된 프로필이 하나도 없으면 엔진을 켜지 않는다.
+            // "엔진 ON = 윈맥키 전 기능 동작" 인지 모델 — 설정+프로필을 먼저 끝내야 켤 수 있음.
+            // 한/영만 쓰려는 사용자는 설정 점검 패널의 "한/영 전환만 빠른 시작" 으로 프로필 1개 생성.
+            guard !profileStore.profiles.isEmpty else {
+                LogService.shared.warning("Engine start blocked: no profile — create one first", category: "Engine")
+                setupWindowOpener?()
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+
             // 엔진 ON: HID ownership 획득 후 EventTap 켜고 매핑 적용.
+            beginKeyboardMonitoringIfPermitted()  // IM 있으면 디바이스 감지도 시작
             HIDRemapper.shared.takeOwnership()
             let started = keyInterceptor.start()
             isEngineRunning = started
@@ -591,6 +605,49 @@ class AppState: ObservableObject {
         }
     }
     
+    /// IOHIDManager(키보드 디바이스 감지)는 입력 모니터링 권한 프롬프트를 유발한다.
+    /// 권한이 없을 때 init 에서 열면 첫 실행 환영 창 *전*에 프롬프트가 떠 순서가 깨진다.
+    /// → 권한이 이미 있을 때만 연다. 없으면 설정 점검 패널의 명시적 버튼으로 부여 후 시작.
+    /// (startMonitoring 은 idempotent — 이미 떠 있으면 no-op)
+    func beginKeyboardMonitoringIfPermitted() {
+        guard permissionService.checkInputMonitoringPermission() else {
+            LogService.shared.info("Keyboard monitoring deferred — Input Monitoring not granted yet", category: "Device")
+            return
+        }
+        keyboardDeviceManager.startMonitoring()
+    }
+
+    /// 앱을 안전하게 재시작. macOS "종료하고 다시 열기"가 메뉴바 전용(LSUIElement) 앱을
+    /// 신뢰성 있게 재실행하지 못하는 문제 우회 — 분리 셸이 현재 인스턴스 종료 후 다시 연다.
+    func relaunch() {
+        let path = Bundle.main.bundlePath
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.6; /usr/bin/open \"\(path)\""]
+        try? task.run()
+        LogService.shared.info("Relaunch requested (self-relaunch helper)", category: "App")
+        NSApp.terminate(nil)
+    }
+
+    /// 한/영 전환만 쓰는 사용자를 위한 빠른 프로필 — 키바인딩 재배치 없음(항등 매핑).
+    /// 엔진 게이트(프로필 ≥1)를 만족시키고, Right Cmd 한/영만 동작한다.
+    /// (위자드의 키 캡처/검수 단계를 건너뛰는 빠른 경로)
+    @discardableResult
+    func createKoreanOnlyProfile() -> SavedKeyboardProfile {
+        let identity: [Int64] = [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+        let profile = SavedKeyboardProfile(
+            name: "한/영 전환만",
+            legendStyle: .mac,
+            physicalKeys: identity,
+            localDesiredKeys: identity,
+            vdiDesiredKeys: identity
+        )
+        profileStore.add(profile)
+        activeMappingProfileId = profile.id.uuidString
+        LogService.shared.info("Created Korean-only profile (no remap)", category: "App")
+        return profile
+    }
+
     /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.
     func resetAll() {
         LogService.shared.warning("Reset all triggered", category: "App")

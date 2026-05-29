@@ -49,6 +49,12 @@ struct ModifierLayoutView: View {
 
     @State private var currentStep: Int = 0 // 0=프로필 목록, 1=표기, 2=현재 입력, 3=Mac 로컬, 4=VDI, 5=검증
     @State private var selectedLegendStyle: KeyboardLegendStyle = .mac
+    /// Step 2 에서 Fn(🌐) 누르면 이모지 창이 뜰 수 있다는 안내 — "다시 보지 않기" 영구 저장.
+    @AppStorage("hideFnEmojiTip") private var hideFnEmojiTip = false
+    /// Step 2 진입 시 1회 뜨는 Fn 안내 팝업.
+    @State private var showFnTipPopup = false
+    /// 코치마크용 펄스(숨쉬는 글로우) — 활성 슬롯에 시선 유도.
+    @State private var coachPulse = false
     @State private var physicalKeys: [Int64] = []
     @State private var localDesiredKeys: [Int64] = []
     @State private var vdiDesiredKeys: [Int64] = []
@@ -71,11 +77,12 @@ struct ModifierLayoutView: View {
         Int64(kVK_Command),
         Int64(kVK_Option)
     ]
+    // 팔레트 표시 순서 (사용자 선호: Cmd · Fn · Opt · Ctrl). 매핑 동작과는 무관(표시용).
     private let macTargetChoices: [Int64] = [
-        Int64(kVK_Function),
-        Int64(kVK_Control),
         Int64(kVK_Command),
-        Int64(kVK_Option)
+        Int64(kVK_Function),
+        Int64(kVK_Option),
+        Int64(kVK_Control)
     ]
     private let vdiTargetChoices: [Int64] = [
         Int64(kVK_Control),
@@ -149,8 +156,35 @@ struct ModifierLayoutView: View {
             : "VDI 목표는 Windows 기준이라 Ctrl / Win / Alt만 고릅니다."
     }
 
+    /// 단계별 "지금 할 일 + 왜" 코치 카드 — 첫 사용자가 절차를 이해하도록.
+    private var stepCoachCard: some View {
+        let info: (String, String)
+        switch currentStep {
+        case 1: info = ("1단계 · 키보드 표기 고르기", "쓰는 키보드 키캡이 Mac인지 Windows인지 고르세요. 표시용 라벨일 뿐이고, 실제 동작은 다음 단계에서 누른 키로 정해집니다.")
+        case 2: info = ("2단계 · 현재 키 입력 감지", "스페이스바 왼쪽 modifier를 왼쪽부터 하나씩 누르고, 마지막에 Space를 누르세요. 초록색으로 빛나는 \"여기\" 칸이 다음에 누를 자리입니다.")
+        case 3: info = ("3단계 · Mac에서 쓸 배치", "위에서 파랗게 빛나는 칸(슬롯)을 누른 뒤, 아래에서 그 자리에 넣을 기능 키를 고르세요. 왼쪽 슬롯부터 차례로 정합니다.")
+        case 4: info = ("4단계 · VDI에서 쓸 배치", "Windows VDI에서 쓸 배치입니다. 맥 4키는 기본값(Ctrl · Win · Win · Alt)이 채워져 있어요 — 그대로 쓰거나, 파란 칸을 누르고 아래 Ctrl / Win / Alt 중 골라 바꾸세요.")
+        case 5: info = ("5단계 · 확인하고 저장", "방금 만든 배치가 실제로 어떻게 들어가는지 키를 눌러 확인하세요. 맞으면 저장합니다.")
+        default: info = ("", "")
+        }
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "hand.point.up.left.fill").foregroundStyle(.blue).font(.title3)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(info.0).font(.subheadline).bold()
+                Text(info.1).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(Color.blue.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if (1...5).contains(currentStep) {
+                stepCoachCard
+            }
             switch currentStep {
             case 0: profileSelectorView
             case 1: shapeSetupView
@@ -161,12 +195,24 @@ struct ModifierLayoutView: View {
             default: EmptyView()
             }
         }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                coachPulse = true
+            }
+        }
         .onDisappear {
             appState.keyInterceptor.onVerifyKeyEvent = nil
             appState.keyboardDeviceManager.onFnKeyDown = nil
+            if !appState.isEngineRunning { appState.keyInterceptor.stopTapForVerify() }
             if currentStep != 0 {
                 appState.refreshActiveProfileForCurrentContext()
             }
+        }
+        .alert("Fn(🌐) 키 입력 안내", isPresented: $showFnTipPopup) {
+            Button("알겠어요", role: .cancel) { }
+            Button("다시 보지 않기") { hideFnEmojiTip = true }
+        } message: {
+            Text("Fn(🌐) 키를 누를 때 이모지·기호 창이 뜨면 마우스로 닫고 다음 키를 눌러 주세요. 감지는 정상 진행됩니다.\n\n계속 뜨는 게 불편하면: 시스템 설정 → 키보드 → \"🌐 키를 다음 용도로 사용\" → \"아무 작업 안 함\" 으로 바꾸세요.")
         }
         .sheet(isPresented: $showSaveDialog) {
             saveProfileSheet
@@ -396,6 +442,25 @@ struct ModifierLayoutView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if !hideFnEmojiTip {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle.fill").foregroundStyle(.blue)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Fn(🌐) 키를 누를 때 이모지·기호 창이 뜨면, 마우스로 닫고 다음 키를 눌러 주세요. 감지는 정상 진행됩니다. (또는 시스템 설정 → 키보드 → \"🌐 키를 다음 용도로 사용\" → \"아무 작업 안 함\")")
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("다시 보지 않기") { hideFnEmojiTip = true }
+                            .font(.caption2)
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.blue)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(8)
+                .background(Color.blue.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             slotSelectionCard(
                 title: "현재 입력 감지",
                 selections: physicalKeys,
@@ -511,7 +576,7 @@ struct ModifierLayoutView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("로컬 macOS에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
                     .font(.subheadline)
-                Text("Mac 로컬 목표는 항상 `Fn / Ctrl / Cmd / Opt` 기준으로 선택합니다.")
+                Text("Mac 로컬 목표는 `Cmd / Fn / Opt / Ctrl` 순으로 고를 수 있습니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -562,6 +627,7 @@ struct ModifierLayoutView: View {
                 Spacer()
 
                 Button("다음 →") {
+                    applyDefaultVdiKeysIfNeeded()
                     selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: configuredSlotCount)
                     currentStep = 4
                 }
@@ -583,6 +649,27 @@ struct ModifierLayoutView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("VDI 안에서 한/영 전환이 되려면 Horizon Client 쪽 설정도 한 번 해줘야 합니다:")
+                    Text("1. Horizon Client → 설정(⌘,) → 키보드 및 마우스 → 키 매핑")
+                    Text("2. 기본 단축키(⌘Z·⌘C 등)는 **전부 체크 해제**")
+                    Text("3. [ + ] 버튼으로 **F16 → Right Alt** 하나만 추가하고 체크")
+                    Text("⚠️ '기본값 복원'을 누르면 F16 매핑도 함께 사라집니다 — 그럴 땐 다시 추가하세요.")
+                        .foregroundStyle(.orange)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+            } label: {
+                Label("Omnissa Horizon 클라이언트 설정 (VDI 쓰는 경우 필수)", systemImage: "display")
+                    .font(.caption).bold()
+            }
+            .padding(10)
+            .background(Color.orange.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             slotSelectionCard(
                 title: "VDI 목표",
@@ -996,14 +1083,14 @@ struct ModifierLayoutView: View {
     ) -> some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 11)
-                .fill(awaiting ? Color.green.opacity(0.12)
+                .fill(awaiting ? Color.green.opacity(0.22)
                                : (filled ? Color.black.opacity(0.028) : Color.black.opacity(0.015)))
 
             RoundedRectangle(cornerRadius: 11)
                 .stroke(
-                    awaiting ? Color.green.opacity(0.9)
+                    awaiting ? Color.green
                              : (selected ? Color.blue.opacity(0.82) : Color.black.opacity(filled ? 0.12 : 0.08)),
-                    lineWidth: (awaiting || selected) ? 1.6 : 1
+                    lineWidth: awaiting ? 3 : (selected ? 1.6 : 1)
                 )
 
             Text("\(slotNumber)")
@@ -1014,8 +1101,8 @@ struct ModifierLayoutView: View {
 
             VStack(spacing: subtitle == nil ? 1 : 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(filled ? Color.primary : Color.secondary)
+                    .font(.system(size: awaiting ? 14 : 13, weight: awaiting ? .heavy : .semibold, design: .rounded))
+                    .foregroundStyle(awaiting ? Color.green : (filled ? Color.primary : Color.secondary))
 
                 if let subtitle {
                     Text(subtitle)
@@ -1027,6 +1114,12 @@ struct ModifierLayoutView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: subtitle == nil ? 58 : 64, height: subtitle == nil ? 42 : 46)
+        .scaleEffect(awaiting ? 1.06 : 1)
+        .shadow(
+            color: awaiting ? Color.green.opacity(0.65) : (selected ? Color.blue.opacity(0.55) : .clear),
+            radius: (awaiting || selected) ? (coachPulse ? 13 : 3) : 0
+        )
+        .animation(.easeInOut(duration: 0.15), value: awaiting)
     }
 
     private func spaceKeycap(captured: Bool) -> some View {
@@ -1149,11 +1242,13 @@ struct ModifierLayoutView: View {
     private func cancelWizard() {
         appState.keyInterceptor.onVerifyKeyEvent = nil
         appState.keyboardDeviceManager.onFnKeyDown = nil
+        if !appState.isEngineRunning { appState.keyInterceptor.stopTapForVerify() }
         appState.refreshActiveProfileForCurrentContext()
         currentStep = 0
     }
 
     private func beginPhysicalKeyCapture() {
+        if !hideFnEmojiTip { showFnTipPopup = true }
         appState.keyInterceptor.applyCustomMappingsSync([:])
         didCaptureSpaceBoundary = (minimumPhysicalKeyCount...maximumPhysicalKeyCount).contains(physicalKeys.count) && didCaptureSpaceBoundary
         physicalCaptureNeedsMoreKeys = false
@@ -1183,6 +1278,12 @@ struct ModifierLayoutView: View {
         appState.keyboardDeviceManager.onFnKeyDown = { [self] in
             registerPhysicalKey(Int64(kVK_Function))
         }
+
+        // 엔진이 꺼져 있어도(프로필 생성 전, 게이트로 OFF) Ctrl/Opt/Cmd 를 감지하도록
+        // 검증 전용 CGEventTap 을 띄운다. 손쉬운 사용 권한이 있어야 동작.
+        if appState.hasAccessibilityPermission {
+            appState.keyInterceptor.startTapForVerify()
+        }
     }
 
     /// Step 2 에서 감지(CGEventTap·IOHID) 또는 버튼으로 들어온 좌측 modifier 를 슬롯에 등록.
@@ -1200,6 +1301,20 @@ struct ModifierLayoutView: View {
         }
         physicalCaptureNeedsMoreKeys = false
         return true
+    }
+
+    /// Mac 4키 레이아웃이면 VDI 목표를 기본값(Ctrl · Win · Win · Alt)으로 미리 채운다.
+    /// 이미 고른 값이 있으면 건드리지 않음 — 사용자가 바꿀 수 있다.
+    private func applyDefaultVdiKeysIfNeeded() {
+        guard configuredSlotCount == 4,
+              selectedLegendStyle == .mac,
+              vdiDesiredKeys.isEmpty else { return }
+        vdiDesiredKeys = [
+            Int64(kVK_Control),   // Ctrl
+            Int64(kVK_Command),   // Win
+            Int64(kVK_Command),   // Win
+            Int64(kVK_Option)     // Alt
+        ]
     }
 
     private func syncSelectionBuffersWithPhysicalKeys() {
@@ -1345,6 +1460,7 @@ struct ModifierLayoutView: View {
 
         // Step 5 검증에서는 Fn 자동 추가 비활성 (물리키 구성은 이미 확정됨)
         appState.keyboardDeviceManager.onFnKeyDown = nil
+        if appState.hasAccessibilityPermission { appState.keyInterceptor.startTapForVerify() }
 
         verifyResults = [:]
         verifyLogs = []

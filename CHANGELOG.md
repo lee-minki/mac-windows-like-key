@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.5.1] — 2026-05-29
+
+신규 맥 "다운로드→설치→설정→사용" 무이탈 온보딩 완성. 첫 사용자가 막히지 않고 끝까지 가도록 펀넬·가이드·동작 모델을 정리.
+
+### Changed
+- **엔진 = 프로필 게이트** (`WinMacKey/WinMacKeyApp.swift`): 저장 프로필이 0개면 엔진을 켤 수 없다("엔진 ON = 전 기능 동작" 인지 모델). 설정·프로필을 먼저 끝내야 켜짐. 메뉴바 토글 비활성 + 힌트.
+- **권한 프롬프트 순서 수정**: IOHIDManager(입력 모니터링 프롬프트 유발)를 권한이 있을 때만 연다. 첫 실행 환영 *전*에 프롬프트가 뜨던 문제 해소 — 권한은 설정 점검 패널의 명시 버튼에서만 요청.
+- 위자드 Step 3 팔레트 순서 `Cmd · Fn · Opt · Ctrl`, Step 4 VDI 맥 4키 기본값 `Ctrl · Win · Win · Alt` 자동 채움.
+
+### Fixed
+- **위자드에서 Ctrl/Opt/Cmd 가 감지되지 않던 문제** (`WinMacKey/Services/KeyInterceptor.swift`): 엔진 게이트로 프로필 생성 전엔 엔진(CGEventTap)이 꺼져 있어 modifier 감지가 안 됐다. 검증 전용 tap(`startTapForVerify`/`stopTapForVerify`)을 띄워 엔진 OFF·HID 비간섭 상태에서도 감지.
+
+### Added
+- **첫 실행 환영 + 설정 점검 자동 표시**: 첫 실행/프로필 0개/권한·환경 이슈가 있으면 패널로 안내.
+- **한/영 전환만 빠른 시작**: 키바인딩 안 바꾸고 한/영만 쓰려는 사용자용 항등 프로필 1클릭 생성(위자드 스킵).
+- **위자드 코치마크** (`WinMacKey/Views/ModifierLayoutView.swift`): 단계별 "지금 할 일 + 왜" 카드, 다음 입력 슬롯 펄스 글로우(초록 "여기"/파랑), Fn 이모지 안내 팝업("다시 보지 않기").
+- **VDI(Omnissa Horizon) 설정 안내**: Step 4 접이식 카드 — 기본 단축키 전부 해제 + `F16 → Right Alt` 하나만 추가 + '기본값 복원' 함정 경고.
+- **앱 다시 시작 버튼**: macOS "종료하고 다시 열기"가 메뉴바 전용(LSUIElement) 앱을 재실행 못 하는 문제 우회(분리 셸 재실행).
+
+### Note
+- build 18. v1.5.0(미출시 Draft)의 온보딩을 실사용 가능한 수준으로 완성한 릴리스.
+
+---
+
 ## [1.5.0] — 2026-05-29
 
 신규 맥 첫 설치 온보딩 개편. 권한·환경 설정을 실행 시 자동 점검·안내하고, 첫 실행 흐름과 위자드 사용성을 정리.

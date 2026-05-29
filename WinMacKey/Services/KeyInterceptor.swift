@@ -347,6 +347,24 @@ class KeyInterceptor: ObservableObject {
         }
     }
 
+    /// 위자드 검증 모드용 — 엔진(HID)을 켜지 않고 CGEventTap 만 띄워 키 입력을 감지한다.
+    /// 프로필을 만들기 전(엔진 게이트로 OFF)에도 Ctrl/Opt/Cmd 등을 잡기 위함.
+    /// HID ownership/매핑은 건드리지 않는다(tap 생성만). 손쉬운 사용 권한 없으면 실패(false).
+    @discardableResult
+    func startTapForVerify() -> Bool {
+        if isRunning { return true }
+        let started = start()
+        if started { logger.info("Verify tap started (engine off, capture only)") }
+        return started
+    }
+
+    /// 검증 모드 종료 시 tap 정지. HID 는 애초에 안 건드렸으므로 보존.
+    func stopTapForVerify() {
+        guard isRunning else { return }
+        stop(clearHIDMappings: false)
+        logger.info("Verify tap stopped")
+    }
+
     func beginInputSourceCommitWindow() {
         guard !isVdiAppFocused else { return }
         startBufferedReplayWindow(.inputSourceCommit, timeout: inputSourceCommitTimeout, timeoutReason: "timeout")

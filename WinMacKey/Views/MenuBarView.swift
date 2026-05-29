@@ -228,16 +228,23 @@ struct MenuBarView: View {
                     Text(appState.isEngineRunning ? "실행 중" : "중지됨")
                         .font(.callout)
                 }
+
+                if appState.profileStore.profiles.isEmpty {
+                    Text("프로필을 먼저 만들어야 켤 수 있어요")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
-            
+
             Spacer()
-            
+
             Toggle("", isOn: Binding(
                 get: { appState.isEngineRunning },
                 set: { _ in appState.toggleEngine() }
             ))
             .toggleStyle(.switch)
             .controlSize(.small)
+            .disabled(appState.profileStore.profiles.isEmpty)
         }
         .padding(12)
     }

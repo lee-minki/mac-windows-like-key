@@ -95,6 +95,7 @@ enum SetupCheckService {
 
 struct SetupCheckView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
     @State private var issues: [SetupIssue] = []
 
     var body: some View {
@@ -174,12 +175,31 @@ struct SetupCheckView: View {
         HStack {
             Button { refresh() } label: { Label("다시 점검", systemImage: "arrow.clockwise") }
                 .buttonStyle(.bordered)
+            Button { appState.relaunch() } label: { Label("앱 다시 시작", systemImage: "arrow.clockwise.circle") }
+                .buttonStyle(.bordered)
+                .help("권한을 바꾼 뒤 적용이 안 되면 누르세요. macOS '종료하고 다시 열기'가 메뉴바 앱을 재실행 못 하는 문제를 우회합니다.")
             Spacer()
             if issues.isEmpty {
-                SettingsLink {
-                    Label("설정 열기 (프로필 만들기)", systemImage: "person.crop.rectangle.stack")
+                if appState.profileStore.profiles.isEmpty {
+                    // 엔진은 프로필 ≥1 이어야 켜진다. 두 가지 시작 경로 제공.
+                    SettingsLink {
+                        Label("직접 프로필 만들기", systemImage: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.bordered)
+                    Button {
+                        appState.createKoreanOnlyProfile()
+                        appState.toggleEngine()
+                        dismiss()
+                    } label: {
+                        Label("한/영 전환만 시작", systemImage: "bolt.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    SettingsLink {
+                        Label("프로필 / 설정 열기", systemImage: "person.crop.rectangle.stack")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
     }
@@ -187,6 +207,8 @@ struct SetupCheckView: View {
     private func refresh() {
         appState.checkPermissions()
         issues = SetupCheckService.detectIssues(using: appState.permissionService)
+        // 입력 모니터링이 부여됐으면 그때 키보드 감지 시작 (init 에서 미리 안 열어 프롬프트 순서 보호)
+        appState.beginKeyboardMonitoringIfPermitted()
     }
 
     private func perform(_ issue: SetupIssue) {
