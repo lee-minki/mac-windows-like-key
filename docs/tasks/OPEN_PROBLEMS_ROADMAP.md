@@ -1,24 +1,57 @@
 # Open Problems Roadmap
 
-> Status: **v0.3.1 — P7 sealed + plan v0.1, P1 sealed, P3 미합의, P2 paused (P7 흡수)**
-> 작성: 2026-05-16, 갱신: 2026-05-20
+> Status: **v0.4.0 — v1.6.0 Published + P9/P10 신규 (사용자 보고, 재현 진단 대기)**
+> 작성: 2026-05-16, 갱신: 2026-05-30
 > 작성자: Claude + lee-minki
 >
 > 이 문서가 합의된 후에만 새 코드 변경 가능.
 > 합의되지 않은 문제는 plan doc 없이 손대지 않는다.
 
-## TL;DR (2026-05-20 snapshot)
+## TL;DR (2026-05-30 snapshot)
 
 | Track | Status | 다음 단계 | 동시 진행 |
 |---|---|---|---|
-| **P1** CapsLock VDI sync | Sealed, severity **medium** (사용자 본인 자체 평가 — "지금도 쓸 만함") | plan doc 작성 | P2 와 병렬 가능 |
+| **P1** CapsLock VDI sync | Sealed, severity **medium** | plan doc 작성 | 독립 |
 | **P2** Per-keyboard binding (단일 active 모델) | **Paused** — P7 검토 후 흡수/폐기 결정 | 보류 | — |
-| **P3** Profile Legend Refactor | plan v0.2 합의 7항목 미답변 | 인터뷰 또는 합의 | 독립 |
-| **P4** Wizard flagsChanged 회귀 | Done (commit 9fe9c2a) | F4-1 follow-up | — |
+| **P3** Profile Legend Refactor | **Superseded by v1.6.0** — 위자드 표 기반 재설계 + 키캡 토글로 통합 | — | 종료 |
+| **P4** Wizard flagsChanged 회귀 | **Obsoleted by v1.6.0** — 캡처 제거로 verify-tap 자체 dead code 삭제 | — | 종료 |
 | **P5/P6** 오타/공백 사라짐 | Out-of-scope (윈맥키 책임 아님) | 등록 안 함 | — |
 | **P7** 디바이스별 독립 매핑 (동시 active) | **Sealed** (인터뷰 1-3 완료) | plan doc 작성 | P2 흡수 결정됨 |
+| **P8** 위자드 표 기반 재설계 | **Done (v1.6.0, commit 8ecf24a, Latest Published 2026-05-30)** | — | — |
+| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **신규 보고 (v1.5.1 환경), 재현 진단 대기** — 엔진 unchanged 라 v1.6.0 도 동일 가능성 99% | 사용자 v1.6.0 업데이트 후 재현 여부 → 핫픽스 PR | 독립 |
+| **P10** Ghostty 에서 ESC → 이상 문자 | **신규 보고 (v1.5.1 환경), 재현 진단 대기** — bufferedReplayWindow / F16 글로벌 영향 / focus race 후보 | 사용자 정확한 출력 문자 + 트리거 순서 회신 → 핫픽스 PR | 독립 |
 
-**권장 다음 행동**: P7 인터뷰 진행 → 동시 active 모델 합의 → plan doc 작성. P2 의 M1-M3 commit 들은 보존 (P7 토대로 활용 가능). P1 / P3 는 별개 트랙.
+**권장 다음 행동**: 사용자 v1.6.0 테스트 회신 → P9/P10 재현 격리 → 핫픽스 PR. P7 plan doc 은 P9/P10 hotfix 후 재개.
+
+## P9 · 한영전환 간헐 실패 (v1.5.1 보고, 2026-05-30)
+
+**증상**: 특정 앱에서 Right Cmd 한영 토글 안 됨. 같은 시점 다른 앱은 정상. 앱 재시작으로 fix.
+
+**자가복구는 이미 있음** (=원인 아님):
+- `KeyInterceptor.swift:390-395` — `tapDisabledByTimeout/ByUserInput` 자동 re-enable
+- `PermissionService.swift:28` — `isStaleGrantDetected` 감지 (단, 모달 없음 · MenuBarView 안내만)
+
+**후보 (가능성 순)**:
+1. **App-specific Ctrl+Space 소비** — "다른 앱은 정상" 가설과 일치 (IntelliJ 코드 완성, Spotlight 변형 등)
+2. **HID remap drift** — Right Cmd→F16 매핑이 다른 hidutil 도구/시스템 이벤트로 풀려나감. 재시작 시 `start()` 가 매핑 재적용 → 우연 fix
+3. **Stale grant 표시 사용자 미인지** — 재시작으로 권한 재평가
+
+**대기 정보**: 어떤 앱·번들 ID, 그 앱에서 Ctrl+Space 직접 동작 여부, 메뉴바 ON 확인, v1.6.0 으로도 재현되는지
+
+## P10 · Ghostty 에서 ESC → 이상 문자 (v1.5.1 보고, 2026-05-30)
+
+**증상**: Ghostty 터미널에서 ESC 키 누르니 이상한 문자 출력.
+
+**터미널 모드 분기는 정상**: `com.mitchellh.ghostty` 가 `ContextManager.swift:42` 화이트리스트 → `StateManager.handleTerminalTrigger()` → `inputSourceManager.toggleDirectly()` (TIS API 직접, 합성 우회) ✓
+
+**후보 (가능성 순)**:
+1. **`bufferedReplayWindow + ESC` 충돌** (`KeyInterceptor.swift:481-484`) — 20ms commit 윈도우 동안 ESC buffer → flush 시 재주입이 합성 부산물과 합쳐져 깨진 시퀀스로 인식
+2. **F16 HID remap 글로벌 영향** — ESC 직전 Right Cmd 살짝 눌렀으면 F16 같이 들어가 Ghostty 가 모르는 `kf16` 이스케이프 → 깨진 문자
+3. **ContextManager focus race** — frontmost 감지 놓쳐 terminal 분기 미적용 → `handleTrigger(isVdiMode: false)` fall through → Ctrl+Space 합성이 터미널 이스케이프 시퀀스로 인식
+
+**대기 정보**: ESC 출력 정확 문자 (스크린샷 또는 `cat -v`), ESC 직전 한영전환 여부, Ghostty frontmost 시 메뉴 → 입력소스 표시기 정상 토글 여부, v1.6.0 으로도 재현되는지
+
+상세 진단 컨텍스트는 메모리 `project_winmackey_v160_pending_bugs.md`.
 
 ---
 
