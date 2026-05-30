@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.6.0] — 2026-05-30
+
+신규 맥 온보딩의 최대 마찰 지점이었던 **프로필 위자드를 캡처 없는 표 기반으로 전면 재설계.** 외부 문서·인앱 도움말 일괄 동기화, 옵셔널 필드 보존 정책 명문화, dead code 정리.
+
+### Changed
+- **위자드 전면 재설계 — 캡처 없는 키코드 기반 직접 매핑 표** (`WinMacKey/Views/ModifierLayoutView.swift`).
+  근거: macOS 가 모든 키보드를 표준 modifier 키코드(Ctrl/Opt/Cmd/Fn)로 정규화하므로 물리 키 캡처는 **로직적으로 불필요**했고, Mac/Win 듀얼모드 키보드(로지텍 등)에서는 오히려 깨졌다(이모지·한영·Spotlight 오발).
+  새 흐름은 3화면 — ① **시작/의도**(프로필 이름 + "한/영 전환만" 1클릭 vs "키 배치도 바꾸기"), ② **매핑 표**(Fn·Ctrl·Opt·Cmd 4행 × Mac/VDI 2열 picker, Mac/Windows 키캡 표기 토글, "Windows 감각" 1클릭 프리셋=Cmd↔Ctrl 스왑, "초기화" 버튼, 라이브 미리보기), ③ **확인·저장**.
+- **`SavedKeyboardProfile` 모델 호환성 — 정확한 정의**: 모델 struct 시그니처는 그대로. 새 표 위자드가 UI 에 노출하지 않는 옵셔널 3필드(`auxiliaryFnKey` · `bundleId` · `deviceIdentifier`)는 **편집 시 기존 값을 보존**한다. 변경하려면: `auxiliaryFnKey` 는 프로필 삭제 후 재생성, `bundleId`/`deviceIdentifier` 는 Profiles 탭의 "Bind keyboard…" UI 에서.
+- 제거: Step 1 (표기 단독 화면, 표 안 토글로 흡수), Step 2 (현재 입력 감지/캡처), Step 3·4 슬롯+팔레트(표 한 화면으로 통합), 3키/4키 자동판단, 내장/외장 프리셋 버튼, "+ Fn 🌐" 버튼, Fn 이모지 팝업, slot 펄스 글로우.
+
+### Fixed
+- **프로필 삭제 안전 처리 (회귀)** (`WinMacKey/WinMacKeyApp.swift`, `WinMacKey/Views/DashboardView.swift`, `WinMacKey/Views/ModifierLayoutView.swift`): 새 ModifierLayoutView 의 삭제 버튼이 `activeMappingProfileId` 리셋과 HID 매핑 clear 를 안 하던 회귀를 수정. invariant 를 `AppState.deleteProfileSafely(_:)` service 메서드로 추출해 두 UI 가 공용 경로 사용.
+- **`auxiliaryFnKey` silent 손실 (회귀)** (`WinMacKey/Views/ModifierLayoutView.swift`): 새 위자드가 편집 저장 시 무조건 `nil` 처리하던 코드 제거. 기존 보조 Fn 설정 보존.
+- **인앱 도움말 (`HelpView`) 새 흐름 동기화**: 옛 Step 1~5 + `+Fn 🌐` 안내를 새 3화면 표 흐름 안내로 교체.
+
+### Removed
+- **dead code 정리** (호출처 0건, 동적 호출 검증 완료): `KeyInterceptor.{onVerifyKeyEvent, startTapForVerify, stopTapForVerify, dispatchVerificationCallback}`, `KeyInterceptor` 의 verify-suppress 분기, `KeyboardDeviceManager.{onFnKeyDown, handleFnKeyDown, appleFnUsagePage/Usage 상수, Fn 검출 분기}`.
+
+### Docs
+- 외부 문서 일괄 동기화 (이번 릴리스에 포함): `README.md` · `docs/manual.html` · `docs/FEATURE_SPEC.md` (§2 매트릭스 P1~P8 + §2.1 + §7 회귀 → v1.6 기준 재작성) · `docs/VDI_SETUP.md` · `docs/FRESH_INSTALL_CHECKLIST.md` (Section D Fn 진단 → 표 기반 매핑 검증으로 교체).
+
+### Note
+- Info.plist `1.5.1/18` → `1.6.0/19`, `MARKETING_VERSION 1.6.0`, `CURRENT_PROJECT_VERSION 19`.
+
+---
+
 ## [1.5.1] — 2026-05-29
 
 신규 맥 "다운로드→설치→설정→사용" 무이탈 온보딩 완성. 첫 사용자가 막히지 않고 끝까지 가도록 펀넬·가이드·동작 모델을 정리.

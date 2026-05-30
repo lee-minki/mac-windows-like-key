@@ -33,7 +33,6 @@ struct ModifierSlot: Identifiable, Equatable {
 
     static func secondaryLabel(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String? {
         guard style == .windows else { return nil }
-
         switch Int(keyCode) {
         case kVK_Command: return "Cmd 입력"
         case kVK_Option: return "Opt 입력"
@@ -44,1491 +43,429 @@ struct ModifierSlot: Identifiable, Equatable {
     }
 }
 
+/// 키보드 매핑 위자드 (v1.6 재설계) — **캡처 없는 키코드 기반 직접 매핑 표**.
+/// macOS 가 모든 키보드를 표준 modifier 키코드(Ctrl/Opt/Cmd/Fn)로 정규화하므로,
+/// 물리 키 캡처는 로직적으로 불필요했고 Mac/Win 모드 키보드에선 오히려 깨졌다.
+/// → 사용자가 표에서 "각 키를 무엇으로 쓸지" 직접 고른다. 캡처 단계 삭제.
 struct ModifierLayoutView: View {
     @EnvironmentObject var appState: AppState
 
-    @State private var currentStep: Int = 0 // 0=프로필 목록, 1=표기, 2=현재 입력, 3=Mac 로컬, 4=VDI, 5=검증
+    // 단계: 0=프로필 목록, 1=시작(의도), 2=매핑 표, 3=확인·저장
+    @State private var currentStep: Int = 0
+    @State private var editingProfileId: UUID? = nil
+    @State private var newProfileName: String = ""
     @State private var selectedLegendStyle: KeyboardLegendStyle = .mac
-    /// Step 2 에서 Fn(🌐) 누르면 이모지 창이 뜰 수 있다는 안내 — "다시 보지 않기" 영구 저장.
-    @AppStorage("hideFnEmojiTip") private var hideFnEmojiTip = false
-    /// Step 2 진입 시 1회 뜨는 Fn 안내 팝업.
-    @State private var showFnTipPopup = false
-    /// 코치마크용 펄스(숨쉬는 글로우) — 활성 슬롯에 시선 유도.
-    @State private var coachPulse = false
-    @State private var physicalKeys: [Int64] = []
-    @State private var localDesiredKeys: [Int64] = []
-    @State private var vdiDesiredKeys: [Int64] = []
-    @State private var auxiliaryFnKey: Int64? = nil
-    @State private var selectedLocalSlotIndex = 0
-    @State private var selectedVdiSlotIndex = 0
-    @State private var didCaptureSpaceBoundary = false
-    @State private var physicalCaptureNeedsMoreKeys = false
+    /// 표 상태: source 키코드 → 사용자가 고른 desired 키코드 (없으면 source 자신=안 바꿈)
+    @State private var localTargets: [Int64: Int64] = [:]
+    @State private var vdiTargets: [Int64: Int64] = [:]
 
-    @State private var verifyResults: [Int64: Bool] = [:]
-    @State private var verifyLogs: [(keyCode: Int64, label: String, pass: Bool)] = []
-    @State private var auxiliaryFnVerified = false
-
-    @State private var showSaveDialog = false
-    @State private var newProfileName = ""
-
-    private let leftSideChoices: [Int64] = [
+    /// 표가 다루는 표준 modifier 집합 (macOS 가 모든 키보드를 이 키코드로 정규화).
+    private let sourceModifiers: [Int64] = [
         Int64(kVK_Function),
         Int64(kVK_Control),
-        Int64(kVK_Command),
-        Int64(kVK_Option)
-    ]
-    // 팔레트 표시 순서 (사용자 선호: Cmd · Fn · Opt · Ctrl). 매핑 동작과는 무관(표시용).
-    private let macTargetChoices: [Int64] = [
-        Int64(kVK_Command),
-        Int64(kVK_Function),
         Int64(kVK_Option),
-        Int64(kVK_Control)
+        Int64(kVK_Command)
     ]
-    private let vdiTargetChoices: [Int64] = [
-        Int64(kVK_Control),
-        Int64(kVK_Command),
-        Int64(kVK_Option)
+    private let macLocalChoices: [Int64] = [
+        Int64(kVK_Command), Int64(kVK_Function), Int64(kVK_Option), Int64(kVK_Control)
     ]
-    private let minimumPhysicalKeyCount = 3
-    private let maximumPhysicalKeyCount = 4
-    private let spaceKeyCode = Int64(kVK_Space)
-    private let auxiliaryFnCandidates: [Int64] = [
-        Int64(kVK_RightControl),
-        Int64(kVK_CapsLock),
-        Int64(kVK_RightShift)
+    private let vdiChoices: [Int64] = [
+        Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)  // Ctrl · Win · Alt
     ]
-
-    private var currentVerificationContext: KeyboardUsageContext {
-        appState.isVdiMode ? .vdi : .localMac
-    }
-
-    private var currentVerificationDesiredKeys: [Int64] {
-        desiredKeys(for: currentVerificationContext)
-    }
-
-    private var configuredSlotCount: Int {
-        physicalKeys.count
-    }
-
-    private var localSelectionCursor: Int {
-        max(0, min(selectedLocalSlotIndex, max(configuredSlotCount - 1, 0)))
-    }
-
-    private var vdiSelectionCursor: Int {
-        max(0, min(selectedVdiSlotIndex, max(configuredSlotCount - 1, 0)))
-    }
-
-    private var shouldOfferAuxiliaryFnKey: Bool {
-        configuredSlotCount == 3
-            && !localDesiredKeys.contains(Int64(kVK_Function))
-            && !vdiDesiredKeys.contains(Int64(kVK_Function))
-    }
-
-    private var physicalCaptureHint: String {
-        if didCaptureSpaceBoundary {
-            return "\(configuredSlotCount)키 감지가 끝났습니다. 다음 단계로 넘어가세요."
-        }
-        if physicalCaptureNeedsMoreKeys {
-            return "Space 전까지 3개 이상의 modifier를 눌러 주세요."
-        }
-        switch physicalKeys.count {
-        case ..<minimumPhysicalKeyCount:
-            return "왼쪽부터 modifier를 누르고 마지막에 Space를 눌러 입력을 끝내세요."
-        case minimumPhysicalKeyCount:
-            return "3개를 감지했지만 아직 확정 전입니다. 3키면 Space를 눌러 확정하고, 4키면 마지막 키를 더 누른 뒤 Space를 누르세요."
-        default:
-            return "4개를 감지했지만 아직 확정 전입니다. Space를 눌러 4키로 확정하세요."
-        }
-    }
-
-    private var legendGuideText: String {
-        switch selectedLegendStyle {
-        case .mac:
-            return "Mac 키보드라면 Ctrl / Opt / Cmd / Fn 인쇄 기준으로 안내합니다."
-        case .windows:
-            return "Windows 키보드라면 Ctrl / Win / Alt / Fn 인쇄 기준으로 안내합니다. 실제 입력은 macOS의 Cmd / Opt로 감지됩니다."
-        }
-    }
-
-    private var vdiGuideText: String {
-        configuredSlotCount == 4
-            ? "VDI 목표는 Windows 기준이라 Ctrl / Win / Alt만 고릅니다. 4키 키보드라면 같은 기능을 두 슬롯에 둘 수 있습니다."
-            : "VDI 목표는 Windows 기준이라 Ctrl / Win / Alt만 고릅니다."
-    }
-
-    /// 단계별 "지금 할 일 + 왜" 코치 카드 — 첫 사용자가 절차를 이해하도록.
-    private var stepCoachCard: some View {
-        let info: (String, String)
-        switch currentStep {
-        case 1: info = ("1단계 · 키보드 표기 고르기", "쓰는 키보드 키캡이 Mac인지 Windows인지 고르세요. 표시용 라벨일 뿐이고, 실제 동작은 다음 단계에서 누른 키로 정해집니다.")
-        case 2: info = ("2단계 · 현재 키 입력 감지", "스페이스바 왼쪽 modifier를 왼쪽부터 하나씩 누르고, 마지막에 Space를 누르세요. 초록색으로 빛나는 \"여기\" 칸이 다음에 누를 자리입니다.")
-        case 3: info = ("3단계 · Mac에서 쓸 배치", "위에서 파랗게 빛나는 칸(슬롯)을 누른 뒤, 아래에서 그 자리에 넣을 기능 키를 고르세요. 왼쪽 슬롯부터 차례로 정합니다.")
-        case 4: info = ("4단계 · VDI에서 쓸 배치", "Windows VDI에서 쓸 배치입니다. 맥 4키는 기본값(Ctrl · Win · Win · Alt)이 채워져 있어요 — 그대로 쓰거나, 파란 칸을 누르고 아래 Ctrl / Win / Alt 중 골라 바꾸세요.")
-        case 5: info = ("5단계 · 확인하고 저장", "방금 만든 배치가 실제로 어떻게 들어가는지 키를 눌러 확인하세요. 맞으면 저장합니다.")
-        default: info = ("", "")
-        }
-        return HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "hand.point.up.left.fill").foregroundStyle(.blue).font(.title3)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(info.0).font(.subheadline).bold()
-                Text(info.1).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .background(Color.blue.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if (1...5).contains(currentStep) {
-                stepCoachCard
-            }
+        VStack(alignment: .leading, spacing: 14) {
             switch currentStep {
-            case 0: profileSelectorView
-            case 1: shapeSetupView
-            case 2: physicalInputView
-            case 3: localMappingView
-            case 4: vdiMappingView
-            case 5: verificationView
+            case 0: profileListView
+            case 1: startIntentView
+            case 2: mappingTableView
+            case 3: confirmSaveView
             default: EmptyView()
             }
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                coachPulse = true
-            }
-        }
-        .onDisappear {
-            appState.keyInterceptor.onVerifyKeyEvent = nil
-            appState.keyboardDeviceManager.onFnKeyDown = nil
-            if !appState.isEngineRunning { appState.keyInterceptor.stopTapForVerify() }
-            if currentStep != 0 {
-                appState.refreshActiveProfileForCurrentContext()
-            }
-        }
-        .alert("Fn(🌐) 키 입력 안내", isPresented: $showFnTipPopup) {
-            Button("알겠어요", role: .cancel) { }
-            Button("다시 보지 않기") { hideFnEmojiTip = true }
-        } message: {
-            Text("Fn(🌐) 키를 누를 때 이모지·기호 창이 뜨면 마우스로 닫고 다음 키를 눌러 주세요. 감지는 정상 진행됩니다.\n\n계속 뜨는 게 불편하면: 시스템 설정 → 키보드 → \"🌐 키를 다음 용도로 사용\" → \"아무 작업 안 함\" 으로 바꾸세요.")
-        }
-        .sheet(isPresented: $showSaveDialog) {
-            saveProfileSheet
-        }
+        .padding(16)
     }
 
-    private var profileSelectorView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("키보드 레이아웃 프로필")
-                .font(.headline)
+    // MARK: - Step 0 · 프로필 목록
 
-            if appState.profileStore.profiles.isEmpty {
-                VStack(spacing: 8) {
-                    Text("저장된 프로필이 없습니다")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("새 프로필을 만들어 로컬 Mac과 VDI 배치를 각각 설정하세요")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(20)
-                .background(Color(nsColor: .windowBackgroundColor))
-                .cornerRadius(12)
-            } else {
-                VStack(spacing: 4) {
-                    ForEach(appState.profileStore.profiles) { profile in
-                        profileRow(profile)
-                    }
-                }
-                .padding(8)
-                .background(Color(nsColor: .windowBackgroundColor))
-                .cornerRadius(12)
-            }
-
+    private var profileListView: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("매핑 초기화") {
-                    appState.activeMappingProfileId = "standardMac"
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
+                Text("키보드 프로필").font(.title3).bold()
                 Spacer()
-
                 Button {
-                    startWizard()
+                    startNewProfile()
                 } label: {
                     Label("새 프로필 만들기", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+            }
+
+            if appState.profileStore.profiles.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "keyboard")
+                        .font(.largeTitle).foregroundStyle(.secondary)
+                    Text("저장된 프로필이 없습니다").font(.subheadline)
+                    Text("새 프로필을 만들어 엔진을 켤 수 있어요.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 24)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(appState.profileStore.profiles) { profile in
+                        profileRow(profile)
+                    }
+                }
             }
         }
     }
 
     private func profileRow(_ profile: SavedKeyboardProfile) -> some View {
         let isActive = appState.activeMappingProfileId == profile.id.uuidString
-
-        return HStack {
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(profile.name)
-                        .font(.system(.body, weight: isActive ? .semibold : .regular))
-                    Text(profile.legendStyle.title)
-                        .font(.system(size: 10, weight: .medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.gray.opacity(0.12))
-                        .cornerRadius(6)
+                    Text(profile.name).font(.subheadline).bold()
+                    if isActive {
+                        Text("Active")
+                            .font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.green.opacity(0.2))
+                            .clipShape(Capsule()).foregroundStyle(.green)
+                    }
                 }
-                Text(profile.summary)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                Text(profile.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
-
             Spacer()
-
-            if isActive {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-            }
-
-            Button(isActive ? "사용 중" : "적용") {
-                appState.applyProfile(profile)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .disabled(isActive)
-
-            Button {
-                appState.profileStore.delete(id: profile.id)
-                if isActive {
-                    appState.activeMappingProfileId = "standardMac"
-                }
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
+            Button("편집") { startEditing(profile) }
+                .buttonStyle(.bordered).controlSize(.small)
+            Button("적용") { appState.applyProfile(profile) }
+                .buttonStyle(.bordered).controlSize(.small).disabled(isActive)
+            Button { appState.deleteProfileSafely(profile) } label: {
+                Image(systemName: "trash").foregroundStyle(.red)
             }
             .buttonStyle(.borderless)
-            .controlSize(.mini)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(isActive ? Color.blue.opacity(0.08) : Color.clear)
-        .cornerRadius(8)
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private var stepIndicator: some View {
-        HStack(spacing: 10) {
-            stepDot(step: 1, title: "표기")
-            stepDot(step: 2, title: "현재 입력")
-            stepDot(step: 3, title: "Mac 로컬")
-            stepDot(step: 4, title: "VDI")
-            stepDot(step: 5, title: "검증")
-        }
-        .frame(maxWidth: .infinity)
-    }
+    // MARK: - Step 1 · 시작 (의도 선택)
 
-    private func stepDot(step: Int, title: String) -> some View {
-        VStack(spacing: 4) {
-            ZStack {
-                Circle()
-                    .fill(step <= currentStep ? Color.blue : Color.gray.opacity(0.3))
-                    .frame(width: 24, height: 24)
-                Text("\(step)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            Text(title)
-                .font(.system(size: 9.5))
-                .foregroundColor(step <= currentStep ? .primary : .secondary)
-        }
-    }
-
-    private var shapeSetupView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            stepIndicator
-            Divider()
-
+    private var startIntentView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("어떻게 쓸까요?").font(.title3).bold()
             VStack(alignment: .leading, spacing: 4) {
-                Text("키보드 키캡 프린팅을 선택하세요")
-                    .font(.subheadline)
-                Text("이 선택은 뒤 단계에서 키 이름과 부연 설명을 어떻게 보여줄지만 결정합니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("프로필 이름").font(.caption).foregroundStyle(.secondary)
+                TextField("예: 내 키보드", text: $newProfileName).textFieldStyle(.roundedBorder)
             }
-
-            VStack(spacing: 8) {
-                legendStyleCard(
-                    style: .mac,
-                    title: "Mac 키보드",
-                    detail: "Ctrl · Opt · Cmd · Fn 키캡"
+            VStack(spacing: 10) {
+                intentCard(
+                    icon: "globe",
+                    color: .green,
+                    title: "한/영 전환만",
+                    detail: "키 배치는 그대로. Right Command 로 한/영만 전환합니다. (캡처 없이 바로 완료)",
+                    action: { quickCreateKoreanOnlyAndDone() }
                 )
-                legendStyleCard(
-                    style: .windows,
-                    title: "Windows 키보드",
-                    detail: "Ctrl · Win · Alt · Fn 키캡"
+                intentCard(
+                    icon: "slider.horizontal.3",
+                    color: .blue,
+                    title: "키 배치도 바꾸기",
+                    detail: "각 키를 어떤 키로 쓸지 표에서 고릅니다. 어떤 키보드든 동일하게 동작.",
+                    action: { currentStep = 2 }
                 )
             }
-
-            Text(legendGuideText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+            Spacer(minLength: 0)
             HStack {
-                Button("← 취소") {
-                    cancelWizard()
-                }
-                .buttonStyle(.bordered)
-
+                Button("← 취소") { cancelWizard() }.buttonStyle(.bordered)
                 Spacer()
-
-                Button("다음 →") {
-                    beginPhysicalKeyCapture()
-                    currentStep = 2
-                }
-                .buttonStyle(.borderedProminent)
             }
         }
     }
 
-    private func legendStyleCard(style: KeyboardLegendStyle, title: String, detail: String) -> some View {
-        let isSelected = selectedLegendStyle == style
-
-        return Button {
-            selectedLegendStyle = style
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(title)
-                        .font(.system(.body, weight: .semibold))
-                    Spacer()
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? .blue : .secondary)
+    private func intentCard(icon: String, color: Color, title: String, detail: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icon).font(.title2).foregroundStyle(color).frame(width: 32)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.headline)
+                    Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                Text(detail)
-                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.blue)
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue.opacity(0.8) : Color.gray.opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
-            )
-            .cornerRadius(12)
+            .padding(12)
+            .background(color.opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
     }
 
-    private var physicalInputView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            stepIndicator
-            Divider()
+    // MARK: - Step 2 · 매핑 표
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("현재 키보드의 스페이스바 왼쪽 modifier를 실제로 눌러 주세요")
-                    .font(.subheadline)
-                Text("왼쪽부터 키를 누르고 마지막에 `Space`를 누르면 3키/4키를 자동으로 감지합니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(legendGuideText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var mappingTableView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("키 배치 정하기").font(.title3).bold()
+            Text("각 키를 어떤 키로 쓸지 고르세요. 안 바꾸려면 \"바꾸지 않음\". macOS 가 모든 키보드를 같은 키코드로 보고하므로 누를 필요 없습니다.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                Text("키캡 표기:").font(.caption).foregroundStyle(.secondary)
+                Picker("", selection: $selectedLegendStyle) {
+                    Text("Mac (Cmd/Opt)").tag(KeyboardLegendStyle.mac)
+                    Text("Windows (Win/Alt)").tag(KeyboardLegendStyle.windows)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 280)
+                .labelsHidden()
+                Spacer()
+                Button("Windows 감각") { applyWindowsFeelPreset() }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .help("Mac 에서 Cmd↔Ctrl 스왑 (Windows 단축키 감각).")
+                Button("초기화") {
+                    localTargets.removeAll()
+                    vdiTargets.removeAll()
+                }
+                .buttonStyle(.bordered).controlSize(.small)
             }
 
-            if !hideFnEmojiTip {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "info.circle.fill").foregroundStyle(.blue)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Fn(🌐) 키를 누를 때 이모지·기호 창이 뜨면, 마우스로 닫고 다음 키를 눌러 주세요. 감지는 정상 진행됩니다. (또는 시스템 설정 → 키보드 → \"🌐 키를 다음 용도로 사용\" → \"아무 작업 안 함\")")
-                            .font(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button("다시 보지 않기") { hideFnEmojiTip = true }
-                            .font(.caption2)
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.blue)
-                    }
-                    Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                Text("키").frame(width: 80, alignment: .leading)
+                Text("Mac 에서").frame(width: 180, alignment: .leading)
+                Text("VDI (Windows) 에서").frame(width: 200, alignment: .leading)
+                Spacer()
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+
+            VStack(spacing: 4) {
+                ForEach(sourceModifiers, id: \.self) { source in
+                    mappingRow(source: source)
                 }
-                .padding(8)
-                .background(Color.blue.opacity(0.08))
+            }
+
+            Divider()
+            HStack(spacing: 10) {
+                Text("미리보기").font(.caption).foregroundStyle(.secondary)
+                Text(mappingPreview()).font(.caption.monospaced())
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+            HStack {
+                Button("← 뒤로") { currentStep = 1 }.buttonStyle(.bordered)
+                Spacer()
+                Button("다음 →") { currentStep = 3 }.buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func mappingRow(source: Int64) -> some View {
+        let macTarget = localTargets[source] ?? source
+        let vdiTarget = vdiTargets[source] ?? source
+        let changed = (macTarget != source) || (vdiTarget != source)
+        return HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Text(ModifierSlot.label(for: source, style: selectedLegendStyle))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                Text("→").foregroundStyle(.secondary)
+            }
+            .frame(width: 80, alignment: .leading)
+
+            mappingPicker(
+                current: macTarget, source: source,
+                choices: macLocalChoices, style: selectedLegendStyle
+            ) { localTargets[source] = $0 }
+                .frame(width: 180, alignment: .leading)
+
+            mappingPicker(
+                current: vdiTarget, source: source,
+                choices: vdiChoices, style: .windows
+            ) { vdiTargets[source] = $0 }
+                .frame(width: 200, alignment: .leading)
+
+            Spacer()
+        }
+        .padding(8)
+        .background(changed ? Color.blue.opacity(0.06) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func mappingPicker(
+        current: Int64,
+        source: Int64,
+        choices: [Int64],
+        style: KeyboardLegendStyle,
+        onPick: @escaping (Int64) -> Void
+    ) -> some View {
+        Menu {
+            Button("바꾸지 않음 (\(ModifierSlot.label(for: source, style: style)))") { onPick(source) }
+            Divider()
+            ForEach(choices, id: \.self) { choice in
+                Button(ModifierSlot.label(for: choice, style: style)) { onPick(choice) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(ModifierSlot.label(for: current, style: style))
+                    .foregroundStyle(current == source ? .secondary : .primary)
+                if current != source {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 6)).foregroundStyle(.blue)
+                }
+                Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private func mappingPreview() -> String {
+        let parts = sourceModifiers.compactMap { source -> String? in
+            let mac = localTargets[source] ?? source
+            let vdi = vdiTargets[source] ?? source
+            guard mac != source || vdi != source else { return nil }
+            let s = ModifierSlot.label(for: source, style: selectedLegendStyle)
+            let m = ModifierSlot.label(for: mac, style: selectedLegendStyle)
+            let v = ModifierSlot.label(for: vdi, style: .windows)
+            return "\(s)→\(m)|\(v)"
+        }
+        return parts.isEmpty ? "변경 없음 (한/영 전환만)" : parts.joined(separator: "   ")
+    }
+
+    // MARK: - Step 3 · 확인·저장
+
+    private var confirmSaveView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("확인하고 저장").font(.title3).bold()
+            VStack(alignment: .leading, spacing: 4) {
+                Text("프로필 이름").font(.caption).foregroundStyle(.secondary)
+                TextField("프로필 이름", text: $newProfileName).textFieldStyle(.roundedBorder)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("매핑 요약").font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(sourceModifiers, id: \.self) { source in
+                        let mac = localTargets[source] ?? source
+                        let vdi = vdiTargets[source] ?? source
+                        let changed = (mac != source) || (vdi != source)
+                        HStack(spacing: 6) {
+                            Text(ModifierSlot.label(for: source, style: selectedLegendStyle))
+                                .frame(width: 50, alignment: .leading).font(.caption.monospaced())
+                            Text("→").foregroundStyle(.secondary).font(.caption)
+                            Text("Mac: \(ModifierSlot.label(for: mac, style: selectedLegendStyle))")
+                                .frame(width: 100, alignment: .leading).font(.caption.monospaced())
+                            Text("VDI: \(ModifierSlot.label(for: vdi, style: .windows))")
+                                .frame(width: 100, alignment: .leading).font(.caption.monospaced())
+                            if changed {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green).font(.caption2)
+                            } else {
+                                Text("(안 바꿈)").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(10)
+                .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-
-            slotSelectionCard(
-                title: "현재 입력 감지",
-                selections: physicalKeys,
-                total: maximumPhysicalKeyCount,
-                displayStyle: selectedLegendStyle,
-                emptyTitle: "대기",
-                showSecondaryLabels: selectedLegendStyle == .windows,
-                spaceCaptured: didCaptureSpaceBoundary,
-                awaitingIndex: (didCaptureSpaceBoundary || physicalKeys.count >= maximumPhysicalKeyCount)
-                    ? nil : physicalKeys.count
-            )
-            Text(physicalCaptureHint)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 2)
-
-            if !physicalKeys.isEmpty {
-                physicalCaptureSummaryCard
-            }
-
+            Spacer(minLength: 0)
             HStack {
-                Button("← 이전") {
-                    appState.keyInterceptor.onVerifyKeyEvent = nil
-                    currentStep = 1
-                }
-                .buttonStyle(.bordered)
-
-                Button("한 칸 지우기") {
-                    _ = physicalKeys.popLast()
-                    didCaptureSpaceBoundary = false
-                    physicalCaptureNeedsMoreKeys = false
-                    auxiliaryFnKey = nil
-                }
-                .buttonStyle(.bordered)
-                .disabled(physicalKeys.isEmpty)
-
-                Button("초기화") {
-                    physicalKeys = []
-                    didCaptureSpaceBoundary = false
-                    physicalCaptureNeedsMoreKeys = false
-                    auxiliaryFnKey = nil
-                }
-                .buttonStyle(.bordered)
-
-                Button("+ Fn 🌐") {
-                    registerPhysicalKey(Int64(kVK_Function), insertAtFront: true)
-                }
-                .buttonStyle(.bordered)
-                .disabled(didCaptureSpaceBoundary
-                    || physicalKeys.contains(Int64(kVK_Function))
-                    || physicalKeys.count >= maximumPhysicalKeyCount)
-                .help("좌측 끝에 Fn(🌐) 키가 있는 4키 키보드인데 눌러도 감지가 안 될 때 추가합니다. 런타임 리맵은 HID(hidutil)로 정상 동작합니다.")
-
+                Button("← 뒤로") { currentStep = 2 }.buttonStyle(.bordered)
                 Spacer()
-
-                Button("다음 →") {
-                    syncSelectionBuffersWithPhysicalKeys()
-                    appState.keyInterceptor.onVerifyKeyEvent = nil
-                    selectedLocalSlotIndex = nextCursorIndex(for: localDesiredKeys, total: configuredSlotCount)
-                    selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: configuredSlotCount)
-                    currentStep = 3
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!didCaptureSpaceBoundary)
+                Button(editingProfileId == nil ? "저장하고 적용" : "변경 저장") { saveAndClose() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
     }
 
-    private var physicalCaptureSummaryCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("감지 요약")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    // MARK: - Actions / Helpers
 
-            summaryLine(title: "키캡 기준", keyCodes: physicalKeys, style: selectedLegendStyle)
-
-            if selectedLegendStyle == .windows {
-                summaryLine(title: "macOS 입력", keyCodes: physicalKeys, style: .mac)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(8)
-    }
-
-    private func summaryLine(title: String, keyCodes: [Int64], style: KeyboardLegendStyle) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .leading)
-
-            Text(formattedLabels(keyCodes, style: style))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-        }
-    }
-
-    private func formattedLabels(_ keyCodes: [Int64], style: KeyboardLegendStyle) -> String {
-        guard !keyCodes.isEmpty else { return "-" }
-        return keyCodes
-            .map { ModifierSlot.label(for: $0, style: style) }
-            .joined(separator: " / ")
-    }
-
-    private var localMappingView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            stepIndicator
-            Divider()
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("로컬 macOS에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
-                    .font(.subheadline)
-                Text("Mac 로컬 목표는 `Cmd / Fn / Opt / Ctrl` 순으로 고를 수 있습니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            slotSelectionCard(
-                title: "Mac 로컬 목표",
-                selections: localDesiredKeys,
-                total: configuredSlotCount,
-                displayStyle: .mac,
-                selectedIndex: localSelectionCursor,
-                onSelectSlot: { selectedLocalSlotIndex = $0 }
-            )
-            mappingPreviewCard(
-                title: "Mac 로컬 미리보기",
-                source: physicalKeys,
-                target: localDesiredKeys,
-                sourceStyle: selectedLegendStyle,
-                targetStyle: .mac
-            )
-            selectionPalette(
-                selections: localDesiredKeys,
-                choices: macTargetChoices,
-                displayStyle: .mac,
-                selectedIndex: localSelectionCursor,
-                allowsDuplicates: false,
-                onSelect: { applyKeySelection($0, to: .local) }
-            )
-
-            HStack {
-                Button("← 이전") {
-                    beginPhysicalKeyCapture()
-                    currentStep = 2
-                }
-                .buttonStyle(.bordered)
-
-                Button("선택 슬롯 지우기") {
-                    removeSelectedKey(from: .local)
-                }
-                .buttonStyle(.bordered)
-                .disabled(localDesiredKeys.isEmpty)
-
-                Button("초기화") {
-                    localDesiredKeys = []
-                    selectedLocalSlotIndex = 0
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("다음 →") {
-                    applyDefaultVdiKeysIfNeeded()
-                    selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: configuredSlotCount)
-                    currentStep = 4
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(localDesiredKeys.count != configuredSlotCount)
-            }
-        }
-    }
-
-    private var vdiMappingView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            stepIndicator
-            Divider()
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Windows VDI 안에서 원하는 배치를 왼쪽부터 순서대로 선택하세요")
-                    .font(.subheadline)
-                Text(vdiGuideText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            DisclosureGroup {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("VDI 안에서 한/영 전환이 되려면 Horizon Client 쪽 설정도 한 번 해줘야 합니다:")
-                    Text("1. Horizon Client → 설정(⌘,) → 키보드 및 마우스 → 키 매핑")
-                    Text("2. 기본 단축키(⌘Z·⌘C 등)는 **전부 체크 해제**")
-                    Text("3. [ + ] 버튼으로 **F16 → Right Alt** 하나만 추가하고 체크")
-                    Text("⚠️ '기본값 복원'을 누르면 F16 매핑도 함께 사라집니다 — 그럴 땐 다시 추가하세요.")
-                        .foregroundStyle(.orange)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-            } label: {
-                Label("Omnissa Horizon 클라이언트 설정 (VDI 쓰는 경우 필수)", systemImage: "display")
-                    .font(.caption).bold()
-            }
-            .padding(10)
-            .background(Color.orange.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            slotSelectionCard(
-                title: "VDI 목표",
-                selections: vdiDesiredKeys,
-                total: configuredSlotCount,
-                displayStyle: .windows,
-                selectedIndex: vdiSelectionCursor,
-                onSelectSlot: { selectedVdiSlotIndex = $0 }
-            )
-            mappingPreviewCard(
-                title: "VDI 미리보기",
-                source: physicalKeys,
-                target: vdiDesiredKeys,
-                sourceStyle: selectedLegendStyle,
-                targetStyle: .windows
-            )
-            selectionPalette(
-                selections: vdiDesiredKeys,
-                choices: vdiTargetChoices,
-                displayStyle: .windows,
-                selectedIndex: vdiSelectionCursor,
-                allowsDuplicates: true,
-                onSelect: { applyKeySelection($0, to: .vdi) }
-            )
-
-            if vdiDesiredKeys.count == configuredSlotCount && shouldOfferAuxiliaryFnKey {
-                auxiliaryFnSection
-            }
-
-            HStack {
-                Button("← 이전") {
-                    currentStep = 3
-                }
-                .buttonStyle(.bordered)
-
-                Button("선택 슬롯 지우기") {
-                    removeSelectedKey(from: .vdi)
-                }
-                .buttonStyle(.bordered)
-                .disabled(vdiDesiredKeys.isEmpty)
-
-                Button("초기화") {
-                    vdiDesiredKeys = []
-                    selectedVdiSlotIndex = 0
-                    auxiliaryFnKey = nil
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("적용 및 검증 →") {
-                    applyAndGoToVerification()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(vdiDesiredKeys.count != configuredSlotCount)
-            }
-        }
-    }
-
-    private var verificationView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            stepIndicator
-            Divider()
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("현재 \(currentVerificationContext.title) 기준 매핑을 실시간으로 확인하세요")
-                    .font(.subheadline)
-                Text("프로필 저장 후에는 로컬 Mac과 VDI 사이를 오갈 때 자동으로 해당 배치로 전환됩니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            mappingPreviewCard(
-                title: "Mac 로컬",
-                source: physicalKeys,
-                target: localDesiredKeys,
-                sourceStyle: selectedLegendStyle,
-                targetStyle: .mac,
-                highlight: currentVerificationContext == .localMac
-            )
-            mappingPreviewCard(
-                title: "VDI",
-                source: physicalKeys,
-                target: vdiDesiredKeys,
-                sourceStyle: selectedLegendStyle,
-                targetStyle: .windows,
-                highlight: currentVerificationContext == .vdi
-            )
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("현재 컨텍스트 검증")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                ForEach(0..<configuredSlotCount, id: \.self) { index in
-                    let physKey = physicalKeys[index]
-                    let desiredKey = currentVerificationDesiredKeys[index]
-                    let targetStyle = targetDisplayStyle(for: currentVerificationContext)
-
-                    HStack {
-                        Text(ModifierSlot.label(for: physKey, style: selectedLegendStyle))
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(width: 48, alignment: .trailing)
-                        Image(systemName: "arrow.right")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                        Text(ModifierSlot.label(for: desiredKey, style: targetStyle))
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.blue)
-                            .frame(width: 48)
-
-                        if let pass = verifyResults[desiredKey] {
-                            Image(systemName: pass ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(pass ? .green : .red)
-                            Text(pass ? "확인됨" : "불일치")
-                                .font(.caption2)
-                                .foregroundColor(pass ? .green : .red)
-                        } else {
-                            Image(systemName: "circle.dotted")
-                                .foregroundColor(.gray)
-                            Text("눌러서 확인")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                        }
-                    }
-                }
-
-                if let auxiliaryFnKey {
-                    HStack {
-                        Text(ModifierSlot.label(for: auxiliaryFnKey, style: selectedLegendStyle))
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(width: 48, alignment: .trailing)
-                        Image(systemName: "arrow.right")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                        Text("Fn")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.blue)
-                            .frame(width: 48)
-                        Image(systemName: auxiliaryFnVerified ? "checkmark.circle.fill" : "circle.dotted")
-                            .foregroundColor(auxiliaryFnVerified ? .green : .gray)
-                        Text(auxiliaryFnVerified ? "확인됨" : "눌러서 확인")
-                            .font(.caption2)
-                            .foregroundColor(auxiliaryFnVerified ? .green : .gray)
-                    }
-                }
-            }
-            .padding(12)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .cornerRadius(12)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("실시간 이벤트 로그")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(verifyLogs.indices.reversed(), id: \.self) { index in
-                            let log = verifyLogs[index]
-                            HStack(spacing: 6) {
-                                Text(log.label)
-                                    .font(.system(.caption, design: .monospaced))
-                                Image(systemName: log.pass ? "checkmark.circle.fill" : "minus.circle")
-                                    .foregroundColor(log.pass ? .green : .gray)
-                                    .font(.caption)
-                            }
-                            .padding(.vertical, 1)
-                        }
-                    }
-                }
-                .frame(maxHeight: 80)
-            }
-            .padding(12)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .cornerRadius(12)
-
-            HStack {
-                Button("← 다시 설정") {
-                    appState.keyInterceptor.onVerifyKeyEvent = nil
-                    appState.refreshActiveProfileForCurrentContext()
-                    verifyResults = [:]
-                    verifyLogs = []
-                    auxiliaryFnVerified = false
-                    currentStep = 4
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button {
-                    newProfileName = ""
-                    showSaveDialog = true
-                } label: {
-                    Label("프로필 저장", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-    }
-
-    private var auxiliaryFnSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("보조 Fn 키 (선택)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("3키 키보드라면 오른쪽 보조 키 하나를 Fn으로 지정할 수 있습니다. 이 값은 로컬 Mac과 VDI에 공통 적용됩니다.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                ForEach(auxiliaryFnCandidates, id: \.self) { keyCode in
-                    let isSelected = auxiliaryFnKey == keyCode
-                    Button {
-                        auxiliaryFnKey = keyCode
-                    } label: {
-                        keycapChoiceLabel(
-                            keyCode: keyCode,
-                            displayStyle: selectedLegendStyle,
-                            selected: isSelected,
-                            usedElsewhere: false,
-                            showsSecondaryLabel: selectedLegendStyle == .windows
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if auxiliaryFnKey != nil {
-                    Button("선택 해제") {
-                        auxiliaryFnKey = nil
-                    }
-                    .buttonStyle(ChipButtonStyle())
-                }
-            }
-        }
-        .padding(8)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(8)
-    }
-
-    private func slotSelectionCard(
-        title: String,
-        selections: [Int64],
-        total: Int,
-        displayStyle: KeyboardLegendStyle,
-        emptyTitle: String = "선택",
-        showSecondaryLabels: Bool = false,
-        selectedIndex: Int? = nil,
-        onSelectSlot: ((Int) -> Void)? = nil,
-        spaceCaptured: Bool = false,
-        awaitingIndex: Int? = nil
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            selectionSlotRow(
-                selections: selections,
-                total: total,
-                displayStyle: displayStyle,
-                emptyTitle: emptyTitle,
-                showSecondaryLabels: showSecondaryLabels,
-                selectedIndex: selectedIndex,
-                onSelectSlot: onSelectSlot,
-                spaceCaptured: spaceCaptured,
-                awaitingIndex: awaitingIndex
-            )
-        }
-    }
-
-    private func selectionSlotRow(
-        selections: [Int64],
-        total: Int,
-        displayStyle: KeyboardLegendStyle,
-        emptyTitle: String,
-        showSecondaryLabels: Bool,
-        selectedIndex: Int?,
-        onSelectSlot: ((Int) -> Void)?,
-        spaceCaptured: Bool,
-        awaitingIndex: Int? = nil
-    ) -> some View {
-        HStack(spacing: 7) {
-            ForEach(0..<total, id: \.self) { index in
-                let isFilled = index < selections.count
-                let isSelected = selectedIndex == index
-                let isAwaiting = (awaitingIndex == index) && !isFilled
-                let subtitle = showSecondaryLabels && isFilled
-                    ? ModifierSlot.secondaryLabel(for: selections[index], style: displayStyle)
-                    : nil
-
-                Button {
-                    onSelectSlot?(index)
-                } label: {
-                    slotKeycap(
-                        title: isFilled ? ModifierSlot.label(for: selections[index], style: displayStyle)
-                                        : (isAwaiting ? "여기" : emptyTitle),
-                        subtitle: subtitle,
-                        filled: isFilled,
-                        selected: isSelected,
-                        slotNumber: index + 1,
-                        awaiting: isAwaiting
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(onSelectSlot == nil)
-            }
-
-            spaceKeycap(captured: spaceCaptured)
-        }
-        .padding(8)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(12)
-    }
-
-    private func selectionPalette(
-        selections: [Int64],
-        choices: [Int64],
-        displayStyle: KeyboardLegendStyle,
-        selectedIndex: Int,
-        allowsDuplicates: Bool,
-        onSelect: @escaping (Int64) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("선택 슬롯을 누른 뒤 기능 키를 고르세요")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                ForEach(choices, id: \.self) { keyCode in
-                    let isCurrentSelection = selectedIndex < selections.count && selections[selectedIndex] == keyCode
-                    let isUsedElsewhere = selections.enumerated().contains { offset, value in
-                        value == keyCode && offset != selectedIndex
-                    }
-                    Button {
-                        onSelect(keyCode)
-                    } label: {
-                        keycapChoiceLabel(
-                            keyCode: keyCode,
-                            displayStyle: displayStyle,
-                            selected: isCurrentSelection,
-                            usedElsewhere: isUsedElsewhere && !allowsDuplicates,
-                            showsSecondaryLabel: false
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(6)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(8)
-    }
-
-    private func mappingPreviewCard(
-        title: String,
-        source: [Int64],
-        target: [Int64],
-        sourceStyle: KeyboardLegendStyle,
-        targetStyle: KeyboardLegendStyle,
-        highlight: Bool = false
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if highlight {
-                    Text("현재 적용")
-                        .font(.system(size: 10, weight: .medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.12))
-                        .foregroundColor(.blue)
-                        .cornerRadius(6)
-                }
-            }
-
-            if target.isEmpty {
-                Text("아직 선택되지 않았습니다")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 10) {
-                    ForEach(0..<min(source.count, target.count), id: \.self) { index in
-                        HStack(spacing: 4) {
-                            Text(ModifierSlot.label(for: source[index], style: sourceStyle))
-                                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 8))
-                                .foregroundColor(.blue)
-                            Text(ModifierSlot.label(for: target[index], style: targetStyle))
-                                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-                                .foregroundColor(.blue)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(8)
-    }
-
-    private func slotKeycap(
-        title: String,
-        subtitle: String?,
-        filled: Bool,
-        selected: Bool,
-        slotNumber: Int,
-        awaiting: Bool = false
-    ) -> some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 11)
-                .fill(awaiting ? Color.green.opacity(0.22)
-                               : (filled ? Color.black.opacity(0.028) : Color.black.opacity(0.015)))
-
-            RoundedRectangle(cornerRadius: 11)
-                .stroke(
-                    awaiting ? Color.green
-                             : (selected ? Color.blue.opacity(0.82) : Color.black.opacity(filled ? 0.12 : 0.08)),
-                    lineWidth: awaiting ? 3 : (selected ? 1.6 : 1)
-                )
-
-            Text("\(slotNumber)")
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 6)
-                .padding(.top, 5)
-
-            VStack(spacing: subtitle == nil ? 1 : 2) {
-                Text(title)
-                    .font(.system(size: awaiting ? 14 : 13, weight: awaiting ? .heavy : .semibold, design: .rounded))
-                    .foregroundStyle(awaiting ? Color.green : (filled ? Color.primary : Color.secondary))
-
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 8, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(width: subtitle == nil ? 58 : 64, height: subtitle == nil ? 42 : 46)
-        .scaleEffect(awaiting ? 1.06 : 1)
-        .shadow(
-            color: awaiting ? Color.green.opacity(0.65) : (selected ? Color.blue.opacity(0.55) : .clear),
-            radius: (awaiting || selected) ? (coachPulse ? 13 : 3) : 0
-        )
-        .animation(.easeInOut(duration: 0.15), value: awaiting)
-    }
-
-    private func spaceKeycap(captured: Bool) -> some View {
-        Text("Space")
-            .font(.system(size: 11.5, weight: .semibold))
-            .foregroundStyle(captured ? Color.blue : Color.secondary)
-            .frame(width: 72, height: 42)
-            .background(
-                RoundedRectangle(cornerRadius: 11)
-                    .fill(captured ? Color.blue.opacity(0.08) : Color.black.opacity(0.018))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 11)
-                    .stroke(captured ? Color.blue.opacity(0.8) : Color.black.opacity(0.08), lineWidth: captured ? 1.4 : 1)
-            )
-    }
-
-    private func keycapChoiceLabel(
-        keyCode: Int64,
-        displayStyle: KeyboardLegendStyle,
-        selected: Bool,
-        usedElsewhere: Bool,
-        showsSecondaryLabel: Bool
-    ) -> some View {
-        let title = ModifierSlot.label(for: keyCode, style: displayStyle)
-        let subtitle = showsSecondaryLabel ? ModifierSlot.secondaryLabel(for: keyCode, style: displayStyle) : nil
-
-        return VStack(spacing: subtitle == nil ? 1 : 2) {
-            Text(title)
-                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.primary)
-
-            if let subtitle {
-                Text(subtitle)
-                    .font(.system(size: 8.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 40 : 46)
-        .overlay(alignment: .topTrailing) {
-            if usedElsewhere {
-                Circle()
-                    .fill(Color.secondary.opacity(0.55))
-                    .frame(width: 6, height: 6)
-                    .padding(6)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 11)
-                .fill(selected ? Color.blue.opacity(0.08) : Color.black.opacity(0.018))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 11)
-                .stroke(selected ? Color.blue.opacity(0.8) : Color.black.opacity(usedElsewhere ? 0.18 : 0.1), lineWidth: selected ? 1.4 : 1)
-        )
-    }
-
-    private var saveProfileSheet: some View {
-        VStack(spacing: 16) {
-            Text("프로필 이름을 입력하세요")
-                .font(.headline)
-
-            mappingPreviewCard(title: "Mac 로컬", source: physicalKeys, target: localDesiredKeys, sourceStyle: selectedLegendStyle, targetStyle: .mac)
-            mappingPreviewCard(title: "VDI", source: physicalKeys, target: vdiDesiredKeys, sourceStyle: selectedLegendStyle, targetStyle: .windows)
-
-            if let auxiliaryFnKey {
-                Text("\(ModifierSlot.label(for: auxiliaryFnKey, style: selectedLegendStyle)) -> Fn")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.blue)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            TextField("예: 회사 키보드, VDI 외장 3키", text: $newProfileName)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 320)
-
-            Text("프로필은 현재 입력, Mac 로컬 목표, VDI 목표를 함께 저장합니다. 자동 전환은 현재 앱의 Bundle ID 기준으로 동작합니다.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 320, alignment: .leading)
-
-            HStack {
-                Button("취소") {
-                    showSaveDialog = false
-                }
-                .buttonStyle(.bordered)
-
-                Button("저장") {
-                    saveCurrentProfile()
-                    showSaveDialog = false
-                    appState.keyInterceptor.onVerifyKeyEvent = nil
-                    currentStep = 0
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(24)
-        .frame(width: 400)
-    }
-
-    private func startWizard() {
-        selectedLegendStyle = appState.isVdiMode ? .windows : .mac
-        physicalKeys = []
-        localDesiredKeys = []
-        vdiDesiredKeys = []
-        auxiliaryFnKey = nil
-        selectedLocalSlotIndex = 0
-        selectedVdiSlotIndex = 0
-        didCaptureSpaceBoundary = false
-        physicalCaptureNeedsMoreKeys = false
-        verifyResults = [:]
-        verifyLogs = []
-        auxiliaryFnVerified = false
-        appState.keyInterceptor.onVerifyKeyEvent = nil
+    private func startNewProfile() {
+        cancelWizard()
         currentStep = 1
     }
 
+    private func startEditing(_ profile: SavedKeyboardProfile) {
+        editingProfileId = profile.id
+        newProfileName = profile.name
+        selectedLegendStyle = profile.legendStyle
+        localTargets.removeAll()
+        vdiTargets.removeAll()
+        for (i, source) in profile.physicalKeys.enumerated() {
+            if i < profile.localDesiredKeys.count {
+                let target = profile.localDesiredKeys[i]
+                if target != source { localTargets[source] = target }
+            }
+            if i < profile.vdiDesiredKeys.count {
+                let target = profile.vdiDesiredKeys[i]
+                if target != source { vdiTargets[source] = target }
+            }
+        }
+        currentStep = 2
+    }
+
     private func cancelWizard() {
-        appState.keyInterceptor.onVerifyKeyEvent = nil
-        appState.keyboardDeviceManager.onFnKeyDown = nil
-        if !appState.isEngineRunning { appState.keyInterceptor.stopTapForVerify() }
-        appState.refreshActiveProfileForCurrentContext()
         currentStep = 0
+        editingProfileId = nil
+        newProfileName = ""
+        selectedLegendStyle = .mac
+        localTargets.removeAll()
+        vdiTargets.removeAll()
     }
 
-    private func beginPhysicalKeyCapture() {
-        if !hideFnEmojiTip { showFnTipPopup = true }
-        appState.keyInterceptor.applyCustomMappingsSync([:])
-        didCaptureSpaceBoundary = (minimumPhysicalKeyCount...maximumPhysicalKeyCount).contains(physicalKeys.count) && didCaptureSpaceBoundary
-        physicalCaptureNeedsMoreKeys = false
-        appState.keyInterceptor.onVerifyKeyEvent = { [self] originalKeyCode, _, _ in
-            guard currentStep == 2 else { return }
-
-            if didCaptureSpaceBoundary {
-                return
-            }
-
-            if originalKeyCode == spaceKeyCode {
-                if (minimumPhysicalKeyCount...maximumPhysicalKeyCount).contains(physicalKeys.count) {
-                    didCaptureSpaceBoundary = true
-                    physicalCaptureNeedsMoreKeys = false
-                    syncSelectionBuffersWithPhysicalKeys()
-                } else {
-                    physicalCaptureNeedsMoreKeys = true
-                }
-                return
-            }
-
-            registerPhysicalKey(originalKeyCode)
+    private func quickCreateKoreanOnlyAndDone() {
+        if newProfileName.trimmingCharacters(in: .whitespaces).isEmpty {
+            newProfileName = "한/영 전환만"
         }
-
-        // IOHID 기반 Fn/Globe 감지 — CGEventTap 이 lone Fn 을 못 받는 맥에서도
-        // 실제 키 입력으로 검증되도록. (안 들어오면 "Fn 추가" 버튼이 보장 경로)
-        appState.keyboardDeviceManager.onFnKeyDown = { [self] in
-            registerPhysicalKey(Int64(kVK_Function))
-        }
-
-        // 엔진이 꺼져 있어도(프로필 생성 전, 게이트로 OFF) Ctrl/Opt/Cmd 를 감지하도록
-        // 검증 전용 CGEventTap 을 띄운다. 손쉬운 사용 권한이 있어야 동작.
-        if appState.hasAccessibilityPermission {
-            appState.keyInterceptor.startTapForVerify()
-        }
+        localTargets.removeAll()
+        vdiTargets.removeAll()
+        saveAndClose()
     }
 
-    /// Step 2 에서 감지(CGEventTap·IOHID) 또는 버튼으로 들어온 좌측 modifier 를 슬롯에 등록.
-    /// - insertAtFront: "Fn 추가" 버튼처럼 좌측 끝 키임이 분명할 때 맨 앞에 삽입.
-    @discardableResult
-    private func registerPhysicalKey(_ keyCode: Int64, insertAtFront: Bool = false) -> Bool {
-        guard currentStep == 2, !didCaptureSpaceBoundary else { return false }
-        guard physicalKeys.count < maximumPhysicalKeyCount else { return false }
-        guard leftSideChoices.contains(keyCode) else { return false }
-        guard !physicalKeys.contains(keyCode) else { return false }
-        if insertAtFront {
-            physicalKeys.insert(keyCode, at: 0)
+    /// Windows 단축키 감각: Mac 에서 Cmd↔Ctrl 스왑 (복붙·저장 등이 Win 키보드처럼).
+    private func applyWindowsFeelPreset() {
+        localTargets[Int64(kVK_Command)] = Int64(kVK_Control)
+        localTargets[Int64(kVK_Control)] = Int64(kVK_Command)
+    }
+
+    private func saveAndClose() {
+        let name = newProfileName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let localDesired = sourceModifiers.map { localTargets[$0] ?? $0 }
+        let vdiDesired = sourceModifiers.map { vdiTargets[$0] ?? $0 }
+        if let editingId = editingProfileId,
+           var existing = appState.profileStore.profiles.first(where: { $0.id == editingId }) {
+            existing.name = name
+            existing.legendStyle = selectedLegendStyle
+            existing.physicalKeys = sourceModifiers
+            existing.localDesiredKeys = localDesired
+            existing.vdiDesiredKeys = vdiDesired
+            // 옵셔널 3필드(auxiliaryFnKey · bundleId · deviceIdentifier) 는 보존 정책 통일:
+            // 새 표 위자드는 이 필드들을 UI 에 노출하지 않으므로 편집 시 기존 값을 그대로 둔다.
+            // (auxiliaryFnKey 를 silent nil 처리하던 회귀를 제거 — 사용자 데이터 손실 차단.)
+            //  - auxiliaryFnKey 변경하려면 프로필 삭제 후 재생성
+            //  - bundleId / deviceIdentifier 는 Profiles 탭의 별도 UI (Bind keyboard…) 에서 관리
+            appState.profileStore.update(existing)
+            appState.applyProfile(existing)
         } else {
-            physicalKeys.append(keyCode)
-        }
-        physicalCaptureNeedsMoreKeys = false
-        return true
-    }
-
-    /// Mac 4키 레이아웃이면 VDI 목표를 기본값(Ctrl · Win · Win · Alt)으로 미리 채운다.
-    /// 이미 고른 값이 있으면 건드리지 않음 — 사용자가 바꿀 수 있다.
-    private func applyDefaultVdiKeysIfNeeded() {
-        guard configuredSlotCount == 4,
-              selectedLegendStyle == .mac,
-              vdiDesiredKeys.isEmpty else { return }
-        vdiDesiredKeys = [
-            Int64(kVK_Control),   // Ctrl
-            Int64(kVK_Command),   // Win
-            Int64(kVK_Command),   // Win
-            Int64(kVK_Option)     // Alt
-        ]
-    }
-
-    private func syncSelectionBuffersWithPhysicalKeys() {
-        let count = configuredSlotCount
-        localDesiredKeys = Array(localDesiredKeys.prefix(count))
-        vdiDesiredKeys = Array(vdiDesiredKeys.prefix(count))
-        if count == maximumPhysicalKeyCount {
-            auxiliaryFnKey = nil
-        }
-        selectedLocalSlotIndex = nextCursorIndex(for: localDesiredKeys, total: count)
-        selectedVdiSlotIndex = nextCursorIndex(for: vdiDesiredKeys, total: count)
-    }
-
-    private func nextCursorIndex(for selections: [Int64], total: Int) -> Int {
-        guard total > 0 else { return 0 }
-        return min(selections.count, total - 1)
-    }
-
-    private func targetDisplayStyle(for context: KeyboardUsageContext) -> KeyboardLegendStyle {
-        switch context {
-        case .localMac: return .mac
-        case .vdi: return .windows
-        }
-    }
-
-    private func applyKeySelection(_ keyCode: Int64, to mode: TargetSelectionMode) {
-        let allowsDuplicates = mode == .vdi
-        let total = configuredSlotCount
-        guard total > 0 else { return }
-
-        switch mode {
-        case .local:
-            localDesiredKeys = updatedSelections(
-                localDesiredKeys,
-                keyCode: keyCode,
-                selectedIndex: localSelectionCursor,
-                total: total,
-                allowsDuplicates: allowsDuplicates
+            let profile = SavedKeyboardProfile(
+                name: name,
+                legendStyle: selectedLegendStyle,
+                physicalKeys: sourceModifiers,
+                localDesiredKeys: localDesired,
+                vdiDesiredKeys: vdiDesired
             )
-            selectedLocalSlotIndex = advancedCursorIndex(
-                afterApplyingAt: localSelectionCursor,
-                selections: localDesiredKeys,
-                total: total
-            )
-        case .vdi:
-            vdiDesiredKeys = updatedSelections(
-                vdiDesiredKeys,
-                keyCode: keyCode,
-                selectedIndex: vdiSelectionCursor,
-                total: total,
-                allowsDuplicates: allowsDuplicates
-            )
-            selectedVdiSlotIndex = advancedCursorIndex(
-                afterApplyingAt: vdiSelectionCursor,
-                selections: vdiDesiredKeys,
-                total: total
-            )
+            appState.profileStore.add(profile)
+            appState.applyProfile(profile)
         }
-    }
-
-    private func updatedSelections(
-        _ currentSelections: [Int64],
-        keyCode: Int64,
-        selectedIndex: Int,
-        total: Int,
-        allowsDuplicates: Bool
-    ) -> [Int64] {
-        guard total > 0 else { return currentSelections }
-
-        var result = Array(currentSelections.prefix(total))
-        let clampedIndex = max(0, min(selectedIndex, total - 1))
-
-        if clampedIndex < result.count {
-            if !allowsDuplicates,
-               let existingIndex = result.firstIndex(of: keyCode),
-               existingIndex != clampedIndex {
-                result.swapAt(existingIndex, clampedIndex)
-            } else {
-                result[clampedIndex] = keyCode
-            }
-            return result
-        }
-
-        if !allowsDuplicates, result.contains(keyCode) {
-            return result
-        }
-
-        if result.count < total {
-            result.append(keyCode)
-        }
-        return result
-    }
-
-    private func advancedCursorIndex(afterApplyingAt index: Int, selections: [Int64], total: Int) -> Int {
-        guard total > 0 else { return 0 }
-        if index >= selections.count - 1 && selections.count < total {
-            return selections.count
-        }
-        return min(index, total - 1)
-    }
-
-    private func removeSelectedKey(from mode: TargetSelectionMode) {
-        switch mode {
-        case .local:
-            guard localSelectionCursor < localDesiredKeys.count else { return }
-            localDesiredKeys.remove(at: localSelectionCursor)
-            selectedLocalSlotIndex = max(0, min(localSelectionCursor, max(localDesiredKeys.count - 1, 0)))
-        case .vdi:
-            guard vdiSelectionCursor < vdiDesiredKeys.count else { return }
-            vdiDesiredKeys.remove(at: vdiSelectionCursor)
-            selectedVdiSlotIndex = max(0, min(vdiSelectionCursor, max(vdiDesiredKeys.count - 1, 0)))
-        }
-    }
-
-    private func desiredKeys(for context: KeyboardUsageContext) -> [Int64] {
-        switch context {
-        case .localMac: return localDesiredKeys
-        case .vdi: return vdiDesiredKeys
-        }
-    }
-
-    private func currentMappings(for context: KeyboardUsageContext) -> [Int64: Int64] {
-        let desiredKeys = desiredKeys(for: context)
-        var result: [Int64: Int64] = [:]
-        for (index, physKey) in physicalKeys.enumerated() {
-            guard index < desiredKeys.count else { break }
-            let desiredKey = desiredKeys[index]
-            if physKey != desiredKey {
-                result[physKey] = desiredKey
-            }
-        }
-        if let auxiliaryFnKey {
-            result[auxiliaryFnKey] = Int64(kVK_Function)
-        }
-        return result
-    }
-
-    private func applyAndGoToVerification() {
-        let mappings = currentMappings(for: currentVerificationContext)
-        appState.persistCustomMappings(mappings)
-        appState.keyInterceptor.activeProfileID = "visualCustomProfile"
-        appState.keyInterceptor.applyCustomMappingsSync(mappings)
-
-        // Step 5 검증에서는 Fn 자동 추가 비활성 (물리키 구성은 이미 확정됨)
-        appState.keyboardDeviceManager.onFnKeyDown = nil
-        if appState.hasAccessibilityPermission { appState.keyInterceptor.startTapForVerify() }
-
-        verifyResults = [:]
-        verifyLogs = []
-        auxiliaryFnVerified = false
-        currentStep = 5
-
-        let desiredSet = Set(currentVerificationDesiredKeys)
-        let fnKeyCode = Int64(kVK_Function)
-
-        appState.keyInterceptor.onVerifyKeyEvent = { [self] incomingKey, _, _ in
-            guard currentStep == 5 else { return }
-
-            let label = ModifierSlot.label(for: incomingKey, style: selectedLegendStyle)
-            if desiredSet.contains(incomingKey) {
-                verifyResults[incomingKey] = true
-                verifyLogs.append((keyCode: incomingKey, label: "\(label) ✅ 매핑 확인", pass: true))
-            } else if auxiliaryFnKey != nil && incomingKey == fnKeyCode {
-                auxiliaryFnVerified = true
-                verifyLogs.append((keyCode: incomingKey, label: "Fn ✅ 보조 키 확인", pass: true))
-            } else if leftSideChoices.contains(incomingKey) || auxiliaryFnCandidates.contains(incomingKey) {
-                verifyLogs.append((keyCode: incomingKey, label: "\(label) — 미매핑", pass: false))
-            } else {
-                verifyLogs.append((keyCode: incomingKey, label: label, pass: true))
-            }
-
-            if verifyLogs.count > 50 {
-                verifyLogs.removeFirst()
-            }
-        }
-    }
-
-    private func saveCurrentProfile() {
-        let profile = SavedKeyboardProfile(
-            name: newProfileName.trimmingCharacters(in: .whitespaces),
-            legendStyle: selectedLegendStyle,
-            physicalKeys: physicalKeys,
-            localDesiredKeys: localDesiredKeys,
-            vdiDesiredKeys: vdiDesiredKeys,
-            auxiliaryFnKey: auxiliaryFnKey
-        )
-        appState.profileStore.add(profile)
-        appState.applyProfile(profile)
-    }
-
-    private enum TargetSelectionMode {
-        case local
-        case vdi
+        cancelWizard()
     }
 }
 
-private struct ChipButtonStyle: ButtonStyle {
-    var tint: Color = .secondary
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(configuration.isPressed ? tint.opacity(0.9) : tint)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(configuration.isPressed ? tint.opacity(0.08) : Color.clear)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(tint.opacity(0.32), lineWidth: 1)
-            )
-            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
+#Preview {
+    ModifierLayoutView()
+        .environmentObject(AppState())
+        .frame(width: 680, height: 540)
 }

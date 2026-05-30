@@ -72,17 +72,6 @@ class KeyInterceptor: ObservableObject {
     // 이벤트 콜백
     var onKeyEvent: ((KeyEvent) -> Void)?
     
-    // 키 감지/검증 콜백 (ModifierLayoutView 마법사용)
-    // (originalKeyCode, mappedKeyCode, isDown)
-    //
-    // 콜백이 nil → non-nil 로 바뀌면 flagsChanged 구독을 강제로 켠다.
-    // 위자드는 빈 매핑으로 진입하기 때문에 keyMappings 기반 최적화만으로는
-    // modifier 키 이벤트가 tap 에 들어오지 않는다. nil 로 돌아오면 다시
-    // 매핑 기반 최적화 결과로 복귀.
-    var onVerifyKeyEvent: ((Int64, Int64, Bool) -> Void)? {
-        didSet { updateNeedsFlagsChangedProcessing() }
-    }
-
     // ContextManager가 앱 전환 시 갱신 — 콜백 내 NSWorkspace 동기 호출 제거용
     var cachedBundleId: String? = nil
     
@@ -215,23 +204,16 @@ class KeyInterceptor: ObservableObject {
     /// 현재 매핑 테이블에서 modifier→비modifier 변환이 있는지 계산합니다.
     /// 이런 매핑이 없으면 CGEventTap에서 flagsChanged를 이벤트 마스크에서 제외하여
     /// Caps Lock 등 시스템 modifier 동작 간섭을 원천 방지합니다.
-    ///
-    /// 단, 위저드 검증 모드(onVerifyKeyEvent != nil)일 때는 빈 매핑이라도
-    /// modifier 키 이벤트를 받아야 하므로 강제로 켭니다.
     private func updateNeedsFlagsChangedProcessing() {
-        var needed = (onVerifyKeyEvent != nil)
-        if needed {
-            logger.info("flagsChanged processing ENABLED (verify mode active)")
-        } else {
-            for (src, dst) in keyMappings {
-                guard src != dst else { continue }
-                let srcIsModifier = modifierKeyToFlag[src] != nil
-                let dstIsModifier = modifierKeyToFlag[dst] != nil
-                if srcIsModifier && !dstIsModifier {
-                    needed = true
-                    logger.info("flagsChanged processing ENABLED (modifier→key mapping found: \(src)→\(dst))")
-                    break
-                }
+        var needed = false
+        for (src, dst) in keyMappings {
+            guard src != dst else { continue }
+            let srcIsModifier = modifierKeyToFlag[src] != nil
+            let dstIsModifier = modifierKeyToFlag[dst] != nil
+            if srcIsModifier && !dstIsModifier {
+                needed = true
+                logger.info("flagsChanged processing ENABLED (modifier→key mapping found: \(src)→\(dst))")
+                break
             }
         }
         if !needed {
@@ -345,24 +327,6 @@ class KeyInterceptor: ObservableObject {
         } else {
             logger.info("Engine stopped (HID mappings preserved for restart).")
         }
-    }
-
-    /// 위자드 검증 모드용 — 엔진(HID)을 켜지 않고 CGEventTap 만 띄워 키 입력을 감지한다.
-    /// 프로필을 만들기 전(엔진 게이트로 OFF)에도 Ctrl/Opt/Cmd 등을 잡기 위함.
-    /// HID ownership/매핑은 건드리지 않는다(tap 생성만). 손쉬운 사용 권한 없으면 실패(false).
-    @discardableResult
-    func startTapForVerify() -> Bool {
-        if isRunning { return true }
-        let started = start()
-        if started { logger.info("Verify tap started (engine off, capture only)") }
-        return started
-    }
-
-    /// 검증 모드 종료 시 tap 정지. HID 는 애초에 안 건드렸으므로 보존.
-    func stopTapForVerify() {
-        guard isRunning else { return }
-        stop(clearHIDMappings: false)
-        logger.info("Verify tap stopped")
     }
 
     func beginInputSourceCommitWindow() {
@@ -519,13 +483,6 @@ class KeyInterceptor: ObservableObject {
             return nil
         }
 
-        dispatchVerificationCallback(
-            event: finalEvent,
-            type: type,
-            originalKey: keyCode,
-            mappedKey: mappedKeyCode
-        )
-
         if finalEvent !== event {
             return Unmanaged.passRetained(finalEvent)
         }
@@ -575,33 +532,6 @@ class KeyInterceptor: ObservableObject {
         // keyDown / keyUp: 원본 이벤트의 키코드 in-place 교체
         event.setIntegerValueField(.keyboardEventKeycode, value: destKey)
         return (nil, destKey)
-    }
-
-    /// 위저드 Step 1/Step 3에서 사용하는 검증 콜백 디스패치.
-    private func dispatchVerificationCallback(
-        event: CGEvent,
-        type: CGEventType,
-        originalKey: Int64,
-        mappedKey: Int64
-    ) {
-        guard let verify = onVerifyKeyEvent else { return }
-
-        let isDown: Bool
-        if type == .flagsChanged {
-            if let flag = modifierKeyToFlag[originalKey] {
-                isDown = event.flags.contains(flag)
-            } else {
-                isDown = true
-            }
-        } else {
-            isDown = (type == .keyDown)
-        }
-
-        if isDown {
-            DispatchQueue.main.async {
-                verify(originalKey, mappedKey, true)
-            }
-        }
     }
 
     private func bufferKeyEvent(_ event: CGEvent) {

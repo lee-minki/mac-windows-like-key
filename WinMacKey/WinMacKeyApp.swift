@@ -414,6 +414,20 @@ class AppState: ObservableObject {
         activeMappingProfileId = profile.id.uuidString
     }
 
+    /// 프로필 삭제 안전 처리 — active 프로필 삭제 시 `activeMappingProfileId` 를
+    /// `"standardMac"` 으로 리셋하고 custom HID 매핑을 비운다.
+    /// 두 진입점(`DashboardView.profileRow`, `ModifierLayoutView.profileRow`)이
+    /// 같은 invariant 를 공유하도록 service 메서드로 추출.
+    /// (예전엔 `DashboardView` 콜백에 인라인 — 새 UI 추가 시 누락되는 구조적 결함.)
+    func deleteProfileSafely(_ profile: SavedKeyboardProfile) {
+        let wasActive = (activeMappingProfileId == profile.id.uuidString)
+        profileStore.delete(id: profile.id)
+        if wasActive {
+            activeMappingProfileId = "standardMac"
+            keyInterceptor.applyCustomMappings([:])
+        }
+    }
+
     func persistCustomMappings(_ mappings: [Int64: Int64]) {
         let stringKeyDict = Dictionary(uniqueKeysWithValues: mappings.map { (String($0.key), $0.value) })
         if let data = try? JSONEncoder().encode(stringKeyDict) {

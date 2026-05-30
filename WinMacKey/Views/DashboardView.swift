@@ -392,11 +392,7 @@ struct DashboardView: View {
                 .disabled(isActive)
 
                 Button {
-                    appState.profileStore.delete(id: profile.id)
-                    if isActive {
-                        appState.activeMappingProfileId = "standardMac"
-                        appState.keyInterceptor.applyCustomMappings([:])
-                    }
+                    appState.deleteProfileSafely(profile)
                 } label: {
                     Image(systemName: "trash")
                         .foregroundColor(.red)

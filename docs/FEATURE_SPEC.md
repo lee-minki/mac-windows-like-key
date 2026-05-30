@@ -1,6 +1,6 @@
 # WinMacKey 기능 명세서 (Feature Specification)
 
-> 기준 버전: **v1.4.0 / build 16** · 작성일 2026-05-28
+> 기준 버전: **v1.6.0 / build 19** · 작성일 2026-05-28 · 최종 갱신 2026-05-30
 > 목적: 전체 기능의 입력·기대 동작·권한·엣지케이스를 한곳에 정의해, 신규 맥북 설치 시 회귀를 체계적으로 검증한다.
 > 함께 볼 것: 핵심 엔진 상세 [`RIGHT_COMMAND_ONLY_SPEC.md`](RIGHT_COMMAND_ONLY_SPEC.md) · 회귀 회귀 검증 [`MANUAL_TEST_PLAN.md`](MANUAL_TEST_PLAN.md) · 신규 설치 검증 [`FRESH_INSTALL_CHECKLIST.md`](FRESH_INSTALL_CHECKLIST.md)
 
@@ -41,29 +41,28 @@
 
 ---
 
-## 2. 프로필 & 매핑 위자드
+## 2. 프로필 & 매핑 위자드 (v1.6.0+ · 캡처 없는 표 기반)
 
 | ID | 기대 동작 | 담당 | 진입 | 권한 | 엣지/위험 |
 |----|-----------|------|------|------|-----------|
 | **P1** | 기본 프로필(standardMac): 매핑 없음 | `MappingProfile.standardMac` | 자동 | 없음 | — |
-| **P2** | 저장 프로필: 물리키 + Mac 목표 + VDI 목표 + 보조 Fn, UUID 저장 | `Profile.SavedKeyboardProfile` | 위자드 완료 | 없음 | 레거시 필드 호환; 이름 충돌 |
-| **P3** | 위자드 6화면: `0`목록 → `1`표기(Mac/Win) → `2`현재 입력 감지 → `3`Mac 로컬 배치 → `4`VDI 배치 → `5`검증 | `ModifierLayoutView` | 설정→Profiles | 손쉬운 사용(2·5단계) | 단계별 회귀 다수(아래 P4 핵심) |
-| **P4** | **Step 2 현재 입력 감지**: 왼쪽부터 modifier 를 누르고 마지막에 Space → 3/4키 자동 확정. 누른 키만 슬롯에 채움 | `ModifierLayoutView.beginPhysicalKeyCapture` + `KeyInterceptor.onVerifyKeyEvent` | Step 2 진입 | 손쉬운 사용(CGEventTap) | **🔴 Fn 미감지(§7 회귀)**; 빈 매핑 진입 시 flagsChanged 제외 회귀(고정) |
-| **P5** | Step 3 Mac 로컬 배치: Fn/Ctrl/Cmd/Opt 중 슬롯별 목표 선택, 3키는 보조 Fn 별도 | `ModifierLayoutView.macTargetChoices` | Step 3 | 없음 | 슬롯 선택 UX 혼동 |
-| **P6** | Step 4 VDI 배치: Ctrl/Win/Alt 3종, 로컬과 독립 | `ModifierLayoutView.vdiTargetChoices` | Step 4 | 없음 | VDI 미사용자도 입력 강요 |
+| **P2** | 저장 프로필: physicalKeys + Mac 목표 + VDI 목표 + (옵셔널) auxiliaryFnKey/bundleId/deviceIdentifier, UUID 저장 | `Profile.SavedKeyboardProfile` | 위자드 완료 | 없음 | 옵셔널 3필드는 새 위자드 UI 미노출이지만 편집 시 보존 |
+| **P3** | 위자드 3화면: `0`프로필 목록 → `1`시작·의도 → `2`매핑 표 → `3`확인·저장 | `ModifierLayoutView` | 설정→Profiles | 없음 (캡처 제거) | 1.5.x 이전의 옛 6화면 흐름은 v1.6.0 에서 완전 제거 |
+| **P4** | **시작·의도**: 프로필 이름 + 두 의도 카드 (① "한/영 전환만" 1클릭 즉시 완료 — 식별 프로필 ② "키 배치도 바꾸기" → 표) | `ModifierLayoutView.startIntentView` | Step 1 진입 | 없음 | — |
+| **P5** | **매핑 표**: 4행(Fn·Ctrl·Opt·Cmd) × 2열(Mac 로컬·VDI) picker. Mac/Windows 키캡 표기 토글, "Windows 감각"(Cmd↔Ctrl 스왑) 1클릭 프리셋, "초기화" 버튼, 라이브 미리보기 | `ModifierLayoutView.mappingTableView` + `mappingRow` | Step 2 진입 | 없음 | 키캡 토글은 라벨만 바뀜 (행 순서는 고정, polish 후보) |
+| **P6** | **확인·저장**: 매핑 요약 + 저장하고 적용 / 변경 저장 (편집 시) | `ModifierLayoutView.confirmSaveView` + `saveAndClose` | Step 3 진입 | 없음 | 편집 시 옵셔널 3필드(auxFn/bundleId/deviceId) 보존, 새로 생성 시 nil |
 | **P7** | 자동 전환 우선순위: 디바이스 바인딩 > 앱 바인딩 > 기본. 외장→내장만 자동, 외장↔외장 swap 은 마지막 프로필 유지(v1.3.8 보수화) | `WinMacKeyApp` / `AppState` resolve | 디바이스·앱 전환 | 손쉬운 사용 | 정책 변경으로 사용자 기대와 어긋날 수 있음 |
-| **P8** | Step 5 검증: 매핑 적용 후 키를 눌러 매핑 결과 실시간 표시 | `ModifierLayoutView.applyAndGoToVerification` | Step 5 | 손쉬운 사용 | Step 2 와 동일한 Fn 감지 한계 |
+| **P8** | **안전 삭제 invariant**: active 프로필 삭제 시 `activeMappingProfileId="standardMac"` 리셋 + custom HID 매핑 clear | `AppState.deleteProfileSafely` | DashboardView·ModifierLayoutView 휴지통 | 없음 | service 추출 전(v1.5.1) 회귀 이력 — DashboardView 만 처리하고 새 UI 누락 |
 
-### 2.1 기능 축은 "표기(Mac/Win)"가 아니라 "좌측 3키 vs 4키 + Space"
+### 2.1 기능 축은 "키코드" — 키캡 표기·물리 위치 무관
 
-Step 1 의 **Mac/Windows 표기 선택(`selectedLegendStyle`)은 표시용(cosmetic)** 이다. 같은 keycode 를 "Opt/Cmd" 로 부르냐 "Alt/Win" 으로 부르냐만 바꾼다(`ModifierLayoutView.label(for:style:)` line 13–14). 실제 동작을 결정하는 것은:
+새 위자드는 **macOS 가 모든 키보드를 표준 modifier 키코드(`kVK_Function`·`kVK_Control`·`kVK_Option`·`kVK_Command`)로 정규화한다는 사실** 위에 선다. `hidutil` 매핑도 키코드→키코드이므로 어떤 물리 키보드(Mac/Windows/듀얼모드/펑션 키 위치 다른 외장)든 동일한 키코드를 받는다 → **표 4행이 모든 경우를 망라.** 누를 필요 없음.
 
-1. **슬롯 수 = 3 또는 4** — `configuredSlotCount = physicalKeys.count`. Step 2 에서 Space 앞까지 누른 modifier 개수로 자동 확정.
-2. **물리 순서대로 감지된 raw keycode** — Mac 은 `Ctrl·Opt·Cmd`, Windows 는 `Ctrl·Win(→Cmd)·Alt(→Opt)` 로 **Cmd/Opt 위치가 서로 뒤바뀌지만**, Step 2 가 실제 순서를 그대로 포착하므로 표기 선택과 무관하게 정확.
+- `selectedLegendStyle` (Mac/Windows) = **표시용(cosmetic)** — `Opt` vs `Alt`, `Cmd` vs `Win` 라벨만 전환 (`ModifierSlot.label(for:style:)`). 실제 매핑·키코드는 일체 영향 없음.
+- "Windows 감각" 프리셋 = Mac 에서 `kVK_Command` ↔ `kVK_Control` 스왑 (Windows 키보드 단축키 감각).
+- 옛 "3키 vs 4키 + Space 경계" 자동 판단 / "좌측 끝 = Fn" 인지 / Fn 캡처는 **v1.6.0 에서 모두 제거** — 표가 항상 4행으로 모든 키를 다룬다.
 
-`selectedLegendStyle` 은 감지(`physicalKeys`)·선택지(`leftSideChoices`/`macTargetChoices`/`vdiTargetChoices`)·매핑(`currentMappings`) **어디에도 관여하지 않는다** — 라벨/요약/미리보기/프로필 설명 표시에만 사용. 따라서 위자드의 "Mac/Windows" 단계는 키캡 인지용 보조이며, 기능적 분류는 **3키/4키 + Space 경계** 가 정답.
-
-> **4키의 네 번째(좌측 끝) 키 = Fn.** (Mac `fn·ctrl·opt·cmd` / Windows 노트북 `fn·ctrl·win·alt`) → Fn 미감지(§7)면 4키 키보드도 3키로 주저앉아 **"3키 vs 4키" 구별 자체가 깨진다.** Fn 버그의 사용자 영향 핵심.
+> **호환성 정의**: 모델 struct 시그니처는 그대로. 새 표 UI 가 노출하지 않는 옵셔널 3필드(`auxiliaryFnKey`·`bundleId`·`deviceIdentifier`)는 편집 시 기존 값을 **보존**한다. 변경하려면 `auxiliaryFnKey` 는 프로필 삭제 후 재생성, `bundleId`/`deviceIdentifier` 는 Profiles 탭의 "Bind keyboard…" UI 에서.
 
 ---
 
@@ -126,32 +125,16 @@ Step 1 의 **Mac/Windows 표기 선택(`selectedLegendStyle`)은 표시용(cosme
 
 ---
 
-## 7. 🔴 회귀 핵심 — "이전엔 되던 Fn 인식이 왜 죽었나"
+## 7. 옛 위자드 Fn 감지 회귀 (역사적 — v1.6.0 에서 무효화)
 
-신규 맥북에서 표면화된 증상: **프로필 만들기 위자드 Step 2(현재 입력 감지)에서 내장 키보드 Fn 을 눌러도 슬롯이 "대기" 에서 안 바뀜.** 팀원은 최신 1.3.8 설치본.
+> **v1.6.0 (build 19) 부터 위자드 캡처가 완전 제거되어 이 회귀 자체가 사라졌다.** 새 표 기반 위자드는 키를 누르지 않으므로 Fn 감지 경로가 더 이상 의존성이 아니다 — `KeyInterceptor.onVerifyKeyEvent` / `KeyboardDeviceManager.onFnKeyDown` / `appleFnUsagePage` 상수 등 관련 코드는 dead code 정리로 모두 삭제. Press-to-bind(`KeyboardBindingCaptureView`)의 Fn 미지원은 별개 이슈로 잔존 — 다만 일반 modifier 키로 바인딩 가능하므로 실사용 영향 미미.
 
-Fn 감지 경로가 **둘**이고, 역사가 다르다:
+### 역사 메모 (v1.5.x 이하)
+신규 맥북에서 표면화된 증상은 **옛 위자드 Step 2(현재 입력 감지)에서 내장 키보드 Fn 을 눌러도 슬롯이 "대기" 에서 안 바뀜.** Fn 감지 경로가 둘 — (A) CGEventTap 경유 + (B) IOHIDManager 경유 — 이고 각자 회귀/구조적 한계가 있었다:
 
-### 경로 A — 위자드 Step 2 (CGEventTap)
-- Fn 은 `leftSideChoices` 에 포함되어 원래 감지 대상. flagsChanged(keycode 63 + `maskSecondaryFn`)로 들어와야 `onVerifyKeyEvent` 가 호출됨.
-- **죽었던 시점**: `844b3c3`(2026-03-27) — Caps Lock 보호 최적화(`updateNeedsFlagsChangedProcessing`)가 *매핑이 비면 flagsChanged 를 eventMask 에서 제외*. 위자드는 빈 매핑 진입 → Ctrl/Opt/Cmd/Fn 전부 미감지("대기" 고정).
-- **복구**: `9fe9c2a`(2026-05-16, **build 12**) — 검증 모드면 flagsChanged 강제 구독.
-- **현재 상태**: 팀원 빌드(최신 1.3.8 ≥ build 13)에 이 수정 포함. 따라서 **build 12 회귀는 원인이 아니다.** Ctrl/Opt/Cmd 는 잡히는데 **Fn 만** 안 잡힌다면, 남은 원인은 macOS 의 Fn/Globe 전달 특성:
-  - **lone Fn/Globe 키의 flagsChanged 전달은 환경 의존적.** 특히 *시스템 설정 → 키보드 → "🌐 키를 다음 용도로 사용"* 이 입력소스 변경/이모지 등으로 설정되면 OS 가 Fn 키를 먼저 소비해 keycode-63 이벤트가 tap 에 도달하지 않을 수 있다. 신규 맥북의 기본값이 개발자 맥과 달라 차이가 생김.
-  - → CGEventTap 단독으로는 lone Fn 을 신뢰성 있게 못 잡는 구조적 한계.
-
-### 경로 B — Press-to-bind / first-seen (IOHIDManager)
-- `KeyboardDeviceManager.inputValueCallback` 이 **`kHIDPage_KeyboardOrKeypad`(0x07) 만** 통과(`KeyboardDeviceManager.swift:207`).
-- 그런데 **Fn/Globe 는 0x07 이 아니라 Apple Vendor Top Case 페이지(usage page 0x00FF, usage 0x03)** 로 보고됨. 앱 스스로도 이 사실을 안다: `HIDRemapper.swift:152` 의 `0x3F → 0xFF00000003 // Fn (Apple vendor-specific)`.
-- 이 필터는 `KeyboardDeviceManager` **최초 생성(`ccc9bba`, 2026-03-27)부터 존재** → 이 경로는 **태초부터 Fn 미지원**(회귀 아님, 원래 미구현).
-
-### 결론
-- **사용자 영향의 핵심**: 4키 구성의 좌측 끝 키가 Fn 이라, Fn 미감지면 4키 키보드가 3키로 주저앉아 **"3키 vs 4키" 기능 구별이 깨진다**(§2.1). 즉 이 버그는 4키 레이아웃 설정을 사실상 불가능하게 만든다.
-- **위자드(경로 A)**: build 회귀 아님. macOS 의 Fn/Globe 전달 의존성 때문에 신규 맥북에서 표면화. 1차 확인 = "🌐 키 용도 → 아무 작업 안 함" 후 재시도 + Ctrl/Cmd/Opt 는 잡히는지 분리 테스트.
-- **바인딩(경로 B)**: 처음부터 Fn 미지원.
-- **근본 수정(공통)**: Fn 을 IOHID usage page `0x00FF`/usage `0x03` 으로 감지(앱이 이미 매핑을 알고 있음). 경로 B 는 캡처 모드에서 usage-page 필터를 완화, 경로 A 는 IOHID 기반 Fn 신호(`onFnKeyDown`)를 위자드에 합류 + "+ Fn 🌐" 버튼 폴백.
-
-> **v1.4.0 (build 16) 에서 수정 완료**: `KeyboardDeviceManager.onFnKeyDown`(IOHID 0x00FF/0x03 감지) + 위자드 Step 2 구독 + "+ Fn 🌐" 버튼(보장 폴백), 캡처 모드 usage-page 필터 완화. IOHID 감지의 실기 동작은 [`FRESH_INSTALL_CHECKLIST.md`](FRESH_INSTALL_CHECKLIST.md) 섹션 D 로 검증.
+- **(A) Step 2 CGEventTap**: 옛 `updateNeedsFlagsChangedProcessing` 최적화(`844b3c3`, 2026-03-27)가 빈 매핑에서 flagsChanged 를 제외 → 위자드 진입 시 modifier 전부 미감지("대기" 고정). `9fe9c2a`(2026-05-16, build 12) 에서 검증 모드면 강제 구독으로 복구. 다만 lone Fn/Globe 키의 flagsChanged 전달은 macOS 환경 의존적("🌐 키 용도" 설정에 따라 OS 가 먼저 소비) — 신규 맥북 기본값이 달라 표면화.
+- **(B) IOHIDManager**: `KeyboardDeviceManager.inputValueCallback` 이 `kHIDPage_KeyboardOrKeypad`(0x07) 만 통과 — Fn 은 Apple Vendor Top Case(0x00FF / 0x03)로 보고되어 처음부터 미지원(회귀 아님).
+- **v1.4.0 (build 16) 수정**: `onFnKeyDown` (IOHID 0x00FF/0x03) + 위자드 Step 2 구독 + "+ Fn 🌐" 폴백 버튼 + 캡처 모드 usage-page 필터 완화. 캡처 자체가 v1.6.0 에서 제거되어 이 fix 도 함께 deleted.
 
 ---
 
@@ -169,3 +152,29 @@ Fn 감지 경로가 **둘**이고, 역사가 다르다:
 ## 9. 자동 스모크 테스트 (`tests/`)
 
 `hid_lifecycle_smoke` · `ownership_smoke` · `engine_off_ui_smoke` · `toggle_off_snapshot_smoke` · `mapping_profile_smoke` · `remote_mac_mode_smoke` · `trigger_branching_smoke` · `keyboard_capture_smoke` — 실행 `scripts/run-tests.sh` (CI 미설정, 수동).
+
+---
+
+## 10. 향후 기능 (계획 · 미구현)
+
+> 명세만 확정. **아직 구현하지 않음.** 우선순위·UX는 별도 합의.
+
+### CLEAN-1 · 키보드 클리닝 시스템 (Keyboard Cleaning Mode)
+| 항목 | 내용 |
+|---|---|
+| **목적** | 키보드를 닦는 동안 **모든 키 입력을 차단** — 닦다가 키가 눌려 글자 입력·단축키·삭제 등이 일어나는 것을 방지. |
+| **동작** | 클리닝 모드 ON 시 **모든 키보드 입력(keyDown/keyUp/flagsChanged)을 suppress**. 화면에 "클리닝 중" 오버레이 표시. |
+| **켜기/끄기** | **마우스로만** 토글 (키가 다 막혀 있으므로 키보드로는 못 끔). 메뉴바 항목 + 화면 오버레이의 큰 "클리닝 종료" 버튼(마우스 클릭). |
+| **안전장치** | ① 마우스/트랙패드는 항상 동작(잠금 해제 보장). ② 일정 시간(예: 5분) 자동 해제 옵션. ③ 전원/시스템 키 등 OS 강제 키는 막지 않음(잠금 위험 회피). |
+| **구현 메모(예정)** | 기존 `KeyInterceptor`의 CGEventTap 재사용 — 클리닝 모드 플래그가 켜지면 콜백에서 모든 키 이벤트 `return nil`(suppress). 손쉬운 사용 권한 필요(이미 보유). 엔진 ON/OFF와 독립적인 별도 모드로 둘지 검토. |
+| **상태** | 🔴 미구현 (명세만) |
+
+### SCROLL-1 · 입력 장치별 스크롤 방향 분리 (Per-Device Scroll Direction)
+| 항목 | 내용 |
+|---|---|
+| **목적** | **트랙패드 = macOS 자연 스크롤 유지(콘텐츠가 손가락 따라옴), 외장 마우스 휠 = Windows 방식(휠 위 = 콘텐츠 위)** 로 **분리.** macOS는 단일 글로벌 "자연스러운 스크롤" 토글이라 둘이 묶여 Windows 출신 사용자가 가장 자주 짜증내는 지점. WinMacKey 가 *"Windows 사용성을 Mac에서"* 라는 정체성에 부합. |
+| **동작** | 스크롤 이벤트가 발생하면 **입력 장치(트랙패드 vs 마우스)를 판별** → 마우스 휠이면 deltaY/deltaX 부호 반전, 트랙패드면 그대로 통과. macOS 자연스크롤 글로벌 설정은 그대로 두고(트랙패드 기준), 마우스만 앱이 반전. |
+| **켜기/끄기** | 메뉴바 / 설정 토글. (선택) 장치별 화이트리스트 — "이 마우스만 반전" |
+| **구현 메모(예정)** | `CGEventTap` 으로 `kCGScrollWheel` 이벤트 구독 → `CGEventSource` / `IOHIDDevice` 정보로 source 가 mouse 인지 trackpad 인지 판별 (트랙패드는 `kCGScrollWheelEventIsContinuous=1` + momentum 등) → mouse 인 경우 새 이벤트로 deltaY/X 반전 후 재발행. OSS 참고: Scroll Reverser / Mos / LinearMouse. 손쉬운 사용 권한(이미 보유). |
+| **안전장치** | ① 토글 OFF 시 즉시 원상복구(이벤트 통과만). ② momentum/관성 스크롤은 트랙패드만, 마우스는 step 단위 그대로. ③ 줌(⌘+휠) 같은 modifier 조합은 부호 반전 영향 검토 — 필요 시 제외. |
+| **상태** | 🔴 미구현 (명세만) |

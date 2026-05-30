@@ -170,20 +170,22 @@ struct HelpView: View {
                 
                 GroupBox("키보드 레이아웃 커스터마이징") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("외장 키보드나 특수 배치를 사용한다면, 위저드로 직접 키 매핑을 설정할 수 있습니다.")
+                        Text("외장 키보드나 Windows 단축키 감각이 필요하다면, 위자드 표에서 키 매핑을 직접 설정할 수 있습니다.")
                             .font(.caption)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("1. 설정 → General Settings → \"새 프로필 만들기\"")
-                            Text("2. Step 1: 키캡 프린팅(`Mac`/`Windows`) 선택 — 라벨 표기일 뿐이며, 기능은 스페이스바 왼쪽 키 개수(3키/4키)로 결정됩니다.")
-                            Text("3. Step 2: 스페이스바 왼쪽 modifier를 왼쪽부터 누르고 마지막에 `Space`. 누른 개수로 3키/4키를 자동 판단합니다.")
-                            Text("4. Fn(🌐) 키가 눌러도 감지되지 않는 맥에서는 `+ Fn 🌐` 버튼으로 4번째(좌측 끝) 슬롯을 직접 추가하세요. (런타임 리맵은 동일하게 동작)")
-                            Text("5. Step 3: 로컬 macOS에서 `Fn / Ctrl / Cmd / Opt` 배치를 왼쪽부터 선택")
-                            Text("6. Step 4: VDI에서 `Ctrl / Win / Alt` 배치를 왼쪽부터 선택")
-                            Text("7. 슬롯을 직접 눌러 선택한 뒤 원하는 기능 키로 즉시 교체 가능")
-                            Text("8. 3키 키보드라면 `RCtrl`/`Caps`/`RShift`를 보조 Fn 키로 지정 가능")
-                            Text("9. Step 5: 현재 컨텍스트를 검증한 뒤 프로필 저장")
-                            Text("10. 저장된 프로필은 로컬 Mac과 VDI 사이를 자동 전환")
+                            Text("2. 시작 화면: 프로필 이름 입력 + 의도 선택")
+                            Text("   • \"한/영 전환만\" — 1클릭 즉시 완료 (키 배치 안 바꿈, 식별 프로필)")
+                            Text("   • \"키 배치도 바꾸기\" — 매핑 표로 이동")
+                            Text("3. 매핑 표: `Fn · Ctrl · Opt · Cmd` 4행, 각 행에서 `Mac에서` / `VDI에서` 목표 키를 picker 로 선택")
+                            Text("   • 상단 \"키캡 표기\" 토글로 Mac (Cmd/Opt) ↔ Windows (Win/Alt) 라벨 전환")
+                            Text("   • \"Windows 감각\" 버튼: Mac 에서 Cmd↔Ctrl 스왑 1클릭 프리셋")
+                            Text("   • \"초기화\" 버튼: 모든 행을 \"안 바꿈\"으로")
+                            Text("4. 확인·저장: 매핑 요약 확인 후 \"저장하고 적용\"")
+                            Text("※ 키보드를 누를 필요 없음 — macOS 가 모든 키보드를 같은 키코드로 보고하므로 표만으로 충분합니다 (Mac/Windows 듀얼모드 키보드 포함).")
+                                .padding(.top, 4)
+                            Text("※ 기존 프로필의 보조 Fn 키 설정은 편집 시 보존되며 새 위자드 UI 에 노출되지 않습니다. 변경하려면 프로필을 삭제하고 재생성하세요.")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
