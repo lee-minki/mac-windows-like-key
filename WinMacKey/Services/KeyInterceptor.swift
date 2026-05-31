@@ -33,6 +33,18 @@ class KeyInterceptor: ObservableObject {
     private(set) var needsFlagsChangedProcessing: Bool = false
 
     private var triggerKeyPressed = false
+
+    // MARK: - Buffered Replay State (Main-Thread-Only Contract · v1.7.0)
+    //
+    // 아래 4개 state 와 그것을 조작하는 begin*/complete*/fail*/bufferKeyEvent/start*/schedule*/flush*/cancel*
+    // 메서드는 모두 **main thread 에서만** 호출되어야 한다. 강제 수단:
+    //   1. CGEventTap 콜백은 `CFRunLoopAddSource(CFRunLoopGetCurrent(), ...)` 로 등록되어
+    //      start() 가 호출된 thread (= 항상 main) 의 RunLoop 에서 발화 → 콜백 path 자동 main.
+    //   2. DispatchQueue.main async 의 work item / Timer 도 main.
+    //   3. StateManager 의 입력소스 변경 observer → completeInputSourceCommitWindow() 호출도 main.
+    //   4. 위 메서드 각각의 시작부에 `assert(Thread.isMainThread, ...)` 로 contract 명문화 — DEBUG 에서
+    //      위반 시 즉시 crash. RELEASE 에선 무시(성능 영향 0).
+    // 향후 `@MainActor` 격리로 컴파일러 enforce 하는 것은 별도 Swift 6 마이그레이션 PR (audit B).
     private var bufferedReplayWindow: BufferedReplayWindow = .none
     private var bufferedReplayStartedAt: UInt64 = 0
 
@@ -41,10 +53,23 @@ class KeyInterceptor: ObservableObject {
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
     private static let inputSourceCommitMinimumHoldNanos: UInt64 = 20_000_000  // 20ms
-    // v1.6.2: 220ms → 150ms 단축 (P13 fix · Word 등 TIS notification 늦은 앱에서 매번 풀 타임아웃까지
-    // 대기해 사용자 체감 지연 발생. 150ms 면 다수 앱의 95th percentile 안에 들어옴. 트레이드오프:
-    // TIS notification 이 150-220ms 사이에 오는 극단 케이스에서 첫 글자 mis-route 가능성 — 희박.)
-    private let inputSourceCommitTimeout: TimeInterval = 0.150
+
+    // MARK: - Adaptive commit window timeout (v1.7.0)
+    //
+    // 앱 카테고리별 다른 timeout 적용:
+    //  - **일반 앱** (Notes/TextEdit/Safari 일반 입력 등): 0.100 (100ms) — TIS notification 빠르게 옴
+    //  - **IME-sensitive 앱** (Word/Pages/Keynote/PowerPoint 등): 0.180 (180ms) — TIS notification 늦어
+    //    풀 타임아웃까지 대기 빈도 높음. v1.6.2 의 단일 0.150 보다 안정적.
+    //  - 터미널: commit window 자체 비활성 (`isTerminalAppFocused` 가드, v1.6.1)
+    //  - VDI: 별도 cooldown (`beginVdiRelayCooldownWindow`, 30ms)
+    //  - Remote Mac: 일반 앱과 동일 (필요 시 별도 카테고리 도입 가능)
+    // (internal 가시성 — 스모크 테스트 `buffered_replay_smoke.swift` 가 값 검증)
+    let inputSourceCommitTimeoutDefault: TimeInterval = 0.100   // 일반
+    let inputSourceCommitTimeoutIMESensitive: TimeInterval = 0.180  // Word/Pages 등
+    var currentInputSourceCommitTimeout: TimeInterval {
+        isIMESensitiveAppFocused ? inputSourceCommitTimeoutIMESensitive : inputSourceCommitTimeoutDefault
+    }
+
     private let vdiRelayCooldownTimeout: TimeInterval = 0.030
     private let maxBufferedEventCount = 8
 
@@ -63,6 +88,13 @@ class KeyInterceptor: ObservableObject {
     // 터미널은 `handleTerminalTrigger` → `toggleDirectly()` 가 처리하므로 220ms commit window 가 불필요하고,
     // SSH/escape sequence(ESC, Backspace, paste 등)과 충돌해 화면 깨짐(P10 / v1.6.1 hotfix) 발생.
     var isTerminalAppFocused: Bool = false
+
+    // IME-sensitive 앱 포커스 여부 (Microsoft Word/Pages/Keynote/PowerPoint 등 — ContextManager 화이트리스트).
+    // true 면 `currentInputSourceCommitTimeout` 이 180ms 로 길어진다 (일반 100ms).
+    // 이유: 이런 앱들은 TIS notification 을 느리게 발화해 짧은 타임아웃에선 매번 풀 대기 → 체감 지연
+    // + replay burst 가 IME 처리 속도 초과 → 글자 drop. v1.6.2 의 단일 0.150 보다 안정적.
+    // (P13 후속 / v1.7.0 adaptive timeout — Word for Mac 등 IME-sensitive 앱 호환성 강화)
+    var isIMESensitiveAppFocused: Bool = false
 
     // Mac 원격접속 앱 포커스 여부 (Screen Sharing, ARD, Jump Desktop 등).
     // true 면 F16 패스스루 — 원격 Mac 의 WinMacKey 가 자체적으로 한영전환 처리.
@@ -339,21 +371,25 @@ class KeyInterceptor: ObservableObject {
     }
 
     func beginInputSourceCommitWindow() {
+        assert(Thread.isMainThread, "beginInputSourceCommitWindow must run on main thread (buffered replay contract)")
         guard !isVdiAppFocused else { return }
         // P10 fix (v1.6.1): 터미널은 toggleDirectly() 가 직접 TIS 토글하므로 commit window 불필요.
         // 220ms 동안 ESC/Backspace/paste 가 buffer 됐다가 replay 되면 SSH escape sequence 와 충돌해 화면 깨짐.
         // (참고: 정상 분기는 WinMacKeyApp.onInputSourceToggle 에서 isTerminalMode 일 때 handleTerminalTrigger 로 보내지만,
         //  focus race 시 풀리는 사례가 있어 KeyInterceptor 측에서도 방어 — double-defense.)
         guard !isTerminalAppFocused else { return }
-        startBufferedReplayWindow(.inputSourceCommit, timeout: inputSourceCommitTimeout, timeoutReason: "timeout")
+        // v1.7.0: adaptive timeout — IME-sensitive 앱(Word/Pages 등)이면 180ms, 그 외 100ms.
+        startBufferedReplayWindow(.inputSourceCommit, timeout: currentInputSourceCommitTimeout, timeoutReason: "timeout")
     }
 
     func beginVdiRelayCooldownWindow() {
+        assert(Thread.isMainThread, "beginVdiRelayCooldownWindow must run on main thread (buffered replay contract)")
         guard isVdiAppFocused else { return }
         startBufferedReplayWindow(.vdiRelayCooldown, timeout: vdiRelayCooldownTimeout, timeoutReason: "vdi-relay-settle")
     }
 
     func completeInputSourceCommitWindow() {
+        assert(Thread.isMainThread, "completeInputSourceCommitWindow must run on main thread (buffered replay contract)")
         guard bufferedReplayWindow == .inputSourceCommit else { return }
 
         let now = DispatchTime.now().uptimeNanoseconds
@@ -371,6 +407,7 @@ class KeyInterceptor: ObservableObject {
     }
 
     func failInputSourceCommitWindow() {
+        assert(Thread.isMainThread, "failInputSourceCommitWindow must run on main thread (buffered replay contract)")
         guard bufferedReplayWindow == .inputSourceCommit else { return }
         scheduleBufferedReplayFlush(after: 0.100, reason: "verification-failed-grace")
     }
@@ -552,6 +589,7 @@ class KeyInterceptor: ObservableObject {
     }
 
     private func bufferKeyEvent(_ event: CGEvent) {
+        assert(Thread.isMainThread, "bufferKeyEvent must run on main thread (buffered replay contract)")
         bufferedKeyEvents.append(event)
         if bufferedKeyEvents.count >= maxBufferedEventCount {
             flushBufferedKeyEvents(reason: "buffer-limit")
@@ -563,6 +601,7 @@ class KeyInterceptor: ObservableObject {
         timeout: TimeInterval,
         timeoutReason: String
     ) {
+        assert(Thread.isMainThread, "startBufferedReplayWindow must run on main thread (buffered replay contract)")
         if bufferedReplayWindow != .none {
             flushBufferedKeyEvents(reason: "superseded")
         }
@@ -573,6 +612,7 @@ class KeyInterceptor: ObservableObject {
     }
 
     private func scheduleBufferedReplayFlush(after timeout: TimeInterval, reason: String) {
+        assert(Thread.isMainThread, "scheduleBufferedReplayFlush must run on main thread (buffered replay contract)")
         bufferedFlushWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
@@ -583,6 +623,7 @@ class KeyInterceptor: ObservableObject {
     }
 
     private func flushBufferedKeyEvents(reason: String) {
+        assert(Thread.isMainThread, "flushBufferedKeyEvents must run on main thread (buffered replay contract)")
         bufferedFlushWorkItem?.cancel()
         bufferedFlushWorkItem = nil
 
@@ -610,6 +651,7 @@ class KeyInterceptor: ObservableObject {
     }
 
     private func cancelPendingBufferedReplay(dropBufferedEvents: Bool = false) {
+        assert(Thread.isMainThread, "cancelPendingBufferedReplay must run on main thread (buffered replay contract)")
         bufferedFlushWorkItem?.cancel()
         bufferedFlushWorkItem = nil
         bufferedReplayWindow = .none

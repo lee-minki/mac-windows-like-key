@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.7.0] — 2026-05-31
+
+**"안정화 + 정리" 릴리스.** v1.6.0 → v1.6.1 → v1.6.2 의 같은 날 sequential hotfix 3건 이후, 핫픽스의 공통 메커니즘(`bufferedReplayWindow`)을 전수 리뷰해 구조적 결함 해소 + 회귀 가드 테스트 추가.
+
+### Changed
+- **`bufferedReplayWindow` 메커니즘 main-thread contract 명문화** (`WinMacKey/Services/KeyInterceptor.swift`).
+  CGEventTap 콜백(`CFRunLoopAddSource` 로 main RunLoop 등록 → 항상 main thread 발화) + DispatchQueue.main 의 timer/work item 모두 main thread 에서 동작이라는 암묵적 contract 를 클래스 헤더 주석으로 명시 + `begin*/complete*/fail*/buffer*/start*/schedule*/flush*/cancel*` 모든 메서드 시작부에 `assert(Thread.isMainThread, ...)` 추가. DEBUG 빌드에서 위반 시 즉시 crash, RELEASE 영향 0. 향후 `@MainActor` 격리는 별도 Swift 6 마이그레이션 PR (audit B).
+- **Adaptive commit window timeout — 앱 카테고리별 분리** (`WinMacKey/Services/KeyInterceptor.swift` + `WinMacKey/Services/ContextManager.swift` + `WinMacKey/WinMacKeyApp.swift`).
+  v1.6.2 의 단일 `0.150` 을 두 값으로 분리:
+  - **일반 앱**(Notes/TextEdit/Safari 일반 입력 등): `0.100` (100ms) — TIS notification 빠르게 옴, 사용자 체감 즉시
+  - **IME-sensitive 앱**(Word/Pages/Keynote/PowerPoint/Excel/Outlook/Adobe Acrobat 등): `0.180` (180ms) — TIS notification 늦게 발화해 짧은 타임아웃에선 매번 풀 대기 + replay burst 가 IME 처리 속도 초과 → 글자 drop. v1.6.2 의 0.150 보다 안정적.
+  `ContextManager.imeSensitiveApps` 화이트리스트 + `isIMESensitiveApp` 발행 + `KeyInterceptor.isIMESensitiveAppFocused` 동기화 + `currentInputSourceCommitTimeout` computed property 로 자동 선택.
+
+### Added
+- **회귀 가드 스모크 테스트 2개**:
+  - `tests/commit_window_smoke.swift` — bufferedReplayWindow 의 guard(VDI/Terminal) + begin/complete/fail/supersede 안전성 7 invariants
+  - `tests/buffered_replay_smoke.swift` — IME-sensitive adaptive timeout (0.100 vs 0.180) + 가드 플래그 독립성 6 invariants
+  `scripts/run-tests.sh` 에 추가. 향후 commit window 회귀 즉시 감지.
+
+### Note
+- Info.plist 1.6.2/21 → **1.7.0/22**, `MARKETING_VERSION 1.7.0`, `CURRENT_PROJECT_VERSION 22`.
+- v1.6.0~v1.6.2 의 fix 들은 모두 보존 (P10 isTerminalAppFocused 가드, P13 intra-replay 5ms).
+- v1.6.2 의 `inputSourceCommitTimeout = 0.150` 단일 값은 제거 — adaptive 로 대체.
+- **P9 (한영 간헐 실패)** 는 별개 후속 — v1.7.0 설치 후 재현 여부 회신 대기. v1.7.0 의 main-thread assert 가 P9 의 잠재적 race 원인을 노출할 가능성 있음(만약 background thread 호출이 원인이라면).
+
+---
+
 ## [1.6.2] — 2026-05-31
 
 v1.6.1 publish 직후 사용자 보고 **P13 (Microsoft Word for Mac 에서 한/영 전환 후 느려지고 글자 씹힘) 핫픽스**. v1.3.x 부터 잠재했던 IME-sensitive 앱 호환성 문제.

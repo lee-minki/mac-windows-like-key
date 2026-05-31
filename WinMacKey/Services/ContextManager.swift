@@ -9,6 +9,11 @@ class ContextManager: ObservableObject {
     @Published var isVirtualizationApp: Bool = false
     @Published var isTerminalApp: Bool = false
     @Published var isRemoteMacApp: Bool = false
+    /// v1.7.0 — IME-sensitive 앱 포커스 여부 (Word/Pages/Keynote/PowerPoint 등).
+    /// true 면 `KeyInterceptor` 의 `currentInputSourceCommitTimeout` 이 180ms 로 길어진다 (기본 100ms).
+    /// 이런 앱들은 TIS notification 을 느리게 발화해 짧은 타임아웃에선 매번 풀 대기 + replay burst 가
+    /// IME 처리 속도 초과 → 글자 drop. 카테고리 분리로 일반 앱은 더 빠르게(100ms), 느린 앱은 안정적(180ms).
+    @Published var isIMESensitiveApp: Bool = false
 
     // 알려진 가상화 앱 Bundle ID 목록 (VDI — Windows 데스크탑)
     private let virtualizationApps: Set<String> = [
@@ -44,6 +49,25 @@ class ContextManager: ObservableObject {
         "dev.warp.Warp-Stable",
         "io.alacritty",
         "net.kovidgoyal.kitty"
+    ]
+
+    // IME-sensitive 앱 (v1.7.0 · P13 후속) — TIS notification 을 느리게 발화해 commit window 가
+    // 매번 풀 타임아웃까지 대기하는 경향이 있는 앱들. `KeyInterceptor.currentInputSourceCommitTimeout`
+    // 이 180ms 로 길어져 첫 글자 mis-route 방지 + replay 안정성 확보.
+    private let imeSensitiveApps: Set<String> = [
+        // Microsoft 365
+        "com.microsoft.Word",
+        "com.microsoft.Powerpoint",
+        "com.microsoft.Excel",
+        "com.microsoft.onenote.mac",
+        "com.microsoft.Outlook",
+        // Apple iWork
+        "com.apple.iWork.Pages",
+        "com.apple.iWork.Keynote",
+        "com.apple.iWork.Numbers",
+        // Adobe (PDF 폼 입력)
+        "com.adobe.Acrobat.Pro",
+        "com.adobe.Reader"
     ]
     
     private var workspaceObserver: NSObjectProtocol?
@@ -92,6 +116,7 @@ class ContextManager: ObservableObject {
         isVirtualizationApp = allVirtualizationApps.contains(bundleId)
         isTerminalApp = allTerminalApps.contains(bundleId)
         isRemoteMacApp = allRemoteMacApps.contains(bundleId)
+        isIMESensitiveApp = imeSensitiveApps.contains(bundleId)  // v1.7.0
 
         onAppChanged?(bundleId, appName)
     }

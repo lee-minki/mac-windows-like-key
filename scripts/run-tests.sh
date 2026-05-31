@@ -97,6 +97,26 @@ swiftc \
 
 build/tests/keyboard_capture_smoke
 
+# ── Commit window invariant smoke (v1.7.0 NEW) ────────────────────────────────
+# bufferedReplayWindow 의 guard (VDI/Terminal/init) + begin·complete·fail·supersede 안전성
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/commit_window_smoke.swift \
+  -o build/tests/commit_window_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/commit_window_smoke
+
+# ── Buffered replay adaptive timeout smoke (v1.7.0 NEW) ───────────────────────
+# P13 후속 — IME-sensitive 화이트리스트 (Word/Pages 등) 의 adaptive timeout 동작
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/buffered_replay_smoke.swift \
+  -o build/tests/buffered_replay_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/buffered_replay_smoke
+
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh
 bash scripts/check-release-workflow.sh
