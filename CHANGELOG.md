@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.6.2] — 2026-05-31
+
+v1.6.1 publish 직후 사용자 보고 **P13 (Microsoft Word for Mac 에서 한/영 전환 후 느려지고 글자 씹힘) 핫픽스**. v1.3.x 부터 잠재했던 IME-sensitive 앱 호환성 문제.
+
+### Fixed
+- **P13 · `bufferedReplayWindow` 의 commit window + replay burst 가 Word for Mac IME 와 충돌** (`WinMacKey/Services/KeyInterceptor.swift`).
+  **증상**: Word for Mac 에서 한/영 전환 후 ① 토글 자체가 ~220ms 체감 지연 ② 빠르게 타이핑하면 한 글자씩 씹힘(드롭) 발생. v1.6.0 회귀가 아니라 v1.3.x 부터 있던 사전 기존 버그 — Word 의 IME 가 TIS notification 을 느리게 발화해 commit window 가 매번 풀 타임아웃까지 대기 + 220ms 후 burst replay 의 0.5ms 인터벌이 Word IME 처리 속도보다 빨라 일부 키 drop.
+  **수정 (2점 패치)**:
+  1. `inputSourceCommitTimeout` **0.220 → 0.150** (220ms → 150ms 단축, 사용자 체감 지연 ~30% 감소). 트레이드오프: TIS notification 이 150-220ms 사이에 오는 극단 케이스에서 첫 글자 mis-route 가능성 — 희박.
+  2. `flushBufferedKeyEvents` 의 intra-replay `usleep(500)` **0.5ms → 5ms**. Word/기타 느린 IME 가 각 키를 안정 처리할 시간 확보. 5키 replay 총 시간 2ms → 20ms (인지 불가 수준).
+  **영향 범위**: Word for Mac + 잠재적으로 기타 IME-sensitive 앱 (Pages, Keynote, 일부 브라우저 입력 필드). 터미널/SSH 는 v1.6.1 의 isTerminalAppFocused 가드로 이미 우회 중이라 영향 없음.
+
+### Note
+- Info.plist 1.6.1/20 → **1.6.2/21**, `MARKETING_VERSION 1.6.2`, `CURRENT_PROJECT_VERSION 21`.
+- 본 핫픽스는 commit window 의 튜닝이라 다른 앱(Notes, TextEdit 등 정상 IME 앱) 동작에는 변화 없음.
+- **P9 (한영 간헐 실패)** 는 별개 후속 — 사용자 v1.6.2 설치 후 재현 여부 회신 대기.
+
+---
+
 ## [1.6.1] — 2026-05-31
 
 v1.6.0 publish 후 사용자 보고 **P10 (Ghostty/SSH 에서 ESC/Backspace → 화면 깨짐) 핫픽스**. v1.5.x 부터 잠재하던 엔진 레벨 회귀.

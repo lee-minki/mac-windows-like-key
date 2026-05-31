@@ -41,7 +41,10 @@ class KeyInterceptor: ObservableObject {
     private var bufferedFlushWorkItem: DispatchWorkItem?
 
     private static let inputSourceCommitMinimumHoldNanos: UInt64 = 20_000_000  // 20ms
-    private let inputSourceCommitTimeout: TimeInterval = 0.220
+    // v1.6.2: 220ms → 150ms 단축 (P13 fix · Word 등 TIS notification 늦은 앱에서 매번 풀 타임아웃까지
+    // 대기해 사용자 체감 지연 발생. 150ms 면 다수 앱의 95th percentile 안에 들어옴. 트레이드오프:
+    // TIS notification 이 150-220ms 사이에 오는 극단 케이스에서 첫 글자 mis-route 가능성 — 희박.)
+    private let inputSourceCommitTimeout: TimeInterval = 0.150
     private let vdiRelayCooldownTimeout: TimeInterval = 0.030
     private let maxBufferedEventCount = 8
 
@@ -595,9 +598,11 @@ class KeyInterceptor: ObservableObject {
         for (i, event) in events.enumerated() {
             event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
             event.post(tap: .cgSessionEventTap)
-            // IME가 각 이벤트를 안정적으로 처리할 수 있도록 키 사이에 짧은 딜레이 삽입
+            // v1.6.2: 0.5ms → 5ms (P13 fix · Microsoft Word for Mac 등 느린 IME 가 burst replay 의
+            // 일부 키를 drop 하던 증상 — "한 글자씩 씹힘" — 해소. 5ms 면 5키 replay 가 20ms 로 인지 불가.
+            // 더 늦추면 인지 가능 영역 진입.)
             if i < events.count - 1 {
-                usleep(500)  // 0.5ms
+                usleep(5_000)  // 5ms
             }
         }
 

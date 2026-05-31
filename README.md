@@ -16,6 +16,21 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-macOS%2014%2B-black?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-SwiftUI-orange?logo=swift" alt="Swift / SwiftUI">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
+  <img src="https://img.shields.io/badge/signed-Apple%20notarized-success?logo=apple" alt="Apple notarized">
+</p>
+
+---
+
+> **TL;DR (English):** A native macOS menu-bar utility for people who use Windows-style keyboards or VDI on a Mac.
+> It remaps **Right Command → Korean/English IME toggle** via a HID-level `hidutil` remap (no modifier-flag pollution),
+> auto-switches **per-device keyboard profiles** (built-in vs. external) through IOKit, and enables **Korean/English
+> switching inside VMware Horizon VDI and Mac-to-Mac screen sharing — without any virtual keyboard driver or system
+> extension.** Signed & Apple-notarized, < 0.5 ms latency, < 20 MB memory, actively maintained with regular releases.
+
 ---
 
 ## ✨ Features
