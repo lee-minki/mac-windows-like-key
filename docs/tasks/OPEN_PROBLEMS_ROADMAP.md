@@ -21,9 +21,10 @@
 | **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **신규 보고 (v1.5.1 환경), 재현 진단 대기** — 엔진 unchanged 라 v1.6.0 도 동일 가능성 99% | 사용자 v1.6.0 업데이트 후 재현 여부 → 핫픽스 PR | 독립 |
 | **P10** Ghostty/SSH 에서 ESC \u2192 이상 문자 | **DONE (v1.6.1, commit f7c7f6b, 2026-05-31)** — `KeyInterceptor.isTerminalAppFocused` 신설 + 가드 2곳 + `WinMacKeyApp` 동기화 | — | — |
 | **P11** 키보드 클리닝 모드 (CLEAN-1) | **사용자 commit (2026-05-31), 구현 대기** — 키보드 닦는 동안 전체 키 입력 차단, 마우스로만 토글. `KeyboardCleanTool` ($9.99) 대체. | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, `FEATURE_SPEC §10 CLEAN-1` |
-| **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
+| **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9 진단 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
+| **P13** Word for Mac 한/영 후 토글 지연 + 글자 드롭 | **DONE (v1.6.2, commit `d7c1055`, 2026-05-31)** — `inputSourceCommitTimeout` 0.220→0.150 + `flushBufferedKeyEvents` intra-replay `usleep(500)`→`usleep(5_000)`. v1.3.x 부터 사전 기존 IME 호환성 버그. | — | — |
 
-**권장 다음 행동**: 사용자 v1.6.0 테스트 회신 → P9/P10 재현 격리 → 핫픽스 PR. **P11/P12 는 P9/P10 안정화 + 디자인 표준화([[project_winmackey_design_standards]]) 이후 본격 진입.** P7 plan doc 은 P9/P10 hotfix 후 재개.
+**권장 다음 행동**: 사용자 v1.6.2 설치 후 ① P10 (SSH) ② P13 (Word) 정상화 확인 → **P9 (한영 간헐 실패)** 만 잔존, 재현 회신 대기 → 별개 핫픽스. **P11/P12 는 P9 안정화 + 디자인 표준화([[project_winmackey_design_standards]]) 이후 본격 진입.** P7 plan doc 도 같은 시점에 재개.
 
 ## P9 · 한영전환 간헐 실패 (v1.5.1 보고, 2026-05-30)
 
