@@ -1,7 +1,7 @@
 # Open Problems Roadmap
 
-> Status: **v0.6.0 — v1.6.2 Published (P10/P13 FIXED), P9 진단 대기, P11/P12 commit**
-> 작성: 2026-05-16, 갱신: 2026-05-31 (same-day sequential 핫픽스 v1.6.0 → v1.6.1 → v1.6.2)
+> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 진단 대기, P11/P12 commit**
+> 작성: 2026-05-16, 갱신: 2026-05-31 (same-day 4건: v1.6.0 → v1.6.1 → v1.6.2 → v1.7.0)
 > 작성자: Claude + lee-minki
 >
 > 이 문서가 합의된 후에만 새 코드 변경 가능.
@@ -22,7 +22,8 @@
 | **P10** Ghostty/SSH 에서 ESC \u2192 이상 문자 | **DONE (v1.6.1, commit f7c7f6b, 2026-05-31)** — `KeyInterceptor.isTerminalAppFocused` 신설 + 가드 2곳 + `WinMacKeyApp` 동기화 | — | — |
 | **P11** 키보드 클리닝 모드 (CLEAN-1) | **사용자 commit (2026-05-31), 구현 대기** — 키보드 닦는 동안 전체 키 입력 차단, 마우스로만 토글. `KeyboardCleanTool` ($9.99) 대체. | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, `FEATURE_SPEC §10 CLEAN-1` |
 | **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9 진단 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
-| **P13** Word for Mac 한/영 후 토글 지연 + 글자 드롭 | **DONE (v1.6.2, commit `d7c1055`, 2026-05-31)** — `inputSourceCommitTimeout` 0.220→0.150 + `flushBufferedKeyEvents` intra-replay `usleep(500)`→`usleep(5_000)`. v1.3.x 부터 사전 기존 IME 호환성 버그. | — | — |
+| **P13** Word for Mac 한/영 후 토글 지연 + 글자 드롭 | **DONE (v1.6.2, commit `d7c1055`, 2026-05-31)** — `inputSourceCommitTimeout` 0.220→0.150 + `flushBufferedKeyEvents` intra-replay `usleep(500)`→`usleep(5_000)`. v1.3.x 부터 사전 기존 IME 호환성 버그. v1.7.0 에서 adaptive 로 강화. | — | — |
+| **P14** `bufferedReplayWindow` 메커니즘 전수 리뷰 + 안정화 | **DONE (v1.7.0, commit `8e5a3e1`, Latest Published 2026-05-31)** — Tier 1 main-thread contract 명문화 (assert) + Tier 2 adaptive timeout (일반 0.100/IME-sensitive 0.180) + 회귀 가드 스모크 2개 신규 (commit_window + buffered_replay, 13/13 PASS). | — | — |
 
 **권장 다음 행동**: 사용자 v1.6.2 설치 후 ① P10 (SSH) ② P13 (Word) 정상화 확인 → **P9 (한영 간헐 실패)** 만 잔존, 재현 회신 대기 → 별개 핫픽스. **P11/P12 는 P9 안정화 + 디자인 표준화([[project_winmackey_design_standards]]) 이후 본격 진입.** P7 plan doc 도 같은 시점에 재개.
 
