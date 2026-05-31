@@ -1,7 +1,7 @@
 # Open Problems Roadmap
 
-> Status: **v0.4.0 — v1.6.0 Published + P9/P10 신규 (사용자 보고, 재현 진단 대기)**
-> 작성: 2026-05-16, 갱신: 2026-05-30
+> Status: **v0.5.0 — v1.6.1 Published (P10 FIXED), P9 진단 대기, P11/P12 commit**
+> 작성: 2026-05-16, 갱신: 2026-05-31
 > 작성자: Claude + lee-minki
 >
 > 이 문서가 합의된 후에만 새 코드 변경 가능.
@@ -19,7 +19,7 @@
 | **P7** 디바이스별 독립 매핑 (동시 active) | **Sealed** (인터뷰 1-3 완료) | plan doc 작성 | P2 흡수 결정됨 |
 | **P8** 위자드 표 기반 재설계 | **Done (v1.6.0, commit 8ecf24a, Latest Published 2026-05-30)** | — | — |
 | **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **신규 보고 (v1.5.1 환경), 재현 진단 대기** — 엔진 unchanged 라 v1.6.0 도 동일 가능성 99% | 사용자 v1.6.0 업데이트 후 재현 여부 → 핫픽스 PR | 독립 |
-| **P10** Ghostty 에서 ESC → 이상 문자 | **신규 보고 (v1.5.1 환경), 재현 진단 대기** — bufferedReplayWindow / F16 글로벌 영향 / focus race 후보 | 사용자 정확한 출력 문자 + 트리거 순서 회신 → 핫픽스 PR | 독립 |
+| **P10** Ghostty/SSH 에서 ESC \u2192 이상 문자 | **DONE (v1.6.1, commit f7c7f6b, 2026-05-31)** — `KeyInterceptor.isTerminalAppFocused` 신설 + 가드 2곳 + `WinMacKeyApp` 동기화 | — | — |
 | **P11** 키보드 클리닝 모드 (CLEAN-1) | **사용자 commit (2026-05-31), 구현 대기** — 키보드 닦는 동안 전체 키 입력 차단, 마우스로만 토글. `KeyboardCleanTool` ($9.99) 대체. | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, `FEATURE_SPEC §10 CLEAN-1` |
 | **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
 
@@ -40,18 +40,23 @@
 
 **대기 정보**: 어떤 앱·번들 ID, 그 앱에서 Ctrl+Space 직접 동작 여부, 메뉴바 ON 확인, v1.6.0 으로도 재현되는지
 
-## P10 · Ghostty 에서 ESC → 이상 문자 (v1.5.1 보고, 2026-05-30)
+## P10 · Ghostty/SSH 에서 ESC → 이상 문자 ✅ DONE (v1.6.1, 2026-05-31)
 
-**증상**: Ghostty 터미널에서 ESC 키 누르니 이상한 문자 출력.
+**증상 (v1.5.1 + v1.6.0 환경 재현 확인)**: SSH 세션에서 ESC/Backspace 누르면 paste 내용이 한 글자씩 줄어들며 무한 재출력 + `^C`/`^L`/`^D` 노출. 사용자 SSH 작업 불가능.
 
-**터미널 모드 분기는 정상**: `com.mitchellh.ghostty` 가 `ContextManager.swift:42` 화이트리스트 → `StateManager.handleTerminalTrigger()` → `inputSourceManager.toggleDirectly()` (TIS API 직접, 합성 우회) ✓
+**확진 증거 (2026-05-31 사용자 스크린샷)**: 매 프롬프트 trailing fragment 가 정확히 1글자씩 짧아짐(`macbook-to-macmini'` → `macbook-to-m` → `macbook-to-` → ... → `m` → 빈 → control chars). 이 패턴은 buffer 가 안 비고 매번 재주입 + Backspace 가 한 글자씩 갉아먹는 동작과 정확히 일치 — 후보 #1 (`bufferedReplayWindow + ESC` 충돌) 확정.
 
-**후보 (가능성 순)**:
-1. **`bufferedReplayWindow + ESC` 충돌** (`KeyInterceptor.swift:481-484`) — 20ms commit 윈도우 동안 ESC buffer → flush 시 재주입이 합성 부산물과 합쳐져 깨진 시퀀스로 인식
-2. **F16 HID remap 글로벌 영향** — ESC 직전 Right Cmd 살짝 눌렀으면 F16 같이 들어가 Ghostty 가 모르는 `kf16` 이스케이프 → 깨진 문자
-3. **ContextManager focus race** — frontmost 감지 놓쳐 terminal 분기 미적용 → `handleTrigger(isVdiMode: false)` fall through → Ctrl+Space 합성이 터미널 이스케이프 시퀀스로 인식
+**근본 원인**: `KeyInterceptor` 에 `isTerminalAppFocused` 자체가 부재. 220ms `inputSourceCommit` 윈도우 동안 ESC/Backspace 가 buffer + `return nil` → 220ms 후 flush 가 한꺼번에 replay → SSH escape sequence 충돌. 터미널 분기 가드가 `WinMacKeyApp.onInputSourceToggle` 콜백의 if-else 분기에만 의존 → focus race 시 풀림.
 
-**대기 정보**: ESC 출력 정확 문자 (스크린샷 또는 `cat -v`), ESC 직전 한영전환 여부, Ghostty frontmost 시 메뉴 → 입력소스 표시기 정상 토글 여부, v1.6.0 으로도 재현되는지
+**수정 (v1.6.1, 4점 패치, commit `f7c7f6b`)**:
+1. `KeyInterceptor.isTerminalAppFocused: Bool = false` 프로퍼티 신설 (`isVdiAppFocused` 와 동일 패턴)
+2. `beginInputSourceCommitWindow` 에 `guard !isTerminalAppFocused else { return }`
+3. `handleMappedKey` 의 buffer 분기에도 `&& !isTerminalAppFocused` (focus race 안전망)
+4. `WinMacKeyApp.onAppChanged` 에서 `keyInterceptor.isTerminalAppFocused = isNowTerminal` 동기화
+
+**검증**: 터미널 화이트리스트(`com.apple.Terminal`, `com.googlecode.iterm2`, `com.mitchellh.ghostty`, `ai.warp.Warp-Stable`, `io.alacritty`, `net.kovidgoyal.kitty`, `dev.warp.Warp-Stable`, `com.anthropic.claudefordesktop`) 포커스 시 commit window 안 열림. 빌드 0 새 warning, 스모크 11개 PASS.
+
+**Release**: GitHub `v1.6.1` Latest Published, 다른 맥 자동 업데이트 트리거.
 
 상세 진단 컨텍스트는 메모리 `project_winmackey_v160_pending_bugs.md`.
 
