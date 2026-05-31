@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.6.1] — 2026-05-31
+
+v1.6.0 publish 후 사용자 보고 **P10 (Ghostty/SSH 에서 ESC/Backspace → 화면 깨짐) 핫픽스**. v1.5.x 부터 잠재하던 엔진 레벨 회귀.
+
+### Fixed
+- **P10 · `bufferedReplayWindow + 터미널 escape sequence` 충돌** (`WinMacKey/Services/KeyInterceptor.swift`, `WinMacKey/WinMacKeyApp.swift`).
+  **증상**: SSH 세션에서 ESC/Backspace 누르면 이전 paste 내용이 한 글자씩 줄어들며 무한 재출력 → `^C`/`^L`/`^D` 등 control char 가 화면에 노출. 사용자 SSH 작업 불가능.
+  **원인**: Right Cmd 한/영 트리거 직후 220ms `inputSourceCommit` 윈도우 동안 모든 키가 buffer + `return nil` 처리됨 → 220ms 후 flush 가 SSH 가 escape sequence 로 해석할 키 시퀀스를 한꺼번에 replay → 깨짐 cascade. 터미널 분기(`handleTerminalTrigger` + `toggleDirectly()`) 는 commit window 가 불필요한데, `KeyInterceptor` 가 터미널 포커스를 모르고(`isTerminalAppFocused` 자체 부재) `WinMacKeyApp.onInputSourceToggle` 콜백의 if-else 분기에만 의존 → focus race 시 가드 풀림.
+  **수정**: ① `KeyInterceptor.isTerminalAppFocused` 프로퍼티 신설(VDI 가드와 같은 패턴) ② `beginInputSourceCommitWindow` 에 `guard !isTerminalAppFocused else { return }` 추가 ③ `handleMappedKey` 의 buffer 분기에도 같은 가드 추가(focus race 안전망) ④ `WinMacKeyApp` 의 `onAppChanged` 에서 `isTerminalAppFocused` 도 동기화.
+  **검증**: 터미널 화이트리스트(`com.apple.Terminal`, `com.googlecode.iterm2`, `com.mitchellh.ghostty`, `ai.warp.Warp-Stable`, `io.alacritty`, `net.kovidgoyal.kitty`, `dev.warp.Warp-Stable`, `com.anthropic.claudefordesktop`) 포커스 시 commit window 자체가 안 열림 + 어떤 이유로 열려 있어도 터미널 키는 즉시 통과.
+
+### Note
+- Info.plist 1.6.0/19 → **1.6.1/20**, `MARKETING_VERSION 1.6.1`, `CURRENT_PROJECT_VERSION 20`.
+- **P9 (한영 간헐 실패)** 는 별개 후속 — 사용자 v1.6.1 설치 후 재현 여부 회신 대기.
+- 본 핫픽스는 엔진 레벨이라 위자드/문서 변경 없음.
+
+---
+
 ## [1.6.0] — 2026-05-30
 
 신규 맥 온보딩의 최대 마찰 지점이었던 **프로필 위자드를 캡처 없는 표 기반으로 전면 재설계.** 외부 문서·인앱 도움말 일괄 동기화, 옵셔널 필드 보존 정책 명문화, dead code 정리.

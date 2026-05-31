@@ -273,6 +273,7 @@ class AppState: ObservableObject {
             let wasRemoteMac = self.isRemoteMacMode
             let isNowRemoteMac = self.contextManager.isRemoteMacApp
             self.keyInterceptor.isVdiAppFocused = isNowVdi
+            self.keyInterceptor.isTerminalAppFocused = isNowTerminal  // P10 fix (v1.6.1): 터미널 focus 동기화 — commit window/buffer 비활성화 가드용
             self.keyInterceptor.isRemoteMacAppFocused = isNowRemoteMac
             self.isVdiMode = isNowVdi
             self.isTerminalMode = isNowTerminal

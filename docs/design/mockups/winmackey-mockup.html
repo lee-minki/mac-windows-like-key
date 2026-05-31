@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinMacKey — Design Mockup (Phase B)</title>
+<style>
+:root{
+  /* === Design tokens (Visual-Design-Concept-Plan §3-1) === */
+  --accent:#007AFF;            /* 시스템 블루 — 조작 컨트롤 전용 */
+  --accent-press:#0063D1;
+  --brand:#3AA893;             /* 브랜드 민트/틸 — 비조작 그래픽/상태 전용 (#359B8B~#42B8A3) */
+  --brand-soft:#E7F4F1;
+  --success:#34C759;
+  --warning:#FF9F0A;
+  --danger:#FF3B30;
+  --text:#1d1d1f;
+  --text-2:#6e6e73;
+  --text-3:#8e8e93;
+  --bg:#ECECEE;
+  --card:#FFFFFF;
+  --card-2:#F5F5F7;
+  --line:#E2E2E5;
+  --radius-win:12px;
+  --radius-card:10px;
+  --radius-ctl:7px;
+  --sidebar:#F2F1F4;
+  --shadow:0 12px 40px rgba(0,0,0,.18);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:18px;padding:28px 16px 60px;color:var(--text)}
+.page-title{text-align:center;color:#3a3a3c}
+.page-title h1{font-size:17px;font-weight:600}
+.page-title p{font-size:12px;color:#6e6e73;margin-top:3px}
+
+/* view switcher (mockup nav, not part of product) */
+.switcher{display:inline-flex;background:#dededf;border-radius:9px;padding:3px;gap:2px;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.06)}
+.switcher button{border:0;background:transparent;font:inherit;font-size:12.5px;font-weight:500;color:#3a3a3c;padding:5px 14px;border-radius:7px;cursor:pointer}
+.switcher button.active{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12);color:#000}
+
+/* macOS window */
+.window{width:760px;max-width:96vw;background:var(--bg);border-radius:var(--radius-win);box-shadow:var(--shadow);overflow:hidden;border:.5px solid rgba(0,0,0,.12)}
+.titlebar{height:38px;display:flex;align-items:center;padding:0 14px;gap:8px;background:linear-gradient(#fbfbfc,#f0f0f2);border-bottom:.5px solid var(--line)}
+.lights{display:flex;gap:8px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+.titlebar .ttl{font-size:13px;font-weight:600;color:#3a3a3c;margin-left:6px}
+.view{display:none}
+.view.active{display:block}
+
+/* ===== Onboarding ===== */
+.ob{display:flex;min-height:440px}
+.ob-rail{width:188px;background:var(--sidebar);border-right:.5px solid var(--line);padding:22px 16px;display:flex;flex-direction:column;gap:6px}
+.ob-rail .brandrow{display:flex;align-items:center;gap:9px;margin-bottom:18px}
+.ob-rail .brandrow img{width:34px;height:34px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.ob-rail .brandrow b{font-size:14px}
+.step{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;font-size:12.5px;color:var(--text-2)}
+.step .dot{width:20px;height:20px;border-radius:50%;background:#dcdce0;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.step.done .dot{background:var(--brand)}
+.step.active{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.step.active .dot{background:var(--accent)}
+.ob-rail .progress{margin-top:auto;font-size:11px;color:var(--text-3)}
+.ob-rail .bar{height:5px;border-radius:3px;background:#dcdce0;margin-top:6px;overflow:hidden}
+.ob-rail .bar i{display:block;height:100%;background:var(--brand);transition:width .3s}
+
+.ob-body{flex:1;padding:30px 34px;position:relative;display:flex;flex-direction:column}
+.pane{display:none;flex-direction:column;height:100%}
+.pane.active{display:flex}
+.pane h2{font-size:22px;font-weight:700;letter-spacing:-.3px}
+.pane .lead{font-size:13.5px;color:var(--text-2);margin-top:7px;line-height:1.5}
+.step-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.4px;padding:3px 9px;border-radius:20px;width:fit-content;margin-bottom:10px;text-transform:uppercase}
+
+/* Welcome */
+.welcome{align-items:center;text-align:center;justify-content:center}
+.welcome img.appicon{width:108px;height:108px;border-radius:24px;box-shadow:0 8px 24px rgba(58,168,147,.28);margin-bottom:18px}
+.welcome h2{font-size:25px}
+.keycap-demo{display:inline-flex;align-items:center;gap:12px;margin:20px 0 4px;padding:10px 16px;background:var(--brand-soft);border-radius:12px}
+.kc{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 10px;background:linear-gradient(#fff,#f0f0f2);border:.5px solid #d3d3d7;border-radius:8px;box-shadow:0 2px 0 #cfcfd4,0 2px 5px rgba(0,0,0,.08);font-size:15px;font-weight:600}
+.kc .han{color:var(--brand)}
+.swaparrow{color:var(--brand);font-size:18px}
+
+/* priming card + permission mirror */
+.priming{background:var(--card);border-radius:var(--radius-card);border:.5px solid var(--line);padding:16px 18px;margin-top:4px;display:flex;gap:14px;align-items:flex-start}
+.priming .ic{width:40px;height:40px;border-radius:10px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--brand-soft);color:var(--brand)}
+.priming .txt b{font-size:13.5px}
+.priming .txt p{font-size:12.5px;color:var(--text-2);margin-top:4px;line-height:1.5}
+.reassure{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--brand);margin-top:8px;font-weight:600}
+
+.mirror{margin-top:16px;position:relative;border-radius:10px;overflow:hidden;border:.5px solid var(--line);background:#fff}
+.mirror .caption{position:absolute;top:8px;left:10px;background:rgba(0,0,0,.62);color:#fff;font-size:10.5px;padding:3px 8px;border-radius:6px;backdrop-filter:blur(4px);z-index:3}
+.mirror img{width:100%;display:block;filter:saturate(.96)}
+.mirror .ring{position:absolute;border:2.5px solid var(--danger);border-radius:18px;box-shadow:0 0 0 4px rgba(255,59,48,.18);animation:pulse 1.5s ease-in-out infinite;z-index:2}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.06);opacity:.65}}
+.mirror .callout{position:absolute;background:#1d1d1f;color:#fff;font-size:11px;padding:5px 9px;border-radius:7px;z-index:3;font-weight:500}
+.mirror .callout:after{content:"";position:absolute;width:9px;height:9px;background:#1d1d1f;transform:rotate(45deg)}
+
+.actionbar{margin-top:auto;padding-top:20px;display:flex;align-items:center;gap:10px}
+.statuschip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px}
+.statuschip.need{background:#ffeceb;color:var(--danger)}
+.statuschip.wait{background:#fff4e0;color:#c77700}
+.statuschip.ok{background:#e6f9ec;color:#1a8a3a}
+.spacer{flex:1}
+.btn{border:0;font:inherit;font-size:13px;font-weight:600;padding:8px 16px;border-radius:var(--radius-ctl);cursor:pointer}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-press)}
+.btn.ghost{background:#e6e6e9;color:var(--text)}
+.btn.linklike{background:transparent;color:var(--accent);padding:8px 6px}
+.hint{font-size:11px;color:var(--text-3);margin-top:9px}
+
+/* ===== Permissions & Status panel ===== */
+.panel{padding:26px 30px;min-height:440px}
+.panel h2{font-size:18px;font-weight:700;margin-bottom:4px}
+.panel .sub{font-size:12.5px;color:var(--text-2);margin-bottom:18px}
+.permrow{display:flex;align-items:center;gap:14px;background:#fff;border:.5px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.permrow .pic{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--card-2)}
+.permrow .pi b{font-size:13.5px}
+.permrow .pi p{font-size:12px;color:var(--text-2);margin-top:2px}
+.permrow .pi{flex:1}
+
+/* ===== Paywall ===== */
+.paywall{background:radial-gradient(120% 90% at 50% -10%,#1c1c22,#0c0c0f);padding:34px 30px 38px;color:#fff;min-height:440px}
+.paywall .pw-head{text-align:center;margin-bottom:24px}
+.paywall .pw-head h2{font-size:24px;font-weight:700}
+.paywall .pw-head p{color:#9b9ba3;font-size:13px;margin-top:8px}
+.plans{display:flex;gap:14px;justify-content:center}
+.plan{flex:1;max-width:230px;background:#16161b;border:1px solid #26262e;border-radius:14px;padding:20px 18px;display:flex;flex-direction:column}
+.plan.pro{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand),0 8px 30px rgba(58,168,147,.18)}
+.plan .pname{font-size:13px;font-weight:600;color:#c9c9d1;display:flex;align-items:center;gap:8px}
+.pro-badge{font-size:9.5px;font-weight:800;letter-spacing:.5px;background:var(--brand);color:#04201b;padding:2px 7px;border-radius:6px}
+.plan .price{font-size:34px;font-weight:800;margin:12px 0 2px;letter-spacing:-1px}
+.plan .price small{font-size:13px;font-weight:500;color:#9b9ba3}
+.plan ul{list-style:none;margin:14px 0;display:flex;flex-direction:column;gap:9px}
+.plan li{font-size:12.5px;color:#d4d4da;display:flex;gap:8px;align-items:flex-start}
+.plan li .ck{color:var(--brand);flex:0 0 auto}
+.plan li.lock{color:#7a7a84}
+.pill{margin-top:auto;border:0;font:inherit;font-size:13px;font-weight:700;padding:11px;border-radius:22px;cursor:pointer}
+.pill.white{background:#fff;color:#000}
+.pill.outline{background:transparent;color:#fff;border:1px solid #3a3a44}
+.pw-note{text-align:center;color:#6f6f78;font-size:11px;margin-top:18px}
+
+/* ===== Settings shell ===== */
+.settings{display:flex;min-height:440px}
+.set-side{width:180px;background:var(--sidebar);border-right:.5px solid var(--line);padding:16px 12px}
+.set-side .appname{font-size:15px;font-weight:700;padding:4px 8px 14px}
+.set-side a{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;font-size:12.5px;color:var(--text);text-decoration:none;margin-bottom:2px;cursor:pointer}
+.set-side a .si{width:20px;height:20px;border-radius:5px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+.set-side a.active{background:#fff;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.set-body{flex:1;padding:24px 26px}
+.set-body h2{font-size:17px;font-weight:700;margin-bottom:3px}
+.set-body .desc{font-size:12px;color:var(--text-2);margin-bottom:18px}
+.group{background:#fff;border:.5px solid var(--line);border-radius:10px;overflow:hidden}
+.grow{display:flex;align-items:center;gap:12px;padding:12px 15px;border-bottom:.5px solid var(--line)}
+.grow:last-child{border-bottom:0}
+.grow .gi{flex:1}
+.grow .gi b{font-size:13px}
+.grow .gi .cap{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.kcchip{display:inline-flex;gap:5px;align-items:center}
+.kcs{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;background:linear-gradient(#fff,#eee);border:.5px solid #d0d0d4;border-radius:6px;box-shadow:0 1px 0 #cfcfd4;font-size:12px;font-weight:600}
+.kcs .han{color:var(--brand)}
+.recbtn{font-size:11.5px;color:var(--accent);background:transparent;border:0;cursor:pointer;font-weight:600}
+/* macOS toggle */
+.toggle{width:38px;height:23px;border-radius:14px;background:#d8d8dc;position:relative;cursor:pointer;flex:0 0 auto;transition:background .2s}
+.toggle.on{background:var(--accent)}
+.toggle i{position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s}
+.toggle.on i{left:17px}
+.restore{margin-top:16px;text-align:right}
+.legend{width:760px;max-width:96vw;font-size:11.5px;color:#48484a;background:rgba(255,255,255,.7);border:.5px solid rgba(0,0,0,.08);border-radius:10px;padding:12px 16px;line-height:1.6}
+.legend b{color:#1d1d1f}
+.legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;margin-right:4px}
+</style>
+</head>
+<body>
+
+<div class="page-title">
+  <h1>WinMacKey — 디자인 목업 (Phase B)</h1>
+  <p>Visual-Design-Concept-Plan 적용 · 와이어프레임 (실제 동작 아님, 클릭으로 화면 전환)</p>
+</div>
+
+<div class="switcher" id="switcher">
+  <button data-v="onboarding" class="active">온보딩</button>
+  <button data-v="perms">권한·상태</button>
+  <button data-v="paywall">Pro 페이월</button>
+  <button data-v="settings">설정</button>
+</div>
+
+<div class="window">
+  <div class="titlebar">
+    <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+    <span class="ttl" id="winttl">WinMacKey 설정</span>
+  </div>
+
+  <!-- ========== ONBOARDING ========== -->
+  <div class="view active" data-view="onboarding">
+    <div class="ob">
+      <div class="ob-rail">
+        <div class="brandrow">
+          <img src="../../../design_asset_handoff_2026-05-30/generated/01_icon_candidate_a_right_command_han_a.png" alt="WinMacKey">
+          <b>WinMacKey</b>
+        </div>
+        <div class="step" data-s="0"><span class="dot">✓</span>시작하기</div>
+        <div class="step" data-s="1"><span class="dot">1</span>손쉬운 사용</div>
+        <div class="step" data-s="2"><span class="dot">2</span>입력 모니터링</div>
+        <div class="step" data-s="3"><span class="dot">3</span>완료</div>
+        <div class="progress">진행 <span id="pct">0</span>%<div class="bar"><i id="barfill" style="width:0"></i></div></div>
+      </div>
+      <div class="ob-body">
+
+        <!-- Step 0: Welcome -->
+        <div class="pane welcome active" data-p="0">
+          <img class="appicon" src="../../../design_asset_handoff_2026-05-30/generated/01_icon_candidate_a_right_command_han_a.png" alt="">
+          <h2>WinMacKey에 오신 걸 환영합니다</h2>
+          <p class="lead">오른쪽 Command 키 하나로 한/영을 전환합니다.<br>설정은 30초면 끝나요.</p>
+          <div class="keycap-demo">
+            <span class="kc">⌘</span>
+            <span class="kc"><span class="han">한</span></span>
+            <span class="swaparrow">⇄</span>
+            <span class="kc">A</span>
+          </div>
+          <div class="actionbar"><div class="spacer"></div><button class="btn ghost" onclick="setStep(1)">건너뛰기</button><button class="btn primary" onclick="setStep(1)">시작하기</button></div>
+        </div>
+
+        <!-- Step 1: Accessibility -->
+        <div class="pane" data-p="1">
+          <span class="step-tag" style="background:#e9f1ff;color:#0058c8;">STEP 1 / 3 · 손쉬운 사용</span>
+          <h2>손쉬운 사용 권한 켜기</h2>
+          <div class="priming">
+            <div class="ic">♿︎</div>
+            <div class="txt">
+              <b>WinMacKey가 키 입력을 Mac 방식으로 바꾸려면 필요해요.</b>
+              <p>활성 앱과 입력 위치를 인식해 한/영 전환을 정확히 처리합니다.</p>
+              <div class="reassure">🔒 키 입력을 저장하거나 외부로 전송하지 않습니다.</div>
+            </div>
+          </div>
+          <div class="mirror">
+            <span class="caption">실제로 보게 될 화면: 손쉬운 사용</span>
+            <img src="../references/karabiner/settings-accessibility.png" alt="Accessibility 설정">
+            <div class="ring" style="right:4%;top:30%;width:54px;height:26px"></div>
+            <div class="callout" style="right:16%;top:64%">이 토글을 켜세요 →</div>
+          </div>
+          <p class="hint">토글을 켤 때 Touch ID나 암호를 물어볼 수 있어요 — 정상입니다.</p>
+          <div class="actionbar">
+            <span class="statuschip need" id="chip1">● 권한 필요</span>
+            <div class="spacer"></div>
+            <button class="btn ghost" onclick="grant(1)">권한 부여됨(시뮬)</button>
+            <button class="btn primary">시스템 설정 열기</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Input Monitoring (intentionally different color theme) -->
+        <div class="pane" data-p="2">
+          <span class="step-tag" style="background:#eaf7f1;color:#0c7a55;">STEP 2 / 3 · 두 번째 권한 (다른 화면!)</span>
+          <h2>입력 모니터링 권한 켜기</h2>
+          <div class="priming">
+            <div class="ic" style="background:#e8f7f0;color:#0c7a55;">⌨︎</div>
+            <div class="txt">
+              <b>방금과 비슷해 보이지만 다른 권한이에요.</b>
+              <p>키 입력 자체를 받아 한/영 키로 변환하려면 입력 모니터링이 필요합니다.</p>
+              <div class="reassure" style="color:#0c7a55">🔒 기록·전송 없이 변환 즉시 폐기합니다.</div>
+            </div>
+          </div>
+          <div class="mirror">
+            <span class="caption" style="background:rgba(12,122,85,.85)">실제로 보게 될 화면: 입력 모니터링</span>
+            <img src="../references/karabiner/settings-input-monitoring.png" alt="Input Monitoring 설정">
+            <div class="ring" style="right:4%;top:30%;width:54px;height:26px;border-color:#0c7a55;box-shadow:0 0 0 4px rgba(12,122,85,.2)"></div>
+            <div class="callout" style="left:10px;top:8px;background:#0c7a55">⚠︎ STEP 1과 다른 화면이에요</div>
+          </div>
+          <p class="hint">"아까 켰는데?"가 아닙니다 — 별도의 두 번째 권한입니다.</p>
+          <div class="actionbar">
+            <span class="statuschip need" id="chip2">● 권한 필요</span>
+            <div class="spacer"></div>
+            <button class="btn ghost" onclick="grant(2)">권한 부여됨(시뮬)</button>
+            <button class="btn primary">시스템 설정 열기</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Done -->
+        <div class="pane welcome" data-p="3">
+          <div style="font-size:54px;color:var(--brand);margin-bottom:6px">✓</div>
+          <h2>준비 완료!</h2>
+          <p class="lead">권한이 모두 활성화됐어요. 마지막으로 한 번 재실행하면 적용됩니다.</p>
+          <div class="keycap-demo" style="margin-top:24px">
+            <span class="kc">⌘</span><span class="swaparrow">→</span><span class="kc"><span class="han">한</span></span>
+            <span style="font-size:12px;color:var(--text-2);margin-left:6px">지금 오른쪽 ⌘를 눌러보세요</span>
+          </div>
+          <div class="actionbar"><div class="spacer"></div><button class="btn ghost">나중에</button><button class="btn primary">WinMacKey 재실행</button></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== PERMISSIONS & STATUS ========== -->
+  <div class="view" data-view="perms">
+    <div class="panel">
+      <h2>권한 · 상태</h2>
+      <p class="sub">실행할 때마다 권한을 다시 확인합니다. 문제가 있으면 조용히 넘어가지 않고 여기에 표시돼요.</p>
+      <div class="permrow">
+        <div class="pic" style="color:var(--brand)">♿︎</div>
+        <div class="pi"><b>손쉬운 사용 (Accessibility)</b><p>한/영 전환 처리를 위해 필요</p></div>
+        <span class="statuschip ok">● 활성</span>
+      </div>
+      <div class="permrow">
+        <div class="pic" style="color:var(--brand)">⌨︎</div>
+        <div class="pi"><b>입력 모니터링 (Input Monitoring)</b><p>키 입력 수신·변환</p></div>
+        <span class="statuschip wait">● 부여됨 · 재실행 필요</span>
+      </div>
+      <div class="permrow">
+        <div class="pic" style="color:var(--text-3)">🧩</div>
+        <div class="pi"><b>드라이버 확장 (선택)</b><p>일부 외장 키보드 호환용 · 미설정</p></div>
+        <span class="statuschip need">● 권한 필요</span>
+      </div>
+      <p class="hint" style="margin-top:14px">상태점은 브랜드/성공색(읽기 전용), "시스템 설정 열기" 같은 동작 버튼은 시스템 블루를 사용합니다.</p>
+      <div style="margin-top:8px"><button class="btn primary">시스템 설정 열기</button> <button class="btn linklike">재인증 / 문제 해결 →</button></div>
+    </div>
+  </div>
+
+  <!-- ========== PAYWALL ========== -->
+  <div class="view" data-view="paywall">
+    <div class="paywall">
+      <div class="pw-head">
+        <h2>키보드를 바꿀 때마다 자동으로 전환</h2>
+        <p>외장 키보드를 연결/분리하면 프로필이 알아서 바뀝니다. 더 이상 수동 전환은 그만.</p>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <div class="pname">Free</div>
+          <div class="price">₩0</div>
+          <ul>
+            <li><span class="ck">✓</span> 오른쪽 ⌘ 한/영 전환</li>
+            <li><span class="ck">✓</span> 키 리매핑 · 프로파일 수동 전환</li>
+            <li><span class="ck">✓</span> 메뉴바 · 설정 전체</li>
+            <li class="lock"><span>🔒</span> 키보드별 자동 전환</li>
+          </ul>
+          <button class="pill outline">현재 사용 중</button>
+        </div>
+        <div class="plan pro">
+          <div class="pname">Pro <span class="pro-badge">PRO</span></div>
+          <div class="price">₩9,900 <small>/ 1회</small></div>
+          <ul>
+            <li><span class="ck">✓</span> <b>Free의 모든 기능</b></li>
+            <li><span class="ck">✓</span> <b>키보드 연결 시 프로필 자동 전환</b></li>
+            <li><span class="ck">✓</span> 디바이스별 규칙</li>
+            <li><span class="ck">✓</span> 평생 업데이트 (한 번 결제)</li>
+          </ul>
+          <button class="pill white">Pro 잠금 해제</button>
+        </div>
+      </div>
+      <p class="pw-note">결제는 브라우저(Gumroad)에서 완료됩니다 · 카드 없이 둘러보기 가능</p>
+    </div>
+  </div>
+
+  <!-- ========== SETTINGS ========== -->
+  <div class="view" data-view="settings">
+    <div class="settings">
+      <div class="set-side">
+        <div class="appname">WinMacKey</div>
+        <a class="active"><span class="si">⌘</span>키매핑</a>
+        <a><span class="si" style="background:#5e5ce6">▦</span>프로파일</a>
+        <a><span class="si" style="background:#ff9500">⌥</span>단축키</a>
+        <a><span class="si" style="background:var(--brand)">✓</span>권한·상태</a>
+        <a><span class="si" style="background:#8e8e93">⚙</span>고급</a>
+      </div>
+      <div class="set-body">
+        <h2>키매핑</h2>
+        <p class="desc">오른쪽 modifier 키를 한/영 전환에 매핑합니다.</p>
+        <div class="group">
+          <div class="grow">
+            <div class="gi"><b>오른쪽 Command → 한/영</b><div class="cap">로컬 Mac 입력소스 전환</div></div>
+            <span class="kcchip"><span class="kcs">⌘</span><span style="color:var(--brand)">⇄</span><span class="kcs"><span class="han">한</span>/A</span></span>
+            <button class="recbtn">변경</button>
+          </div>
+          <div class="grow">
+            <div class="gi"><b>오른쪽 Option → 사용 안 함</b><div class="cap">비워두려면 단축키 입력</div></div>
+            <button class="recbtn">단축키 기록…</button>
+            <div class="toggle"><i></i></div>
+          </div>
+          <div class="grow">
+            <div class="gi"><b>VDI 모드 (F16 릴레이)</b><div class="cap">가상 데스크톱에서 오른쪽 Alt로 패스스루</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"><i></i></div>
+          </div>
+        </div>
+        <div class="restore"><button class="btn linklike">기본값으로 되돌리기</button></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <b>컬러 분배 규칙 (§2-5)</b> —
+  <span class="sw" style="background:#007AFF"></span><b>시스템 블루</b>: 토글·버튼·선택 등 <i>조작 가능한 컨트롤 전용</i> ·
+  <span class="sw" style="background:#3AA893"></span><b>브랜드 민트/틸</b>: 아이콘·키캡·읽기전용 상태점·Pro 뱃지 등 <i>비조작 그래픽 전용</i>.
+  STEP 1(블루)과 STEP 2(그린) 테마를 의도적으로 달리해 "같은 화면 착각·이탈"을 방지.
+</div>
+
+<script>
+// view switcher
+document.getElementById('switcher').addEventListener('click',e=>{
+  if(e.target.tagName!=='BUTTON')return;
+  const v=e.target.dataset.v;
+  document.querySelectorAll('#switcher button').forEach(b=>b.classList.toggle('active',b===e.target));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.dataset.view===v));
+  const t={onboarding:'WinMacKey 설정 — 시작하기',perms:'WinMacKey — 권한·상태',paywall:'WinMacKey Pro',settings:'WinMacKey 설정'};
+  document.getElementById('winttl').textContent=t[v];
+});
+// onboarding step machine
+let granted={1:false,2:false};
+function setStep(n){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',+p.dataset.p===n));
+  document.querySelectorAll('.step').forEach(s=>{
+    const i=+s.dataset.s;
+    s.classList.toggle('active',i===n);
+    s.classList.toggle('done',i<n);
+  });
+  const pct=Math.round(n/3*100);
+  document.getElementById('pct').textContent=pct;
+  document.getElementById('barfill').style.width=pct+'%';
+}
+function grant(step){
+  granted[step]=true;
+  const chip=document.getElementById('chip'+step);
+  chip.className='statuschip ok';chip.textContent='● 활성';
+  setTimeout(()=>setStep(step+1),450);
+}
+setStep(0);
+</script>
+</body>
+</html>

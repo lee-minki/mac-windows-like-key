@@ -55,6 +55,12 @@ class KeyInterceptor: ObservableObject {
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
 
+    // 터미널 앱 포커스 여부 (Ghostty/iTerm2/Terminal/Warp/Alacritty/kitty 등 — ContextManager 화이트리스트).
+    // true 면 `beginInputSourceCommitWindow` + handleMappedKey 의 buffer 분기 모두 비활성화.
+    // 터미널은 `handleTerminalTrigger` → `toggleDirectly()` 가 처리하므로 220ms commit window 가 불필요하고,
+    // SSH/escape sequence(ESC, Backspace, paste 등)과 충돌해 화면 깨짐(P10 / v1.6.1 hotfix) 발생.
+    var isTerminalAppFocused: Bool = false
+
     // Mac 원격접속 앱 포커스 여부 (Screen Sharing, ARD, Jump Desktop 등).
     // true 면 F16 패스스루 — 원격 Mac 의 WinMacKey 가 자체적으로 한영전환 처리.
     // 로컬에서는 입력소스 합성 안 함 (로컬 입력소스 변경 부작용 방지).
@@ -331,6 +337,11 @@ class KeyInterceptor: ObservableObject {
 
     func beginInputSourceCommitWindow() {
         guard !isVdiAppFocused else { return }
+        // P10 fix (v1.6.1): 터미널은 toggleDirectly() 가 직접 TIS 토글하므로 commit window 불필요.
+        // 220ms 동안 ESC/Backspace/paste 가 buffer 됐다가 replay 되면 SSH escape sequence 와 충돌해 화면 깨짐.
+        // (참고: 정상 분기는 WinMacKeyApp.onInputSourceToggle 에서 isTerminalMode 일 때 handleTerminalTrigger 로 보내지만,
+        //  focus race 시 풀리는 사례가 있어 KeyInterceptor 측에서도 방어 — double-defense.)
+        guard !isTerminalAppFocused else { return }
         startBufferedReplayWindow(.inputSourceCommit, timeout: inputSourceCommitTimeout, timeoutReason: "timeout")
     }
 
@@ -478,7 +489,10 @@ class KeyInterceptor: ObservableObject {
 
         logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
 
-        if bufferedReplayWindow != .none {
+        // P10 fix (v1.6.1): 터미널 컨텍스트는 buffer 안 함 (focus race 안전망).
+        // bufferedReplayWindow 가 어떤 이유로 열려 있어도 (이전 비-터미널 앱에서 시작했고 아직 안 닫힘),
+        // 터미널로 전환된 직후에는 SSH escape sequence 충돌을 피하기 위해 즉시 통과시킨다.
+        if bufferedReplayWindow != .none && !isTerminalAppFocused {
             bufferKeyEvent(finalEvent)
             return nil
         }
