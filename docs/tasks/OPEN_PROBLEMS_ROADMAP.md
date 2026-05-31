@@ -1,7 +1,7 @@
 # Open Problems Roadmap
 
-> Status: **v0.5.0 — v1.6.1 Published (P10 FIXED), P9 진단 대기, P11/P12 commit**
-> 작성: 2026-05-16, 갱신: 2026-05-31
+> Status: **v0.6.0 — v1.6.2 Published (P10/P13 FIXED), P9 진단 대기, P11/P12 commit**
+> 작성: 2026-05-16, 갱신: 2026-05-31 (same-day sequential 핫픽스 v1.6.0 → v1.6.1 → v1.6.2)
 > 작성자: Claude + lee-minki
 >
 > 이 문서가 합의된 후에만 새 코드 변경 가능.
