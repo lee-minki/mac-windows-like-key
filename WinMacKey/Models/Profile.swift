@@ -114,14 +114,27 @@ enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
     }
 
     /// VDI 자동 매핑 default (사용자가 안 만지면 이 값).
-    /// 룰: "사용자가 키캡 보고 누른 그대로 Windows 에서 동작" — 표준 Win 키 배열로 보냄.
+    /// **v1.8.1 사용자 명시 (release blocker fix):**
+    ///   - 4키: Ctrl · Win · Win · Alt   ← 표준 Windows 4키 배열 (양쪽 Win 키 사용 가능)
+    ///   - 3키: Ctrl · Win · Alt          ← 표준 Windows 3키 배열
+    /// 룰: 키보드 형태(Mac/Win)와 무관하게, VDI 에서는 **표준 Windows 키 배열** 로 보냄.
+    /// 사용자가 Mac 키보드 쓰든 Win 키보드 쓰든 VDI 안에서 Windows 단축키 (Ctrl+C 등) 가 일관되게 동작.
     var vdiDefaults: [Int64] {
         switch self {
-        case .mac4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]  // Fn·Ctrl·Win·Alt
-        case .mac3key: return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]  // Ctrl·Win·Alt
-        case .win3key: return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]  // Ctrl·Win·Alt (그대로)
-        case .win4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
-        case .custom: return []
+        case .mac4key:
+            // [Fn, Ctrl, Opt, Cmd] → VDI [Ctrl, Win, Win, Alt]
+            return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Command), Int64(kVK_Option)]
+        case .mac3key:
+            // [Ctrl, Opt, Cmd] → VDI [Ctrl, Win, Alt]
+            return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
+        case .win3key:
+            // [Ctrl, Opt, Cmd] (macOS 가 Win→Cmd/Alt→Opt 매핑) → VDI [Ctrl, Win, Alt]
+            return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
+        case .win4key:
+            // [Fn, Ctrl, Opt, Cmd] → VDI [Ctrl, Win, Win, Alt]
+            return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Command), Int64(kVK_Option)]
+        case .custom:
+            return []
         }
     }
 }

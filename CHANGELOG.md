@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.8.1] — 2026-06-02
+
+**v1.8.0 Release Blocker 핫픽스 — 사용자 보고 4건 일괄 fix.** v1.8.0 은 GitHub Pre-release 로 demote, v1.7.0 이 일시 Latest 였다가 본 릴리스로 다시 Latest 승격.
+
+### Fixed
+- **HIGH 2 · VDI 4키 자동 매핑 사용자 의도 불일치** (`WinMacKey/Models/Profile.swift`).
+  사용자 명시 "VDI는 무조건 4키 = CTRL WIN WIN ALT" 와 v1.8.0 의 `Fn·Ctrl·Win·Alt` 가 명백히 다름.
+  수정: `KeyboardLayout.vdiDefaults` 의 mac4key/win4key 를 `[Ctrl, Cmd, Cmd, Opt]` (= **Ctrl·Win·Win·Alt**) 로 변경. 3키는 `Ctrl·Win·Alt` 그대로 (변경 없음).
+- **HIGH 3 · "이 키보드에만" UI 안내와 동작 불일치** (`WinMacKey/Views/ModifierLayoutView.swift`).
+  v1.8.0 UI 는 "외장 자동 바인딩 — 첫 입력 시 식별" 이라고 했지만 실제 코드는 저장 시점 `lastActiveKeyboard` 즉시 사용 (nil 이면 silent 로 "모든 키보드" 와 같은 상태 저장 = UI 거짓말).
+  수정: ① 라디오 라벨을 동적으로 (`lastActiveKeyboard` 있으면 "현재 활성 외장 [이름] 자동 바인딩", nil 이면 "⚠️ 외장 키보드에서 키를 1번 누른 뒤 저장하세요"). ② nil 인데 `.thisKeyboardAuto` 선택했으면 `saveAndClose` 가 저장 멈춤 (`LogService.warning` 로깅).
+- **HIGH 4 · 편집 시 기존 `deviceIdentifier` 덮어쓰기 위험** (`WinMacKey/Views/ModifierLayoutView.swift`).
+  v1.8.0 의 `startEditing` 이 `bindingScope` 복원 안 함 → 기본값 `.thisKeyboardAuto` 로 진입 → 사용자가 명시적으로 안 만지면 저장 시 deviceIdentifier 가 `lastActiveKeyboard` (또는 nil) 로 덮어쓰임.
+  수정: `startEditing` 에서 `bindingScope = .decideLater` 로 기본값 설정 → 사용자가 명시 변경 안 하면 기존 `deviceIdentifier` 보존.
+
+### Added
+- **회귀 가드 강화** (`tests/keyboard_layout_smoke.swift`):
+  - Invariant 8 신규: `mac4key.vdiDefaults == win4key.vdiDefaults == [Ctrl, Cmd, Cmd, Opt]` (= Ctrl·Win·Win·Alt) 명시 검증. HIGH 2 회귀 차단.
+  - 총 12 invariants → 13 invariants.
+
+### Note
+- Info.plist 1.8.0/23 → **1.8.1/24**, `MARKETING_VERSION 1.8.1`, `CURRENT_PROJECT_VERSION 24`.
+- **HIGH 1 (physicalKeys 순서 = Fn·Ctrl·Opt·Cmd)** 는 사용자 컨펌으로 **현재 코드 유지 결정** (Mac 노트북 스페이스 좌측 좌→우, 사용자 mental model 일치). 검수자 주장 "Cmd·Fn·Opt·Ctrl" 는 사용자 의도와 다름.
+- **MEDIUM 5 (테스트 fixate)** 와 **MEDIUM 6 (README/Help/CHANGELOG 동기화)** 는 별도 follow-up (v1.8.2 또는 v1.9.0). 이번 hotfix 는 코드 동작 결함 중심.
+- v1.6.0~v1.8.0 의 모든 이전 fix 보존 (P10 isTerminal, P13 IME, adaptive timeout, main-thread contract, 위자드 v2 mental model).
+
+---
+
 ## [1.8.0] — 2026-06-01
 
 **위자드 v2 전면 재설계.** 사용자 보고 UX 결함 6건 일괄 해소 — 키보드 형태 mental model + 적응형 매핑 표 + VDI 자동 + 외장 바인딩.

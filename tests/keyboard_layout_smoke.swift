@@ -54,22 +54,32 @@ struct KeyboardLayoutSmoke {
         }
         print("  - Invariant 6 (vdiDefaults length matches physicalKeys) ✓")
 
-        // === Invariant 7: Mac 계열 vdiDefaults — Cmd 위치가 Win 키코드여야 함 ===
-        // mac3key: [Ctrl, Opt, Cmd] → vdi [Ctrl, Win, Alt]
+        // === Invariant 7: 3키 VDI = Ctrl·Win·Alt (mac3key + win3key 둘 다) ===
         let mac3vdi = KeyboardLayout.mac3key.vdiDefaults
         guard mac3vdi == [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)] else {
-            print("keyboard_layout_smoke: FAIL — mac3key vdiDefaults should be Ctrl/Cmd(=Win)/Opt(=Alt)")
+            print("keyboard_layout_smoke: FAIL — mac3key vdiDefaults should be Ctrl/Win/Alt")
             exit(1)
         }
-        print("  - Invariant 7 (Mac3key VDI defaults = Ctrl/Win/Alt) ✓")
-
-        // === Invariant 8: Win 계열 vdiDefaults — 이미 Win/Alt 그대로 ===
         let win3vdi = KeyboardLayout.win3key.vdiDefaults
         guard win3vdi == [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)] else {
-            print("keyboard_layout_smoke: FAIL — win3key vdiDefaults should match win key codes")
+            print("keyboard_layout_smoke: FAIL — win3key vdiDefaults should be Ctrl/Win/Alt")
             exit(1)
         }
-        print("  - Invariant 8 (Win3key VDI defaults consistent) ✓")
+        print("  - Invariant 7 (3키 VDI defaults = Ctrl/Win/Alt) ✓")
+
+        // === Invariant 8 (v1.8.1 신규): 4키 VDI = Ctrl·Win·Win·Alt (사용자 명시) ===
+        let mac4vdi = KeyboardLayout.mac4key.vdiDefaults
+        let expected4 = [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Command), Int64(kVK_Option)]
+        guard mac4vdi == expected4 else {
+            print("keyboard_layout_smoke: FAIL — mac4key vdiDefaults should be Ctrl/Win/Win/Alt, got \(mac4vdi)")
+            exit(1)
+        }
+        let win4vdi = KeyboardLayout.win4key.vdiDefaults
+        guard win4vdi == expected4 else {
+            print("keyboard_layout_smoke: FAIL — win4key vdiDefaults should be Ctrl/Win/Win/Alt, got \(win4vdi)")
+            exit(1)
+        }
+        print("  - Invariant 8 (4키 VDI defaults = Ctrl/Win/Win/Alt, v1.8.1 fix) ✓")
 
         // === Invariant 9: capLabels 텍스트 검증 ===
         guard KeyboardLayout.mac4key.capLabels == ["Fn", "Ctrl", "Opt", "Cmd"] else {

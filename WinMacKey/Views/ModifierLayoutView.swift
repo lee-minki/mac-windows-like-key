@@ -388,7 +388,7 @@ struct ModifierLayoutView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("저장 후 어디에 적용?").font(.caption).foregroundStyle(.secondary)
-                radioRow("이 키보드에만  (외장 자동 바인딩 — 첫 입력 시 식별)",
+                radioRow(bindThisLabel(),
                          selected: bindingScope == .thisKeyboardAuto) {
                     bindingScope = .thisKeyboardAuto
                 }
@@ -454,7 +454,21 @@ struct ModifierLayoutView: View {
                 }
             }
         }
+        // 4) v1.8.1 — bindingScope 복원 (HIGH 4 fix)
+        //    편집 진입 기본값을 .decideLater 로 두면, 사용자가 명시적으로 안 바꾸면 기존 deviceIdentifier 보존.
+        //    이전 v1.8.0 은 .thisKeyboardAuto 기본값이라 사용자 의도와 무관하게 lastActiveKeyboard 로 덮어쓸 위험.
+        bindingScope = .decideLater
         currentStep = 2
+    }
+
+    /// v1.8.1 — "이 키보드에만" 라디오의 동적 라벨 (HIGH 3 fix).
+    /// lastActiveKeyboard 가 nil 이면 사용자에게 명확히 안내 (이전 'first 입력 시 식별' 문구는 동작 불일치 거짓말).
+    private func bindThisLabel() -> String {
+        if let device = appState.lastActiveKeyboard {
+            return "이 키보드에만  (현재 활성 외장 \(device.displayName) 자동 바인딩)"
+        } else {
+            return "이 키보드에만  ⚠️ 외장 키보드에서 키를 1번 누른 뒤 저장하세요"
+        }
     }
 
     private func inferLayout(from profile: SavedKeyboardProfile) -> KeyboardLayout {
@@ -508,11 +522,21 @@ struct ModifierLayoutView: View {
         }
 
         // 바인딩 스코프 → deviceIdentifier 자동 설정
+        // v1.8.1 — HIGH 3 fix: "이 키보드에만" 선택했는데 lastActiveKeyboard 가 nil 이면 저장 막음.
+        // 이전 v1.8.0 은 silent 로 nil 저장 (= "모든 키보드" 와 같은 상태) → UI 안내 거짓말.
         let lastActiveDevice = appState.lastActiveKeyboard
+        if bindingScope == .thisKeyboardAuto && lastActiveDevice == nil {
+            LogService.shared.warning(
+                "위자드 저장 막힘: 'thisKeyboardAuto' 선택했지만 lastActiveKeyboard nil — 사용자에게 외장 키 입력 안내 필요",
+                category: "Wizard"
+            )
+            // TODO(v1.8.x): UI Alert 추가 — 현재는 라디오 라벨이 ⚠️ 안내로 대체 (bindThisLabel).
+            return  // 저장 멈춤
+        }
         let deviceId: KeyboardDeviceIdentifier? = {
             switch bindingScope {
-            case .thisKeyboardAuto: return lastActiveDevice  // 마지막 활성 외장 자동 바인딩
-            case .allKeyboards:     return nil               // 기본 프로필
+            case .thisKeyboardAuto: return lastActiveDevice
+            case .allKeyboards:     return nil
             case .decideLater:      return nil
             }
         }()
