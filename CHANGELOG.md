@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.8.0] — 2026-06-01
+
+**위자드 v2 전면 재설계.** 사용자 보고 UX 결함 6건 일괄 해소 — 키보드 형태 mental model + 적응형 매핑 표 + VDI 자동 + 외장 바인딩.
+
+### Changed
+- **위자드 mental model 전환 — "물리 키캡 → 동작"** (`WinMacKey/Models/Profile.swift`, `WinMacKey/Views/ModifierLayoutView.swift`).
+  v1.6.0~v1.7.0 의 "추상 키코드 → 키코드" 추상 모델이 사용자 직관과 충돌(특히 외장 Win 키보드 사용자). v2 는 사용자가 자기 키보드 형태(Mac 4키/Mac 3키/Win 3키/Win 4키)를 선택하면 행이 자동 구성 + 행 라벨이 실제 키캡 텍스트(Ctrl·Win·Alt 등) 로 표시. 매핑 의미가 "내 키보드의 Win 키를 누르면 Mac 에서 Cmd 동작" 식으로 직관적.
+- **`SavedKeyboardProfile.keyboardLayout: KeyboardLayout?`** 옵셔널 필드 추가. 기존 v1.7.x 프로필 (= nil) 정상 로드, 편집 시 form 자동 추론 (legendStyle + Fn 포함 여부).
+
+### Added
+- **위자드 v2 3화면** (`ModifierLayoutView`):
+  - **Step 1 시작** — 프로필 이름 + 키보드 형태 라디오 (4종) + 의도 라디오 (한/영 전환만 vs 키 배치 바꾸기)
+  - **Step 2 매핑 표** (의도 = "키 배치 바꾸기" 일 때만) — 키보드 형태에 따라 3행/4행 자동 구성, 행 라벨 = 실제 키캡. Mac 측 picker 만 노출, VDI 는 자동 (접힘 "고급" 에서 직접 편집). default 회색 "(기본 — 안 바꿈)" 명시.
+  - **Step 3 확인·저장** — 미리보기 + 바인딩 스코프 라디오 (이 키보드 자동 바인딩 / 모든 키보드 / 나중에)
+- **VDI 자동 매핑 룰** (`KeyboardLayout.vdiDefaults`): Mac 4키 → Fn·Ctrl·Win·Alt, Mac 3키 → Ctrl·Win·Alt, Win 키보드 → 그대로. 사용자가 안 만져도 표준 Win 키 배열.
+- **외장 키보드 자동 바인딩**: Step 3 의 "이 키보드에만" 선택 시 `appState.lastActiveKeyboard` 를 `deviceIdentifier` 로 자동 설정.
+- **회귀 가드 스모크** `tests/keyboard_layout_smoke.swift` (12 invariants) — KeyboardLayout 의 physicalKeys/capLabels/vdiDefaults 일관성 + SavedKeyboardProfile Codable round-trip + legacy v1.7.x 프로필 로드 호환.
+
+### Fixed (사용자 보고 UX 결함 6건)
+- **"키캡 표기" 토글의 의미 불명** — 제거. 키보드 형태가 라벨 자동 결정.
+- **윈도우 너비 부족 ("Windo..." 잘림)** — DashboardView 의 `frame(width: 550, ...)` 를 `frame(minWidth: 680, ...)` 로 확대.
+- **외장 키보드 흐름 안내 부재** — Step 3 의 "바인딩 스코프" 라디오로 명시.
+- **3키 키보드 무지원 (Fn 항상 표시)** — 키보드 형태 선택에 따라 행 자동 (3행 / 4행).
+- **"바꾸지 않음" 의도 불명** — default 회색 + "(기본 — 안 바꿈)" 명시. 사용자가 다 채울 필요 없음.
+- **VDI 표준 매핑 (4키→Ctrl·Win·Win·Alt, 3키→Ctrl·Win·Alt) 수동 입력** — 자동 default. 사용자는 Mac 측만 결정.
+
+### Note
+- Info.plist 1.7.0/22 → **1.8.0/23**, `MARKETING_VERSION 1.8.0`, `CURRENT_PROJECT_VERSION 23`.
+- 기존 v1.7.x 프로필 (keyboardLayout=nil) 호환 — 편집 시 legendStyle + Fn 포함 여부로 layout 자동 추론.
+- v1.6.0~v1.7.0 의 모든 기존 fix (P10 SSH 가드, P13 Word IME, adaptive timeout, main-thread contract, 회귀 가드 13 smoke) 전부 보존 + 신규 12 invariants 추가 → 총 14 smoke.
+
+---
+
 ## [1.7.0] — 2026-05-31
 
 **"안정화 + 정리" 릴리스.** v1.6.0 → v1.6.1 → v1.6.2 의 같은 날 sequential hotfix 3건 이후, 핫픽스의 공통 메커니즘(`bufferedReplayWindow`)을 전수 리뷰해 구조적 결함 해소 + 회귀 가드 테스트 추가.

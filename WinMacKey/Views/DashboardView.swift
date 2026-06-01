@@ -36,7 +36,7 @@ struct DashboardView: View {
                 }
                 .tag(2)
         }
-        .frame(width: 550, height: 450)
+        .frame(minWidth: 680, minHeight: 540)  // v1.8.0 — 위자드 v2 (라디오 + 적응형 표 + 외장 바인딩) 가 잘리지 않도록 너비 확보
         // P2 / M3 — first-seen prompt (보조 — MenuBarView 가 주).
         // Settings 윈도우가 열려 있을 때 새 키보드 입력이 오면 여기서도 sheet 표시.
         .sheet(item: $appState.firstSeenKeyboardCandidate) { device in

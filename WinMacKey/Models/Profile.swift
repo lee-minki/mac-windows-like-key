@@ -1,6 +1,50 @@
 import Foundation
 import Carbon.HIToolbox
 
+/// 모디파이어 키 라벨 유틸 (v1.8.0 — `Profile.summary` + `ModifierLayoutView` 공용).
+/// SwiftUI 의존 없이 Models·Services·smoke 테스트 어디서나 사용 가능.
+struct ModifierSlot: Identifiable, Equatable {
+    let id: UUID
+    let keyCode: Int64
+    var label: String
+
+    static func label(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String {
+        switch Int(keyCode) {
+        case kVK_Function: return "Fn"
+        case kVK_Control: return "Ctrl"
+        case kVK_Option: return style == .windows ? "Alt" : "Opt"
+        case kVK_Command: return style == .windows ? "Win" : "Cmd"
+        case kVK_Shift: return "Shift"
+        case kVK_RightCommand: return style == .windows ? "RWin" : "RCmd"
+        case kVK_RightOption: return style == .windows ? "RAlt" : "ROpt"
+        case kVK_RightControl: return "RCtrl"
+        case kVK_RightShift: return "RShift"
+        case kVK_CapsLock: return "Caps"
+        default: return "0x\(String(keyCode, radix: 16, uppercase: true))"
+        }
+    }
+
+    static func detailedLabel(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String {
+        let primary = label(for: keyCode, style: style)
+        let macLabel = label(for: keyCode, style: .mac)
+        if style == .windows && primary != macLabel {
+            return "\(primary) (\(macLabel))"
+        }
+        return primary
+    }
+
+    static func secondaryLabel(for keyCode: Int64, style: KeyboardLegendStyle = .mac) -> String? {
+        guard style == .windows else { return nil }
+        switch Int(keyCode) {
+        case kVK_Command: return "Cmd 입력"
+        case kVK_Option: return "Opt 입력"
+        case kVK_RightCommand: return "RCmd 입력"
+        case kVK_RightOption: return "ROpt 입력"
+        default: return nil
+        }
+    }
+}
+
 enum KeyboardLegendStyle: String, Codable, CaseIterable, Hashable {
     case mac
     case windows
@@ -16,6 +60,68 @@ enum KeyboardLegendStyle: String, Codable, CaseIterable, Hashable {
         switch self {
         case .mac: return "Ctrl · Opt · Cmd · Fn"
         case .windows: return "Ctrl · Win · Alt · Fn"
+        }
+    }
+}
+
+/// v1.8.0 — 키보드 물리 형태 분류 (위자드 v2 의 핵심 mental model 단위).
+/// 사용자가 자기 키보드의 실제 키캡 배열을 선택 → 위자드 표가 그에 맞춰 자동 구성된다.
+/// 옵셔널이라 기존 v1.7.x 프로필 (= layout 정보 없음) 도 정상 로드 (Codable 호환).
+enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
+    /// 맥북 내장 또는 외장 4키 Mac (Fn · Ctrl · Opt · Cmd)
+    case mac4key
+    /// 외장 Mac 3키 (Ctrl · Opt · Cmd) — Apple Magic Keyboard, Keychron K6 등
+    case mac3key
+    /// 외장 Windows 3키 (Ctrl · Win · Alt) — 일반 PC 키보드
+    case win3key
+    /// 외장 Windows 4키 (Fn · Ctrl · Win · Alt) — 일부 노트북식 키캡
+    case win4key
+    /// 사용자가 직접 슬롯·매핑을 정의 (v1.7.x 이전 호환 + 비표준 키보드)
+    case custom
+
+    var title: String {
+        switch self {
+        case .mac4key: return "맥북 내장 (Fn · Ctrl · Opt · Cmd)"
+        case .mac3key: return "외장 Mac 3키 (Ctrl · Opt · Cmd)"
+        case .win3key: return "외장 Windows 3키 (Ctrl · Win · Alt)"
+        case .win4key: return "외장 Windows 4키 (Fn · Ctrl · Win · Alt)"
+        case .custom: return "사용자 정의"
+        }
+    }
+
+    /// 형태가 결정되면 물리 키캡 (사용자가 보는 라벨) 도 정해진다.
+    /// 표의 행 라벨 = 이 배열.
+    var physicalKeys: [Int64] {
+        switch self {
+        case .mac4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+        case .mac3key: return [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+        case .win3key: return [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]  // macOS 가 Win 키보드 받을 때: Win→Cmd, Alt→Opt
+        case .win4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+        case .custom: return []  // 사용자가 직접 정의
+        }
+    }
+
+    /// 키캡 표시용 라벨 (사용자가 화면에서 보는 텍스트). physicalKeys 와 같은 순서.
+    /// Mac 계열은 Cmd/Opt 그대로, Win 계열은 Win/Alt 로 표기.
+    var capLabels: [String] {
+        switch self {
+        case .mac4key: return ["Fn", "Ctrl", "Opt", "Cmd"]
+        case .mac3key: return ["Ctrl", "Opt", "Cmd"]
+        case .win3key: return ["Ctrl", "Win", "Alt"]
+        case .win4key: return ["Fn", "Ctrl", "Win", "Alt"]
+        case .custom: return []
+        }
+    }
+
+    /// VDI 자동 매핑 default (사용자가 안 만지면 이 값).
+    /// 룰: "사용자가 키캡 보고 누른 그대로 Windows 에서 동작" — 표준 Win 키 배열로 보냄.
+    var vdiDefaults: [Int64] {
+        switch self {
+        case .mac4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]  // Fn·Ctrl·Win·Alt
+        case .mac3key: return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]  // Ctrl·Win·Alt
+        case .win3key: return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]  // Ctrl·Win·Alt (그대로)
+        case .win4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Option)]
+        case .custom: return []
         }
     }
 }
@@ -37,6 +143,9 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
     var id: UUID = UUID()
     var name: String
     var legendStyle: KeyboardLegendStyle = .mac
+    /// v1.8.0 — 키보드 물리 형태 (3키/4키, Mac/Win 라벨). 옵셔널: 기존 v1.7.x 프로필도 정상 로드.
+    /// nil = legacy custom (v1.7.x 이전 위자드로 만든 프로필) — 위자드 v2 에서 편집 시 form 추론.
+    var keyboardLayout: KeyboardLayout?
     var physicalKeys: [Int64]
     var localDesiredKeys: [Int64]
     var vdiDesiredKeys: [Int64]
@@ -51,6 +160,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         id: UUID = UUID(),
         name: String,
         legendStyle: KeyboardLegendStyle = .mac,
+        keyboardLayout: KeyboardLayout? = nil,
         physicalKeys: [Int64],
         localDesiredKeys: [Int64],
         vdiDesiredKeys: [Int64]? = nil,
@@ -61,6 +171,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         self.id = id
         self.name = name
         self.legendStyle = legendStyle
+        self.keyboardLayout = keyboardLayout
         self.physicalKeys = physicalKeys
         self.localDesiredKeys = localDesiredKeys
         self.vdiDesiredKeys = vdiDesiredKeys ?? localDesiredKeys
@@ -73,6 +184,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         case id
         case name
         case legendStyle
+        case keyboardLayout  // v1.8.0
         case physicalKeys
         case localDesiredKeys
         case vdiDesiredKeys
@@ -87,6 +199,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
         legendStyle = try container.decodeIfPresent(KeyboardLegendStyle.self, forKey: .legendStyle) ?? .mac
+        keyboardLayout = try container.decodeIfPresent(KeyboardLayout.self, forKey: .keyboardLayout)  // v1.8.0, 기존 프로필은 nil
         physicalKeys = try container.decode([Int64].self, forKey: .physicalKeys)
         let legacyDesired = try container.decodeIfPresent([Int64].self, forKey: .desiredKeys)
         localDesiredKeys = try container.decodeIfPresent([Int64].self, forKey: .localDesiredKeys) ?? legacyDesired ?? physicalKeys
@@ -101,6 +214,7 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(legendStyle, forKey: .legendStyle)
+        try container.encodeIfPresent(keyboardLayout, forKey: .keyboardLayout)  // v1.8.0
         try container.encode(physicalKeys, forKey: .physicalKeys)
         try container.encode(localDesiredKeys, forKey: .localDesiredKeys)
         try container.encode(vdiDesiredKeys, forKey: .vdiDesiredKeys)

@@ -18,6 +18,7 @@ build/tests/mapping_profile_smoke
 COMMON_SOURCES=(
   WinMacKey/Models/MappingProfile.swift
   WinMacKey/Models/KeyEvent.swift
+  WinMacKey/Models/Profile.swift
   WinMacKey/Services/HIDRemapper.swift
   WinMacKey/Services/LogService.swift
   WinMacKey/Services/KeyInterceptor.swift
@@ -116,6 +117,17 @@ swiftc \
   "${COMMON_FRAMEWORKS[@]}"
 
 build/tests/buffered_replay_smoke
+
+# ── KeyboardLayout invariant smoke (v1.8.0 NEW) ───────────────────────────────
+# 위자드 v2 의 핵심 단위 — 4가지 layout (mac4key/mac3key/win3key/win4key) + custom
+# 의 physicalKeys/capLabels/vdiDefaults 일관성 + SavedKeyboardProfile Codable 호환
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/keyboard_layout_smoke.swift \
+  -o build/tests/keyboard_layout_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/keyboard_layout_smoke
 
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh

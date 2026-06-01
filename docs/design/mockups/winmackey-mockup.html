@@ -94,6 +94,8 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
 @keyframes pulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.06);opacity:.65}}
 .mirror .callout{position:absolute;background:#1d1d1f;color:#fff;font-size:11px;padding:5px 9px;border-radius:7px;z-index:3;font-weight:500}
 .mirror .callout:after{content:"";position:absolute;width:9px;height:9px;background:#1d1d1f;transform:rotate(45deg)}
+.mirror .callout.warn{background:#b8780a}
+.mirror .callout.warn:after{background:#b8780a}
 
 .actionbar{margin-top:auto;padding-top:20px;display:flex;align-items:center;gap:10px}
 .statuschip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px}
@@ -225,7 +227,7 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
 
         <!-- Step 1: Accessibility -->
         <div class="pane" data-p="1">
-          <span class="step-tag" style="background:#e9f1ff;color:#0058c8;">STEP 1 / 3 · 손쉬운 사용</span>
+          <span class="step-tag" style="background:#eef0f2;color:#3a3a3c;">STEP 1 / 3 · 손쉬운 사용</span>
           <h2>손쉬운 사용 권한 켜기</h2>
           <div class="priming">
             <div class="ic">♿︎</div>
@@ -252,21 +254,21 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
 
         <!-- Step 2: Input Monitoring (intentionally different color theme) -->
         <div class="pane" data-p="2">
-          <span class="step-tag" style="background:#eaf7f1;color:#0c7a55;">STEP 2 / 3 · 두 번째 권한 (다른 화면!)</span>
+          <span class="step-tag" style="background:#eef0f2;color:#3a3a3c;">STEP 2 / 3 · 두 번째 권한 (다른 화면!)</span>
           <h2>입력 모니터링 권한 켜기</h2>
           <div class="priming">
-            <div class="ic" style="background:#e8f7f0;color:#0c7a55;">⌨︎</div>
+            <div class="ic">⌨︎</div>
             <div class="txt">
               <b>방금과 비슷해 보이지만 다른 권한이에요.</b>
               <p>키 입력 자체를 받아 한/영 키로 변환하려면 입력 모니터링이 필요합니다.</p>
-              <div class="reassure" style="color:#0c7a55">🔒 기록·전송 없이 변환 즉시 폐기합니다.</div>
+              <div class="reassure">🔒 기록·전송 없이 변환 즉시 폐기합니다.</div>
             </div>
           </div>
           <div class="mirror">
-            <span class="caption" style="background:rgba(12,122,85,.85)">실제로 보게 될 화면: 입력 모니터링</span>
+            <span class="caption">실제로 보게 될 화면: 입력 모니터링</span>
             <img src="../references/karabiner/settings-input-monitoring.png" alt="Input Monitoring 설정">
-            <div class="ring" style="right:4%;top:30%;width:54px;height:26px;border-color:#0c7a55;box-shadow:0 0 0 4px rgba(12,122,85,.2)"></div>
-            <div class="callout" style="left:10px;top:8px;background:#0c7a55">⚠︎ STEP 1과 다른 화면이에요</div>
+            <div class="ring" style="right:4%;top:30%;width:54px;height:26px"></div>
+            <div class="callout warn" style="left:10px;top:8px">⚠︎ STEP 1과 다른 화면이에요</div>
           </div>
           <p class="hint">"아까 켰는데?"가 아닙니다 — 별도의 두 번째 권한입니다.</p>
           <div class="actionbar">
@@ -333,7 +335,9 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
             <li><span class="ck">✓</span> 오른쪽 ⌘ 한/영 전환</li>
             <li><span class="ck">✓</span> 키 리매핑 · 프로파일 수동 전환</li>
             <li><span class="ck">✓</span> 메뉴바 · 설정 전체</li>
+            <li><span class="ck">✓</span> 시스템 다크/라이트 자동 추종</li>
             <li class="lock"><span>🔒</span> 키보드별 자동 전환</li>
+            <li class="lock"><span>🔒</span> 커스텀 테마 · 외관 강제</li>
           </ul>
           <button class="pill outline">현재 사용 중</button>
         </div>
@@ -343,7 +347,7 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
           <ul>
             <li><span class="ck">✓</span> <b>Free의 모든 기능</b></li>
             <li><span class="ck">✓</span> <b>키보드 연결 시 프로필 자동 전환</b></li>
-            <li><span class="ck">✓</span> <b>다크 모드 · 커스텀 테마</b></li>
+            <li><span class="ck">✓</span> <b>커스텀 테마 · 액센트 · 라이트/다크 강제</b></li>
             <li><span class="ck">✓</span> 디바이스별 규칙</li>
             <li><span class="ck">✓</span> 평생 업데이트 (한 번 결제)</li>
           </ul>
@@ -385,11 +389,19 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
           </div>
         </div>
         <h2 style="margin-top:22px">외관</h2>
-        <p class="desc">앱 테마. 다크 모드는 Pro에서 사용할 수 있어요.</p>
+        <p class="desc">라이트/다크는 시스템 설정을 자동으로 따릅니다. 커스텀 테마와 강제 전환은 Pro입니다.</p>
         <div class="group">
           <div class="grow">
-            <div class="gi"><b>다크 모드 / 테마 <span class="pro-lock">PRO</span></b><div class="cap">Free는 라이트 모드 · Pro에서 다크·커스텀 테마 잠금 해제</div></div>
+            <div class="gi"><b>시스템 외관 자동 추종</b><div class="cap">macOS가 다크면 앱도 다크 — 메뉴바 팝오버·설정창 모두</div></div>
+            <span class="statuschip ok" style="font-size:11px">기본 · 무료</span>
+          </div>
+          <div class="grow">
+            <div class="gi"><b>라이트/다크 수동 강제 <span class="pro-lock">PRO</span></b><div class="cap">시스템과 무관하게 항상 라이트 또는 항상 다크로 고정</div></div>
             <div class="toggle locked" onclick="document.querySelector('#switcher button[data-v=paywall]').click()" title="Pro 전용"><i></i></div>
+          </div>
+          <div class="grow">
+            <div class="gi"><b>커스텀 테마 · 액센트 컬러 <span class="pro-lock">PRO</span></b><div class="cap">브랜드 민트/틸 외 액센트, 프리미엄 테마</div></div>
+            <button class="recbtn" onclick="document.querySelector('#switcher button[data-v=paywall]').click()">잠금 해제 →</button>
           </div>
         </div>
         <div class="restore"><button class="btn linklike">기본값으로 되돌리기</button></div>
@@ -403,7 +415,7 @@ body{background:linear-gradient(135deg,#d7d7db,#ececed 60%);min-height:100vh;dis
   <b>컬러 분배 규칙 (§2-5)</b> —
   <span class="sw" style="background:#007AFF"></span><b>시스템 블루</b>: 토글·버튼·선택 등 <i>조작 가능한 컨트롤 전용</i> ·
   <span class="sw" style="background:#3AA893"></span><b>브랜드 민트/틸</b>: 아이콘·키캡·읽기전용 상태점·Pro 뱃지 등 <i>비조작 그래픽 전용</i>.
-  STEP 1(블루)과 STEP 2(그린) 테마를 의도적으로 달리해 "같은 화면 착각·이탈"을 방지.
+  STEP 1·2 구분은 색이 아니라 <b>큰 라벨("STEP 2 · 다른 화면") + 다른 일러스트 + "⚠︎ 다른 화면" 경고 콜아웃</b>으로 — 의미색 남용 없이 "같은 화면 착각·이탈" 방지.
 </div>
 
 <script>
