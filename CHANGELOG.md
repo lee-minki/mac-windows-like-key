@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.8.2] — 2026-06-09
+
+**보안·신뢰성 하드닝 패치 (묶음 A).** 코드 검수에서 도출된 저위험 항목만 선별 적용 — 엔진/트리거(`bufferedReplayWindow`) 경로는 일절 건드리지 않아 P9·P10·P13 회귀 표면 0. 입력 매끄러움(비동기 replay)·`@MainActor` 격리 등 엔진 관련 항목은 별도 하네스 게이트 트랙으로 분리(미포함).
+
+### Security
+- **CI 스크립트 인젝션 차단** (`.github/workflows/release.yml`). `workflow_dispatch` 의 `version` 입력을 `run:` 셸에 직접 인터폴레이션하던 것을 `env:` 경유로 변경 (CWE-94). `Get version`/`Update version in project`/`Create DMG`/`Notarize DMG` 4개 스텝 적용.
+- **무서명 자동 설치 거부** (`WinMacKey/Services/UpdateService.swift`). 릴리스 빌드에서 업데이트 서명 public key 가 누락된 경우 다운로드 자산을 무검증 설치하지 않고 즉시 실패. 개발(DEBUG) 빌드만 폴백 허용. (현재 빌드는 키가 임베드돼 있어 동작 변화 없음 — 미래 misconfig 안전망.)
+
+### Fixed
+- **앱 재시작 셸 인젝션 위험 제거** (`WinMacKey/WinMacKeyApp.swift`, `relaunch()`). `sh -c` 스크립트 본문에 앱 경로를 끼워 넣던 것을 위치 인자(`$0`)로 전달하도록 변경 — 따옴표/공백/특수문자가 포함된 설치 경로에서도 안전하게 재시작. `UpdateService.relaunchApp` 의 인자 배열 방식과 일관.
+- **전체 초기화 누락 키 보강 + 일원화** (`WinMacKey/Services/ResetService.swift`, `WinMacKey/Services/DoctorService.swift`). 리셋 키 목록이 두 곳에 하드코딩 중복돼 있어 `CustomRemoteMacApps`·`hasCompletedFirstRunOnboarding`·`WinMacKey.AccessibilityWasEverGranted` 3개 키가 초기화되지 않던 문제 수정. 단일 정의 `AppManagedDefaultsKeys.all` 로 통합해 향후 drift 방지.
+
+### Note
+- Info.plist 1.8.1/24 → **1.8.2/25**, `MARKETING_VERSION 1.8.2`, `CURRENT_PROJECT_VERSION 25`.
+- 엔진/트리거 경로 무변경 — 기존 스모크 13종 그대로 유효, 신규 회귀 표면 없음.
+- 미포함(별도 트랙): 비동기 replay·`@MainActor` 격리 등 엔진 관련 하드닝은 `bufferedReplayWindow` 핵심 메커니즘이라 plan doc + replay 순서/간격 스모크 + P9 종결 후 진입 권장.
+
+---
+
 ## [1.8.1] — 2026-06-02
 
 **v1.8.0 Release Blocker 핫픽스 — 사용자 보고 4건 일괄 fix.** v1.8.0 은 GitHub Pre-release 로 demote, v1.7.0 이 일시 Latest 였다가 본 릴리스로 다시 Latest 승격.

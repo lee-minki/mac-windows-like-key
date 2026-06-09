@@ -7,21 +7,10 @@ class ResetService {
     
     private let logger = Logger(subsystem: "com.winmackey.app", category: "ResetService")
     
-    // 앱에서 사용하는 UserDefaults 키 목록
-    private let userDefaultsKeys = [
-        "WinMacKey.Profiles",
-        "LastUpdateCheck",
-        "AutoCheckUpdates",
-        "CustomVirtualizationApps",
-        "CustomTerminalApps",
-        "activeMappingProfileId",
-        "visualCustomMappings",
-        "eventViewerAlwaysOnTop",
-        "savedKeyboardProfiles",
-        "languagePairSource1",
-        "languagePairSource2",
-        "startEngineOnAppLaunch"
-    ]
+    // 앱에서 사용하는 UserDefaults 키 목록 — 단일 정의(AppManagedDefaultsKeys)를 공유.
+    // ResetService 와 DoctorService.emergencyRecovery 가 같은 목록을 쓰도록 일원화해
+    // 키 추가 시 한쪽만 누락되는 drift 를 방지한다.
+    private let userDefaultsKeys = AppManagedDefaultsKeys.all
     
     /// 모든 앱 설정을 초기화합니다.
     /// - Parameters:
@@ -69,4 +58,27 @@ class ResetService {
             UserDefaults.standard.removeObject(forKey: key)
         }
     }
+}
+
+/// 앱이 관리하는 모든 UserDefaults 키의 단일 정의.
+/// Reset(`ResetService`)·Emergency Recovery(`DoctorService`)가 공유해, 신규 키 추가 시
+/// 한쪽 목록만 갱신되어 초기화가 불완전해지는 drift 를 구조적으로 차단한다.
+enum AppManagedDefaultsKeys {
+    static let all: [String] = [
+        "WinMacKey.Profiles",
+        "LastUpdateCheck",
+        "AutoCheckUpdates",
+        "CustomVirtualizationApps",
+        "CustomTerminalApps",
+        "CustomRemoteMacApps",            // v1.8.2: ContextManager 가 쓰지만 누락돼 있던 키
+        "activeMappingProfileId",
+        "visualCustomMappings",
+        "eventViewerAlwaysOnTop",
+        "savedKeyboardProfiles",
+        "languagePairSource1",
+        "languagePairSource2",
+        "startEngineOnAppLaunch",
+        "hasCompletedFirstRunOnboarding", // v1.8.2: 초기화 후 첫 실행 온보딩 재노출
+        "WinMacKey.AccessibilityWasEverGranted" // v1.8.2: stale-grant 판정 상태도 초기화
+    ]
 }

@@ -30,16 +30,20 @@ jobs:
 
       - name: Get version
         id: version
+        env:
+          # 신뢰 불가 입력은 셸 인터폴레이션이 아니라 env 로 받는다 (스크립트 인젝션 차단, CWE-94).
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "VERSION=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Update version in project
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" WinMacKey/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" WinMacKey/Info.plist
 
@@ -110,8 +114,9 @@ jobs:
 
       - name: Create DMG
         id: dmg
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
           APP_PATH="build/DerivedData/Build/Products/Release/WinMacKey.app"
           DMG_NAME="WinMacKey-${VERSION}.dmg"
 
@@ -143,9 +148,8 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          DMG_PATH: ${{ steps.dmg.outputs.DMG_PATH }}
         run: |
-          DMG_PATH=${{ steps.dmg.outputs.DMG_PATH }}
-
           echo "Submitting for notarization..."
           xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$NOTARY_APPLE_ID" \

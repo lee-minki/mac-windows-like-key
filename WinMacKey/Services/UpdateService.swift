@@ -169,6 +169,12 @@ class UpdateService: ObservableObject {
                 updateStatus = "서명 검증 중..."
                 downloadProgress = 0.78
                 try await verifyDownloadSignature(assetURL: tempFileURL)
+            } else {
+                // 릴리스 빌드는 무서명 자동 설치를 거부한다 — 서명 키가 누락된 빌드가
+                // 검증 없이 임의 자산을 설치하는 사고를 원천 차단. 개발(DEBUG) 빌드만 폴백 허용.
+                #if !DEBUG
+                throw UpdateError.signatureInvalid("이 빌드에 업데이트 서명 키가 포함되어 있지 않아 무서명 설치를 거부합니다.")
+                #endif
             }
 
             // 3. 압축 해제

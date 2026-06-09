@@ -639,7 +639,10 @@ class AppState: ObservableObject {
         let path = Bundle.main.bundlePath
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "sleep 0.6; /usr/bin/open \"\(path)\""]
+        // 경로를 스크립트 본문에 끼워 넣지 않고 위치 인자($0)로 전달 — 따옴표/공백/특수문자가
+        // 포함된 설치 경로에서도 셸 인젝션 없이 안전하게 재시작 (UpdateService.relaunchApp 와 일관).
+        // sleep 0.6 으로 현재 인스턴스 종료 후 새 인스턴스 launch 순서 보존.
+        task.arguments = ["-c", #"sleep 0.6; exec /usr/bin/open "$0""#, path]
         try? task.run()
         LogService.shared.info("Relaunch requested (self-relaunch helper)", category: "App")
         NSApp.terminate(nil)
