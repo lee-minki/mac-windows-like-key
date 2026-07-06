@@ -109,29 +109,44 @@ onInputSourceToggle:
 
 ---
 
-## 5. P9 — 특정 앱 한/영 토글 간헐 실패 (원인 확정, 패치 대기)
+## 5. P9 — 특정 앱 한/영 토글 간헐 실패 (진단 진행 중 · 원인 미확정)
+
+> ⚠️ **주의(2026-07-06 갱신):** 초기에 "Codex가 Ctrl+Space를 소비해서"라고 좁게 결론냈으나,
+> 후속 캡처에서 **Chrome(평범한 브라우저)에서도 동일 timeout 다발**이 관측되어 그 app-specific
+> 가설은 **과한 것으로 판명**. 원인은 아직 미확정이며, 아래 클린 대조 테스트가 남아 있다.
+> 성급히 "Codex carve-out" 패치를 넣지 말 것.
 
 **정의(`docs/private/…REGRESSION_REVIEW`):** "특정 앱에서 한/영 토글 간헐 실패, 재시작으로 일시
-fix. 후보: **앱의 Ctrl+Space 소비** / HID remap drift / stale grant."
+fix. 후보: 앱의 Ctrl+Space 소비 / HID remap drift / stale grant."
 
-**2026-07-06 라이브 캡처로 재현·원인 확정:**
-- 대상: **Codex**(`com.openai.codex`, Electron 계열 `SkyComputerUseClient`).
-- 관측: 한/영 **17회 중 verification timeout 14회**, Control+Space 30발 발사, 매번 ~150ms 헛발질
-  후 TIS 폴백으로 겨우 전환.
-- 기제: **Codex가 합성 Ctrl+Space 를 자기 자동완성으로 소비** → 입력소스가 폴링 창 안에 안 바뀜
-  → timeout → 재시도(또 소비됨) → 최후에 `toggleDirectly()` 폴백. 문서의 1순위 후보와 정확히 일치.
-- 반증 완료: Cmd/Ctrl 스왑 충돌 아님(합성 이벤트는 WINK 마커로 탭 통과), SymbolicHotKey 60 은
-  켜져 있음(즉 시스템 단축키 문제 아님, **앱이 가로채는** 문제).
+**2026-07-06 라이브 캡처로 확인된 것 (관측 사실):**
+- GUI(Control+Space) 경로에서 **`Toggle verification timeout; retrying` 다발** + 매 토글 ~150ms
+  헛발질 후 `toggleDirectly()`(TIS) 폴백으로 겨우 전환. 이 oscillation 구간에 친 글자가 씹히거나
+  엉뚱한 IME 로 감 (사용자 "씹힘" 보고와 일치).
+- timeout 이 **Codex · Google Chrome · 그리고 메모(Notes) 에서도** 발생 → **app-specific 아님**.
+  - 메모 구간 = `16:54:43–51` (Ghostty 직전 마지막 GUI 구간, 사용자 "메모로 테스트" 보고와 일치):
+    timeout 2회 포함. 순한 네이티브 필드에서도 재현됨.
+  - **주의(귀속 함정):** winmackey.log 는 비터미널↔비터미널 전환(Codex↔메모↔Chrome)을 안 찍어
+    이 구간이 처음엔 "Codex"로 오귀속됐다 → §6 gotcha 참조.
+- 반증된 후보: Cmd/Ctrl 스왑 충돌 아님(합성 이벤트 WINK 마커로 탭 통과), SymbolicHotKey 60 ON,
+  **"앱이 Ctrl+Space 소비"도 반증**(Chrome·메모에서도 나므로).
 
-**아직 남은 확정 테스트:** 동일 재현을 **TextEdit/Notes** 에서 → timeout ≈0 이면 "앱이 소비"가
-최종 확정 (순한 텍스트필드는 정상).
+**현재 유력 가설 — (2) 일반 verification 타이밍:**
+- **폴링 창(~40–80ms, `StateManager:112` 20×2ms)이 실제 입력소스 전환 지연보다 짧아** 첫
+  Control+Space 성공을 놓치고 timeout → **재시도가 입력소스를 되돌려(oscillation)** → 그 구간에
+  친 글자가 씹히거나 엉뚱한 IME 로 감. Chrome·Codex·메모 전부 설명됨.
 
-**권장 패치 방향(트리거 코어 무변경):**
-- Ctrl+Space 를 소비하는 Electron/IDE 류(Codex 등)를 **터미널처럼 TIS 직행 버킷으로 carve-out**.
-  이런 앱은 어차피 Control+Space 가 안 먹으므로 조합-commit 이점도 없음 → TIS 직행이 옳다.
-- 구현: `ContextManager.terminalApps` 확장 또는 별도 "직행 토글" 버킷 신설, 혹은 무빌드로
-  `CustomTerminalApps` UserDefaults 에 `com.openai.codex` 추가.
-- **`usleep`·버퍼 코어는 건드리지 않음** → P10/P13/P14 회귀 표면 0.
+**원인 못 박기 (airtight — 귀속 함정 우회):** 다음 캡처에서 **frontmost 앱을 병렬 로깅**해 토글별
+앱을 확정. 메모 **단독**에서 timeout 재현 확인 시 (2) 최종 확정.
+
+**다음 진단 (원인 확정 — 반드시 클린하게):**
+1. **TextEdit 단독** 재현 (다른 앱 전환 금지, 포커스 로그에 TextEdit 확인). timeout 0 이면 (1),
+   여전하면 (2).
+2. 빠른 타자 vs 300ms 대기 후 타자 비교 → 대기 시 씹힘이 사라지면 (2) 전환-창 타이밍.
+
+**패치는 원인 확정 후.** 어느 경우든 **`usleep`·버퍼 코어 무변경 원칙 유지** (P10/P13/P14 회귀 표면 0).
+- (1)이면: Ctrl+Space 소비 앱을 TIS 직행 버킷 carve-out.
+- (2)면: 폴링 창 확대 / 재시도 oscillation 억제.
 
 ---
 
@@ -159,6 +174,15 @@ log stream --level debug \
 | `Toggle: posted Control down + Space …` | GUI 경로(Control+Space) |
 | `Toggle verification timeout; retrying` | **P9 징후** — Control+Space 안 먹힘 |
 | `Replayed N buffered key events (win, reason)` | 커밋창 flush (reason: `input-source-changed` / `min-hold` / `timeout` / `vdi-relay-settle`) |
+
+> **⚠️ 앱 귀속 함정.** `winmackey.log` 의 `[Terminal]/[VDI]` 줄은 **터미널/VDI 상태가 바뀔 때만**
+> 찍힌다(`WinMacKeyApp.swift:284`). 비터미널→비터미널 전환(예: Codex↔메모↔Chrome)은 로그가
+> 없어, 그 구간의 GUI 토글이 "직전에 로깅된 앱"으로 **오귀속**된다 (실제로 이 문서 §5 진단 중
+> 메모 테스트가 Codex 로 오귀속됐다). 토글별 앱을 정확히 알려면 캡처 중 **frontmost 앱을 병렬로
+> 로깅**하라:
+> ```bash
+> while :; do echo "$(date +%T) $(lsappinfo info -only name "$(lsappinfo front)")"; sleep 0.5; done
+> ```
 
 ---
 

@@ -1,6 +1,6 @@
 # Open Problems Roadmap
 
-> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 진단 완료·패치 대기 (2026-07-06, Codex=Ctrl+Space 소비 확정), P11/P12 commit**
+> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 진단 진행 중 (2026-07-06, GUI 경로 verification timeout 재현 — Codex+Chrome, app-specific 가설 반증, 클린 TextEdit 대조 대기), P11/P12 commit**
 > 작성: 2026-05-16, 갱신: 2026-05-31 (same-day 4건: v1.6.0 → v1.6.1 → v1.6.2 → v1.7.0)
 > 작성자: Claude + lee-minki
 >
@@ -18,7 +18,7 @@
 | **P5/P6** 오타/공백 사라짐 | Out-of-scope (윈맥키 책임 아님) | 등록 안 함 | — |
 | **P7** 디바이스별 독립 매핑 (동시 active) | **Sealed** (인터뷰 1-3 완료) | plan doc 작성 | P2 흡수 결정됨 |
 | **P8** 위자드 표 기반 재설계 | **Done (v1.6.0, commit 8ecf24a, Latest Published 2026-05-30)** | — | — |
-| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **진단 완료·패치 대기 (2026-07-06)** — Codex(`com.openai.codex`)가 합성 Ctrl+Space 소비 확정, 후보 #1 일치 | TextEdit 확정 테스트 → Ctrl+Space 소비 앱 TIS 직행 carve-out (트리거 코어 무변경) | 독립, `IME_TOGGLE_ARCHITECTURE.md §5` |
+| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **진단 진행 중 (2026-07-06)** — GUI 경로 verification timeout 재현(Codex+Chrome+메모), **app-specific 가설 반증**, 유력 원인=폴링 창 타이밍/oscillation | frontmost 병렬 로깅으로 앱 귀속 확정 → 폴링 창 확대/oscillation 억제 (트리거 코어 무변경) | 독립, `IME_TOGGLE_ARCHITECTURE.md §5·§6` |
 | **P10** Ghostty/SSH 에서 ESC \u2192 이상 문자 | **DONE (v1.6.1, commit f7c7f6b, 2026-05-31)** — `KeyInterceptor.isTerminalAppFocused` 신설 + 가드 2곳 + `WinMacKeyApp` 동기화 | — | — |
 | **P11** 키보드 클리닝 모드 (CLEAN-1) | **사용자 commit (2026-05-31), 구현 대기** — 키보드 닦는 동안 전체 키 입력 차단, 마우스로만 토글. `KeyboardCleanTool` ($9.99) 대체. | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, `FEATURE_SPEC §10 CLEAN-1` |
 | **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9 진단 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
@@ -42,20 +42,20 @@
 
 **대기 정보**: 어떤 앱·번들 ID, 그 앱에서 Ctrl+Space 직접 동작 여부, 메뉴바 ON 확인, v1.6.0 으로도 재현되는지
 
-**🔎 진단 결과 (2026-07-06, v1.8.1 환경 라이브 로그 캡처) — 후보 #1 확정**:
-- **재현 앱**: Codex (`com.openai.codex`, Electron 계열 `SkyComputerUseClient`).
-- **관측**: 한/영 17회 중 `Toggle verification timeout; retrying` 14회, Control+Space 30발 발사,
-  매 토글 ~150ms 헛발질 후 `toggleDirectly()`(TIS) 폴백으로 겨우 전환.
+**🔎 진단 진행 (2026-07-06, v1.8.1 환경 라이브 로그 캡처) — app-specific 가설 반증**:
+- **관측**: GUI(Control+Space) 경로에서 `Toggle verification timeout; retrying` 다발 + 매 토글
+  ~150ms 헛발질 후 `toggleDirectly()`(TIS) 폴백으로 겨우 전환. oscillation 구간에서 글자 씹힘.
   (캡처: `log stream --level debug --predicate 'subsystem == "com.winmackey.app"'`)
-- **기제**: Codex 가 합성 Ctrl+Space 를 자기 **자동완성**으로 소비 → 입력소스가 폴링 창(~40–80ms)
-  안에 안 바뀜 → timeout → 재시도(또 소비) → 최후 TIS 폴백. "재시작으로 일시 fix" = 포커스/상태 리셋.
-- **반증 완료**: 후보 #2(HID drift) 아님 — 재현 시 매핑 정상. Cmd/Ctrl 스왑 충돌도 아님(합성 이벤트는
-  WINK 마커로 탭 통과). SymbolicHotKey 60 은 ON (시스템 단축키 문제 아님 = **앱이 가로챔**).
-- **남은 확정 테스트**: 동일 재현을 TextEdit/Notes 에서 → timeout ≈0 이면 최종 확정.
-- **패치 방향(트리거 코어 무변경)**: Ctrl+Space 소비 앱(Electron/IDE)을 **터미널처럼 TIS 직행 버킷으로
-  carve-out** (`ContextManager.terminalApps` 확장 또는 `CustomTerminalApps` UserDefaults). `usleep`/버퍼
-  코어 무변경 → P10/P13/P14 회귀 표면 0.
-- **상세**: [`docs/IME_TOGGLE_ARCHITECTURE.md`](../IME_TOGGLE_ARCHITECTURE.md) §5
+- **초기 오진 → 정정**: 처음엔 "Codex(`com.openai.codex`)가 Ctrl+Space 소비"로 좁게 결론냈으나,
+  후속 캡처에서 **Chrome + 메모(Notes) 에서도 동일 timeout** 확인 → **app-specific(후보 #1) 반증.**
+  (메모 구간이 winmackey.log 의 비터미널↔비터미널 로깅 gap 때문에 Codex 로 오귀속됐던 것.)
+- **반증됨**: #1 Ctrl+Space 소비(Chrome/메모도 실패), #2 HID drift(매핑 정상), Cmd/Ctrl 스왑 충돌
+  (WINK 마커 통과), SymbolicHotKey 60 은 ON.
+- **현재 유력**: **폴링 창(~40–80ms, `StateManager:112`)이 실제 전환 지연보다 짧아** 첫 Control+Space
+  성공을 놓치고 timeout → 재시도가 입력소스를 되돌려(oscillation) 씹힘.
+- **원인 확정 테스트**: frontmost 앱 병렬 로깅으로 귀속 함정 우회 → 메모 단독 timeout 재현 시 확정.
+- **패치는 확정 후** (트리거 코어·`usleep`·버퍼 무변경 원칙): 폴링 창 확대 / 재시도 oscillation 억제.
+- **상세·귀속 함정**: [`docs/IME_TOGGLE_ARCHITECTURE.md`](../IME_TOGGLE_ARCHITECTURE.md) §5·§6
 
 ## P10 · Ghostty/SSH 에서 ESC → 이상 문자 ✅ DONE (v1.6.1, 2026-05-31)
 
