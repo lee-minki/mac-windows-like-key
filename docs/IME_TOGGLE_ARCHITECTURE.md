@@ -109,44 +109,38 @@ onInputSourceToggle:
 
 ---
 
-## 5. P9 — 특정 앱 한/영 토글 간헐 실패 (진단 진행 중 · 원인 미확정)
+## 5. P9 — 한/영 토글 간헐 실패 (원인 확정: GUI verification 타이밍/oscillation · 패치 대기)
 
-> ⚠️ **주의(2026-07-06 갱신):** 초기에 "Codex가 Ctrl+Space를 소비해서"라고 좁게 결론냈으나,
-> 후속 캡처에서 **Chrome(평범한 브라우저)에서도 동일 timeout 다발**이 관측되어 그 app-specific
-> 가설은 **과한 것으로 판명**. 원인은 아직 미확정이며, 아래 클린 대조 테스트가 남아 있다.
-> 성급히 "Codex carve-out" 패치를 넣지 말 것.
+> 📌 **진단 여정(교훈):** ①첫 캡처(Codex) → "Codex가 Ctrl+Space 소비"로 성급히 확정 →
+> ②Chrome 에서도 재현 → app-specific 의심 → ③**메모(Notes) 단독 + frontmost 병렬 로깅**으로
+> **일반 타이밍 문제 확정.** 대조군 없이 첫 재현으로 결론내면 오진한다 — 두 번 뒤집혔다.
 
 **정의(`docs/private/…REGRESSION_REVIEW`):** "특정 앱에서 한/영 토글 간헐 실패, 재시작으로 일시
-fix. 후보: 앱의 Ctrl+Space 소비 / HID remap drift / stale grant."
+fix. 후보: 앱의 Ctrl+Space 소비 / HID remap drift / stale grant." → **셋 다 반증됨(아래).**
 
-**2026-07-06 라이브 캡처로 확인된 것 (관측 사실):**
-- GUI(Control+Space) 경로에서 **`Toggle verification timeout; retrying` 다발** + 매 토글 ~150ms
-  헛발질 후 `toggleDirectly()`(TIS) 폴백으로 겨우 전환. 이 oscillation 구간에 친 글자가 씹히거나
-  엉뚱한 IME 로 감 (사용자 "씹힘" 보고와 일치).
-- timeout 이 **Codex · Google Chrome · 그리고 메모(Notes) 에서도** 발생 → **app-specific 아님**.
-  - 메모 구간 = `16:54:43–51` (Ghostty 직전 마지막 GUI 구간, 사용자 "메모로 테스트" 보고와 일치):
-    timeout 2회 포함. 순한 네이티브 필드에서도 재현됨.
-  - **주의(귀속 함정):** winmackey.log 는 비터미널↔비터미널 전환(Codex↔메모↔Chrome)을 안 찍어
-    이 구간이 처음엔 "Codex"로 오귀속됐다 → §6 gotcha 참조.
-- 반증된 후보: Cmd/Ctrl 스왑 충돌 아님(합성 이벤트 WINK 마커로 탭 통과), SymbolicHotKey 60 ON,
-  **"앱이 Ctrl+Space 소비"도 반증**(Chrome·메모에서도 나므로).
+**2026-07-06 airtight 캡처 (frontmost 앱 병렬 로깅으로 귀속 확정):**
+- **메모(Notes) 단독** 구간 `17:11:13–34` (폴러가 내내 `Notes` 확인): 약 **14 토글 중 verification
+  timeout ~12회.** 순정 애플 메모 = Electron/IDE/브라우저 아님 → **app-specific 완전 반증.**
+- Codex · Chrome · 메모 **전부 동일** 실패 → **후보 #1(Ctrl+Space 소비) 사망.**
+- 반증된 나머지: #2 HID drift(매핑 정상), Cmd/Ctrl 스왑(WINK 마커 통과), SymbolicHotKey 60 ON.
 
-**현재 유력 가설 — (2) 일반 verification 타이밍:**
-- **폴링 창(~40–80ms, `StateManager:112` 20×2ms)이 실제 입력소스 전환 지연보다 짧아** 첫
-  Control+Space 성공을 놓치고 timeout → **재시도가 입력소스를 되돌려(oscillation)** → 그 구간에
-  친 글자가 씹히거나 엉뚱한 IME 로 감. Chrome·Codex·메모 전부 설명됨.
+**확정 원인 — (2) verification 타이밍 + 재시도 oscillation:**
+- 폴링 창(`StateManager:112`, 20×2ms ≈ 40–80ms)이 실제 입력소스 전환 지연보다 짧을 때 첫
+  Control+Space 의 성공을 **놓친다** → timeout.
+- **핵심 결함:** timeout 시 `StateManager:131` 이 **Control+Space 를 다시 발사**한다. 그런데
+  Control+Space 는 **토글**이라 재시도가 전환을 **되돌린다(reverse).** 첫 전환이 실패가 아니라
+  단지 **느렸을 뿐**이면, 재시도가 반대로 뒤집어 **oscillation** → 그 구간 글자가 씹히거나 엉뚱한
+  IME 로. "간헐"(타이밍/parity 의존), "재시작으로 fix"(상태 리셋) 전부 설명됨.
+- 아이러니: 이 재시도는 v1.2.1 에서 "Control+Space 신뢰성 향상"으로 넣은 것. **신뢰성 안전망이
+  오히려 느린 전환을 뒤집어 씹힘을 만들고 있었다.**
 
-**원인 못 박기 (airtight — 귀속 함정 우회):** 다음 캡처에서 **frontmost 앱을 병렬 로깅**해 토글별
-앱을 확정. 메모 **단독**에서 timeout 재현 확인 시 (2) 최종 확정.
+**패치 방향(원인 확정 → 트리거 코어·`usleep`·버퍼 무변경 원칙 유지):**
+1. **재시도가 토글을 되돌리지 않게** — 재시도 전 현재 입력소스를 재확인해 이미 바뀌었으면 재발사
+   금지(idempotent 검증), 또는 재시도를 `toggleDirectly()`(목표 소스 명시 세팅)로 대체.
+2. **폴링 창 확대**(20→예: 50–60회) 로 느린 전환을 놓치지 않게 — 단 ㅊ/replay 트레이드오프 실측.
+3. 하네스 게이트(순서/간격 스모크 + §7 6표면 체크리스트) 통과 후 적용.
 
-**다음 진단 (원인 확정 — 반드시 클린하게):**
-1. **TextEdit 단독** 재현 (다른 앱 전환 금지, 포커스 로그에 TextEdit 확인). timeout 0 이면 (1),
-   여전하면 (2).
-2. 빠른 타자 vs 300ms 대기 후 타자 비교 → 대기 시 씹힘이 사라지면 (2) 전환-창 타이밍.
-
-**패치는 원인 확정 후.** 어느 경우든 **`usleep`·버퍼 코어 무변경 원칙 유지** (P10/P13/P14 회귀 표면 0).
-- (1)이면: Ctrl+Space 소비 앱을 TIS 직행 버킷 carve-out.
-- (2)면: 폴링 창 확대 / 재시도 oscillation 억제.
+> **주의:** 앱별 carve-out(Codex 등)은 **오답** — Notes/Chrome 도 실패하므로 근본 해결 아님.
 
 ---
 

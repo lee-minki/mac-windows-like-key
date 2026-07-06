@@ -1,6 +1,6 @@
 # Open Problems Roadmap
 
-> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 진단 진행 중 (2026-07-06, GUI 경로 verification timeout 재현 — Codex+Chrome, app-specific 가설 반증, 클린 TextEdit 대조 대기), P11/P12 commit**
+> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 원인 확정·패치 대기 (2026-07-06, 메모 단독 airtight 재현 → GUI verification 타이밍 + 재시도 oscillation), P11/P12 commit**
 > 작성: 2026-05-16, 갱신: 2026-05-31 (same-day 4건: v1.6.0 → v1.6.1 → v1.6.2 → v1.7.0)
 > 작성자: Claude + lee-minki
 >
@@ -18,7 +18,7 @@
 | **P5/P6** 오타/공백 사라짐 | Out-of-scope (윈맥키 책임 아님) | 등록 안 함 | — |
 | **P7** 디바이스별 독립 매핑 (동시 active) | **Sealed** (인터뷰 1-3 완료) | plan doc 작성 | P2 흡수 결정됨 |
 | **P8** 위자드 표 기반 재설계 | **Done (v1.6.0, commit 8ecf24a, Latest Published 2026-05-30)** | — | — |
-| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **진단 진행 중 (2026-07-06)** — GUI 경로 verification timeout 재현(Codex+Chrome+메모), **app-specific 가설 반증**, 유력 원인=폴링 창 타이밍/oscillation | frontmost 병렬 로깅으로 앱 귀속 확정 → 폴링 창 확대/oscillation 억제 (트리거 코어 무변경) | 독립, `IME_TOGGLE_ARCHITECTURE.md §5·§6` |
+| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **원인 확정·패치 대기 (2026-07-06)** — 메모 단독 airtight 재현(14토글 중 timeout ~12). app-specific 반증. **원인=폴링 창(40–80ms) 미스 + 재시도가 Control+Space 토글을 되돌림(oscillation)** | 재시도 idempotent화(되돌림 금지) 또는 `toggleDirectly` 대체 + 폴링 창 확대. 트리거 코어·usleep 무변경, 하네스 게이트 | 독립, `IME_TOGGLE_ARCHITECTURE.md §5` |
 | **P10** Ghostty/SSH 에서 ESC \u2192 이상 문자 | **DONE (v1.6.1, commit f7c7f6b, 2026-05-31)** — `KeyInterceptor.isTerminalAppFocused` 신설 + 가드 2곳 + `WinMacKeyApp` 동기화 | — | — |
 | **P11** 키보드 클리닝 모드 (CLEAN-1) | **사용자 commit (2026-05-31), 구현 대기** — 키보드 닦는 동안 전체 키 입력 차단, 마우스로만 토글. `KeyboardCleanTool` ($9.99) 대체. | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, `FEATURE_SPEC §10 CLEAN-1` |
 | **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9 진단 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
@@ -42,20 +42,20 @@
 
 **대기 정보**: 어떤 앱·번들 ID, 그 앱에서 Ctrl+Space 직접 동작 여부, 메뉴바 ON 확인, v1.6.0 으로도 재현되는지
 
-**🔎 진단 진행 (2026-07-06, v1.8.1 환경 라이브 로그 캡처) — app-specific 가설 반증**:
-- **관측**: GUI(Control+Space) 경로에서 `Toggle verification timeout; retrying` 다발 + 매 토글
-  ~150ms 헛발질 후 `toggleDirectly()`(TIS) 폴백으로 겨우 전환. oscillation 구간에서 글자 씹힘.
-  (캡처: `log stream --level debug --predicate 'subsystem == "com.winmackey.app"'`)
-- **초기 오진 → 정정**: 처음엔 "Codex(`com.openai.codex`)가 Ctrl+Space 소비"로 좁게 결론냈으나,
-  후속 캡처에서 **Chrome + 메모(Notes) 에서도 동일 timeout** 확인 → **app-specific(후보 #1) 반증.**
-  (메모 구간이 winmackey.log 의 비터미널↔비터미널 로깅 gap 때문에 Codex 로 오귀속됐던 것.)
-- **반증됨**: #1 Ctrl+Space 소비(Chrome/메모도 실패), #2 HID drift(매핑 정상), Cmd/Ctrl 스왑 충돌
-  (WINK 마커 통과), SymbolicHotKey 60 은 ON.
-- **현재 유력**: **폴링 창(~40–80ms, `StateManager:112`)이 실제 전환 지연보다 짧아** 첫 Control+Space
-  성공을 놓치고 timeout → 재시도가 입력소스를 되돌려(oscillation) 씹힘.
-- **원인 확정 테스트**: frontmost 앱 병렬 로깅으로 귀속 함정 우회 → 메모 단독 timeout 재현 시 확정.
-- **패치는 확정 후** (트리거 코어·`usleep`·버퍼 무변경 원칙): 폴링 창 확대 / 재시도 oscillation 억제.
-- **상세·귀속 함정**: [`docs/IME_TOGGLE_ARCHITECTURE.md`](../IME_TOGGLE_ARCHITECTURE.md) §5·§6
+**🔎 원인 확정 (2026-07-06, v1.8.1, frontmost 병렬 로깅 airtight 캡처)**:
+- **메모(Notes) 단독 재현**: `17:11:13–34` 폴러가 내내 `Notes` 확인. 약 14 토글 중 verification
+  timeout ~12. 순정 애플 메모 = Electron/브라우저/IDE 아님 → **app-specific 완전 반증** (후보 #1 사망).
+- **진단 여정(교훈)**: Codex→"Ctrl+Space 소비" 성급 확정 → Chrome 도 실패 → 메모 단독으로 일반
+  타이밍 확정. **대조군 없이 첫 재현으로 결론내면 오진** (두 번 뒤집힘). winmackey.log 의
+  비터미널↔비터미널 로깅 gap 이 초기 오귀속(메모→Codex) 유발 → 병렬 폴러로 우회.
+- **확정 원인**: 폴링 창(`StateManager:112`, 40–80ms)이 느린 전환을 놓쳐 timeout → `StateManager:131`
+  재시도가 **Control+Space(토글)를 다시 발사 = 전환을 되돌림(oscillation)** → 씹힘/엉뚱한 IME.
+  아이러니: v1.2.1 의 "신뢰성 재시도"가 실제로는 느린 전환을 뒤집는 원흉.
+- **패치 방향** (트리거 코어·`usleep`·버퍼 무변경, 하네스 게이트):
+  1) 재시도 idempotent화 — 재발사 전 현재 소스 재확인, 이미 바뀌었으면 재발사 금지 (또는
+     `toggleDirectly` 목표소스 명시 세팅으로 대체). 2) 폴링 창 확대(ㅊ 트레이드오프 실측).
+  - ❌ 앱별 carve-out 은 오답(Notes/Chrome 도 실패).
+- **상세**: [`docs/IME_TOGGLE_ARCHITECTURE.md`](../IME_TOGGLE_ARCHITECTURE.md) §5
 
 ## P10 · Ghostty/SSH 에서 ESC → 이상 문자 ✅ DONE (v1.6.1, 2026-05-31)
 
