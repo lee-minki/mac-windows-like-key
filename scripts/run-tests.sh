@@ -119,7 +119,7 @@ swiftc \
 build/tests/buffered_replay_smoke
 
 # ── KeyboardLayout invariant smoke (v1.8.0 NEW) ───────────────────────────────
-# 위자드 v2 의 핵심 단위 — 4가지 layout (mac4key/mac3key/win3key/win4key) + custom
+# 위자드 v2 의 핵심 단위 — 5가지 layout (mac4key/portableMac4key/mac3key/win3key/win4key) + custom
 # 의 physicalKeys/capLabels/vdiDefaults 일관성 + SavedKeyboardProfile Codable 호환
 swiftc \
   "${COMMON_SOURCES[@]}" \
@@ -128,6 +128,14 @@ swiftc \
   "${COMMON_FRAMEWORKS[@]}"
 
 build/tests/keyboard_layout_smoke
+
+swiftc \
+  WinMacKey/Services/StartupPolicy.swift \
+  tests/startup_policy_smoke.swift \
+  -o build/tests/startup_policy_smoke \
+  -framework AppKit
+
+build/tests/startup_policy_smoke
 
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh

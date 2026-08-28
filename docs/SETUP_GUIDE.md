@@ -8,6 +8,7 @@
 - Mac → Mac 원격 / 화면 공유: 로컬 맥북의 입력소스만 토글 → 변환된 문자가 원격 화면에 forward (원격 Mac 에는 설치 불필요, v1.3.5+)
 
 ### 개선된 점
+- **(v1.8.3) 중복 실행 차단 + 포터블 4키 지원**: Applications 설치본을 우선해 개발 빌드와 동시에 입력 엔진이 켜지는 일을 막고, `Ctrl · Fn · Opt · Cmd` 키캡 배열을 정식 지원한다.
 - **(v1.6.0) 프로필 위자드 — 키코드 기반 직접 매핑 표**: 캡처 없이 표에서 "각 키를 무엇으로 쓸지" 직접 고른다. macOS 가 모든 키보드를 표준 modifier 키코드(Ctrl/Opt/Cmd/Fn)로 정규화하므로 어떤 키보드든 누를 필요 없다 — Mac/Win 듀얼모드 키보드(로지텍 등)에서도 동일하게 동작. "한/영 전환만"은 1클릭으로 즉시 완료, "키 배치도 바꾸기"는 4행×2열 표 + Mac/Windows 키캡 토글 + "Windows 감각" 1클릭 프리셋. (이전: 물리 키 캡처 + Step 1~5)
 - **F16 HID remap 아키텍처**: `hidutil`로 Right Command를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
 - VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
@@ -105,10 +106,22 @@ xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -
 ### 실행
 
 ```bash
-open build/DerivedData/Build/Products/Debug/WinMacKey.app
+WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/WinMacKey.app/Contents/MacOS/WinMacKey
 ```
 
 또는 Xcode에서 `Cmd+R`
+
+> `/Applications/WinMacKey.app`이 설치된 상태에서는 다른 위치의 복사본이 입력 엔진을 시작하지 않습니다. 위 환경 변수는 개발 검증 전용이며 로그인 항목에는 개발 빌드를 등록하지 마세요.
+
+### Keys-To-Go 2 포터블 배열
+
+1. 키보드에서 `Fn + O`를 3초간 눌러 macOS 모드로 맞춥니다.
+2. 설정의 키보드 프로필에서 **새 프로필 만들기**를 누릅니다.
+3. **포터블 Mac 4키 (Ctrl · Fn · Opt · Cmd)**와 **키 배치 바꾸기**를 선택합니다.
+4. Mac 추천값 `Cmd · Fn · Opt · Ctrl`, VDI 자동값 `Ctrl · Win · Win · Alt`를 확인합니다.
+5. Keys-To-Go 2에서 아무 키나 한 번 누른 뒤 **이 키보드에만**으로 저장합니다.
+
+잘못 적용되면 엔진을 끄거나 아래 문제 해결의 `hidutil` 초기화 명령으로 즉시 되돌릴 수 있습니다.
 
 ### 엔진 활성화
 
@@ -123,6 +136,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 1. 메뉴바 `wm/WM` 클릭 → **설정...**
 2. **General → Startup** 카드에서 **로그인 시 자동 실행** ON
 3. 같은 카드에서 **앱 실행 후 엔진 자동 시작** ON
+4. **새 버전 자동 확인**은 기본 ON이며 필요하면 같은 카드에서 끌 수 있습니다.
 4. 상태가 `승인 필요`로 나오면 **로그인 항목 설정 열기**를 눌러 시스템 설정에서 WinMac Key를 허용
 
 주의:

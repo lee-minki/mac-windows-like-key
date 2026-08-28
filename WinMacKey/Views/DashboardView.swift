@@ -189,6 +189,24 @@ struct DashboardView: View {
                                 .toggleStyle(.switch)
                         }
 
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("새 버전 자동 확인")
+                                    .font(.subheadline)
+                                Text("실행할 때 GitHub의 최신 정식 릴리스를 확인합니다. 설치 전에는 다시 확인합니다.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { appState.updateService.autoCheckEnabled },
+                                set: { appState.updateService.autoCheckEnabled = $0 }
+                            ))
+                            .toggleStyle(.switch)
+                        }
+
                         if appState.launchAtLoginService.requiresApproval {
                             Button("로그인 항목 설정 열기") {
                                 appState.launchAtLoginService.openLoginItemsSettings()

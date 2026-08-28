@@ -530,8 +530,8 @@ class UpdateService: ObservableObject {
     
     /// 자동 업데이트 체크 설정
     var autoCheckEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: "AutoCheckUpdates") }
-        set { UserDefaults.standard.set(newValue, forKey: "AutoCheckUpdates") }
+        get { StartupDefaults.autoCheckUpdates() }
+        set { UserDefaults.standard.set(newValue, forKey: StartupDefaults.autoCheckUpdatesKey) }
     }
 }
 

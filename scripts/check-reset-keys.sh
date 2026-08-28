@@ -11,16 +11,16 @@ from pathlib import Path
 reset = Path('WinMacKey/Services/ResetService.swift').read_text()
 doctor = Path('WinMacKey/Services/DoctorService.swift').read_text()
 
-reset_match = re.search(r'private let userDefaultsKeys = \[(.*?)\]', reset, re.S)
-doctor_match = re.search(r'let keys = \[(.*?)\]', doctor, re.S)
-if not reset_match:
-    raise SystemExit('reset key check failed: ResetService userDefaultsKeys not found')
-if not doctor_match:
-    raise SystemExit('reset key check failed: DoctorService emergencyRecovery keys not found')
+shared_match = re.search(r'static let all: \[String\] = \[(.*?)\]', reset, re.S)
+if not shared_match:
+    raise SystemExit('reset key check failed: AppManagedDefaultsKeys.all not found')
+if 'userDefaultsKeys = AppManagedDefaultsKeys.all' not in reset:
+    raise SystemExit('reset key check failed: ResetService does not use shared keys')
+if 'for key in AppManagedDefaultsKeys.all' not in doctor:
+    raise SystemExit('reset key check failed: DoctorService does not use shared keys')
 
 extract = lambda body: set(re.findall(r'"([A-Za-z0-9_.]+)"', body))
-reset_keys = extract(reset_match.group(1))
-doctor_keys = extract(doctor_match.group(1))
+shared_keys = extract(shared_match.group(1))
 required = {
     'WinMacKey.Profiles',
     'LastUpdateCheck',
@@ -36,21 +36,10 @@ required = {
     'startEngineOnAppLaunch',
 }
 
-problems = []
-if reset_keys != doctor_keys:
-    problems.append('ResetService and DoctorService key sets differ')
-missing_reset = required - reset_keys
-missing_doctor = required - doctor_keys
-if missing_reset:
-    problems.append('ResetService missing: ' + ', '.join(sorted(missing_reset)))
-if missing_doctor:
-    problems.append('DoctorService missing: ' + ', '.join(sorted(missing_doctor)))
-
-if problems:
-    for problem in problems:
-        print('reset key check failed:', problem)
-    print('ResetService:', ', '.join(sorted(reset_keys)))
-    print('DoctorService:', ', '.join(sorted(doctor_keys)))
+missing = required - shared_keys
+if missing:
+    print('reset key check failed: shared keys missing: ' + ', '.join(sorted(missing)))
+    print('Shared keys:', ', '.join(sorted(shared_keys)))
     raise SystemExit(1)
 
 print('reset key parity: PASS')

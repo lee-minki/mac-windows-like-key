@@ -126,6 +126,7 @@ struct ModifierLayoutView: View {
     private func layoutBadge(_ layout: KeyboardLayout) -> String {
         switch layout {
         case .mac4key: return "Mac 4키"
+        case .portableMac4key: return "포터블 4키"
         case .mac3key: return "Mac 3키"
         case .win3key: return "Win 3키"
         case .win4key: return "Win 4키"
@@ -159,7 +160,7 @@ struct ModifierLayoutView: View {
                          selected: selectedIntent == .koreanOnly) {
                     selectedIntent = .koreanOnly
                 }
-                radioRow("키 배치 바꾸기  (다음 화면 표에서 직접)",
+                radioRow("키 배치 바꾸기  (선택한 형태의 추천 배열 적용)",
                          selected: selectedIntent == .customize) {
                     selectedIntent = .customize
                 }
@@ -202,7 +203,7 @@ struct ModifierLayoutView: View {
     private var mappingTableView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("키 배치").font(.title3).bold()
-            Text("바꿀 키만 골라요. 안 만지면 그대로 (\"기본\"). VDI 는 자동으로 표준 Windows 키 배열로 보냅니다.")
+            Text("선택한 키보드 형태의 추천 배열로 시작합니다. 필요한 키만 바꿀 수 있고, VDI 는 표준 Windows 키 배열로 자동 설정됩니다.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
             // 헤더
@@ -221,6 +222,7 @@ struct ModifierLayoutView: View {
                     mappingRow(
                         sourceKey: sourceKey,
                         capLabel: selectedLayout.capLabels[idx],
+                        localDefault: selectedLayout.localDefaults[idx],
                         vdiDefault: selectedLayout.vdiDefaults[idx],
                         legendStyle: layoutLegend(selectedLayout)
                     )
@@ -259,8 +261,14 @@ struct ModifierLayoutView: View {
         }
     }
 
-    private func mappingRow(sourceKey: Int64, capLabel: String, vdiDefault: Int64, legendStyle: KeyboardLegendStyle) -> some View {
-        let macTarget = localMappings[sourceKey] ?? sourceKey
+    private func mappingRow(
+        sourceKey: Int64,
+        capLabel: String,
+        localDefault: Int64,
+        vdiDefault: Int64,
+        legendStyle: KeyboardLegendStyle
+    ) -> some View {
+        let macTarget = localMappings[sourceKey] ?? localDefault
         let isDefault = (localMappings[sourceKey] == nil)
         let macChoices: [Int64] = [
             Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)
@@ -273,7 +281,10 @@ struct ModifierLayoutView: View {
             .frame(width: 90, alignment: .leading)
 
             Menu {
-                Button("바꾸지 않음 (기본)") { localMappings[sourceKey] = nil }
+                Button("추천 기본값으로") { localMappings[sourceKey] = nil }
+                if localDefault != sourceKey {
+                    Button("바꾸지 않음 (키캡 그대로)") { localMappings[sourceKey] = sourceKey }
+                }
                 Divider()
                 ForEach(macChoices, id: \.self) { choice in
                     Button(ModifierSlot.label(for: choice, style: .mac)) {
@@ -283,7 +294,8 @@ struct ModifierLayoutView: View {
             } label: {
                 HStack(spacing: 4) {
                     if isDefault {
-                        Text("\(capLabel)  (기본 — 안 바꿈)").foregroundStyle(.secondary)
+                        Text(ModifierSlot.label(for: localDefault, style: .mac) + "  (추천 기본값)")
+                            .foregroundStyle(.secondary)
                     } else {
                         Text(ModifierSlot.label(for: macTarget, style: .mac))
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.blue)
@@ -473,6 +485,9 @@ struct ModifierLayoutView: View {
 
     private func inferLayout(from profile: SavedKeyboardProfile) -> KeyboardLayout {
         let keys = profile.physicalKeys
+        if keys == KeyboardLayout.portableMac4key.physicalKeys {
+            return .portableMac4key
+        }
         let hasFn = keys.contains(Int64(kVK_Function))
         switch (profile.legendStyle, hasFn) {
         case (.mac, true):     return .mac4key
@@ -496,7 +511,7 @@ struct ModifierLayoutView: View {
 
     private func layoutLegend(_ layout: KeyboardLayout) -> KeyboardLegendStyle {
         switch layout {
-        case .mac4key, .mac3key: return .mac
+        case .mac4key, .portableMac4key, .mac3key: return .mac
         case .win3key, .win4key: return .windows
         case .custom: return .mac
         }
@@ -514,7 +529,10 @@ struct ModifierLayoutView: View {
             localDesired = physicalKeys  // identity
             vdiDesired = physicalKeys
         } else {
-            localDesired = physicalKeys.map { localMappings[$0] ?? $0 }
+            let localDefaults = selectedLayout.localDefaults
+            localDesired = physicalKeys.enumerated().map { idx, source in
+                localMappings[source] ?? (idx < localDefaults.count ? localDefaults[idx] : source)
+            }
             let defaults = selectedLayout.vdiDefaults
             vdiDesired = physicalKeys.enumerated().map { idx, source in
                 vdiOverrides[source] ?? (idx < defaults.count ? defaults[idx] : source)

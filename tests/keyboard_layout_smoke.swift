@@ -22,6 +22,12 @@ struct KeyboardLayoutSmoke {
             print("keyboard_layout_smoke: FAIL — mac4key should have 4 physical keys")
             exit(1)
         }
+        guard KeyboardLayout.portableMac4key.physicalKeys == [
+            Int64(kVK_Control), Int64(kVK_Function), Int64(kVK_Option), Int64(kVK_Command)
+        ] else {
+            print("keyboard_layout_smoke: FAIL — portableMac4key should be Ctrl/Fn/Opt/Cmd")
+            exit(1)
+        }
         guard KeyboardLayout.mac3key.physicalKeys.count == 3 else {
             print("keyboard_layout_smoke: FAIL — mac3key should have 3 physical keys")
             exit(1)
@@ -37,7 +43,7 @@ struct KeyboardLayoutSmoke {
         print("  - Invariant 1-4 (physicalKeys counts: 4/3/3/4) ✓")
 
         // === Invariant 5: capLabels 와 physicalKeys 길이 동일 ===
-        for layout in [KeyboardLayout.mac4key, .mac3key, .win3key, .win4key] {
+        for layout in [KeyboardLayout.mac4key, .portableMac4key, .mac3key, .win3key, .win4key] {
             guard layout.physicalKeys.count == layout.capLabels.count else {
                 print("keyboard_layout_smoke: FAIL — \(layout) capLabels/physicalKeys 길이 불일치")
                 exit(1)
@@ -46,7 +52,7 @@ struct KeyboardLayoutSmoke {
         print("  - Invariant 5 (capLabels length matches physicalKeys) ✓")
 
         // === Invariant 6: vdiDefaults 와 physicalKeys 길이 동일 ===
-        for layout in [KeyboardLayout.mac4key, .mac3key, .win3key, .win4key] {
+        for layout in [KeyboardLayout.mac4key, .portableMac4key, .mac3key, .win3key, .win4key] {
             guard layout.physicalKeys.count == layout.vdiDefaults.count else {
                 print("keyboard_layout_smoke: FAIL — \(layout) vdiDefaults/physicalKeys 길이 불일치")
                 exit(1)
@@ -74,6 +80,10 @@ struct KeyboardLayoutSmoke {
             print("keyboard_layout_smoke: FAIL — mac4key vdiDefaults should be Ctrl/Win/Win/Alt, got \(mac4vdi)")
             exit(1)
         }
+        guard KeyboardLayout.portableMac4key.vdiDefaults == expected4 else {
+            print("keyboard_layout_smoke: FAIL — portableMac4key VDI defaults should be Ctrl/Win/Win/Alt")
+            exit(1)
+        }
         let win4vdi = KeyboardLayout.win4key.vdiDefaults
         guard win4vdi == expected4 else {
             print("keyboard_layout_smoke: FAIL — win4key vdiDefaults should be Ctrl/Win/Win/Alt, got \(win4vdi)")
@@ -84,6 +94,16 @@ struct KeyboardLayoutSmoke {
         // === Invariant 9: capLabels 텍스트 검증 ===
         guard KeyboardLayout.mac4key.capLabels == ["Fn", "Ctrl", "Opt", "Cmd"] else {
             print("keyboard_layout_smoke: FAIL — mac4key capLabels should be [Fn, Ctrl, Opt, Cmd]")
+            exit(1)
+        }
+        guard KeyboardLayout.portableMac4key.capLabels == ["Ctrl", "Fn", "Opt", "Cmd"] else {
+            print("keyboard_layout_smoke: FAIL — portableMac4key capLabels should be [Ctrl, Fn, Opt, Cmd]")
+            exit(1)
+        }
+        guard KeyboardLayout.portableMac4key.localDefaults == [
+            Int64(kVK_Command), Int64(kVK_Function), Int64(kVK_Option), Int64(kVK_Control)
+        ] else {
+            print("keyboard_layout_smoke: FAIL — portableMac4key local defaults should be Cmd/Fn/Opt/Ctrl")
             exit(1)
         }
         guard KeyboardLayout.win3key.capLabels == ["Ctrl", "Win", "Alt"] else {
@@ -144,6 +164,6 @@ struct KeyboardLayoutSmoke {
         }
         print("  - Invariant 12 (Legacy v1.7.x profile loads with nil keyboardLayout) ✓")
 
-        print("keyboard_layout_smoke: PASS (12 invariants)")
+        print("keyboard_layout_smoke: PASS (13 invariants)")
     }
 }

@@ -41,7 +41,7 @@
 
 ---
 
-## 2. 프로필 & 매핑 위자드 (v1.6.0+ · 캡처 없는 표 기반)
+## 2. 프로필 & 매핑 위자드 (v1.8.3+ · 키보드 형태 기반)
 
 | ID | 기대 동작 | 담당 | 진입 | 권한 | 엣지/위험 |
 |----|-----------|------|------|------|-----------|
@@ -49,18 +49,14 @@
 | **P2** | 저장 프로필: physicalKeys + Mac 목표 + VDI 목표 + (옵셔널) auxiliaryFnKey/bundleId/deviceIdentifier, UUID 저장 | `Profile.SavedKeyboardProfile` | 위자드 완료 | 없음 | 옵셔널 3필드는 새 위자드 UI 미노출이지만 편집 시 보존 |
 | **P3** | 위자드 3화면: `0`프로필 목록 → `1`시작·의도 → `2`매핑 표 → `3`확인·저장 | `ModifierLayoutView` | 설정→Profiles | 없음 (캡처 제거) | 1.5.x 이전의 옛 6화면 흐름은 v1.6.0 에서 완전 제거 |
 | **P4** | **시작·의도**: 프로필 이름 + 두 의도 카드 (① "한/영 전환만" 1클릭 즉시 완료 — 식별 프로필 ② "키 배치도 바꾸기" → 표) | `ModifierLayoutView.startIntentView` | Step 1 진입 | 없음 | — |
-| **P5** | **매핑 표**: 4행(Fn·Ctrl·Opt·Cmd) × 2열(Mac 로컬·VDI) picker. Mac/Windows 키캡 표기 토글, "Windows 감각"(Cmd↔Ctrl 스왑) 1클릭 프리셋, "초기화" 버튼, 라이브 미리보기 | `ModifierLayoutView.mappingTableView` + `mappingRow` | Step 2 진입 | 없음 | 키캡 토글은 라벨만 바뀜 (행 순서는 고정, polish 후보) |
+| **P5** | **매핑 표**: 선택한 키보드 형태에 맞는 3행/4행 × 2열(Mac 로컬·VDI) picker. 포터블 Mac 4키는 물리 `Ctrl·Fn·Opt·Cmd`, Mac 추천 `Cmd·Fn·Opt·Ctrl`, VDI 자동 `Ctrl·Win·Win·Alt` | `KeyboardLayout` + `ModifierLayoutView.mappingTableView` | Step 2 진입 | 없음 | 실제 물리 순서와 다른 형태를 고르면 매핑이 뒤바뀜 |
 | **P6** | **확인·저장**: 매핑 요약 + 저장하고 적용 / 변경 저장 (편집 시) | `ModifierLayoutView.confirmSaveView` + `saveAndClose` | Step 3 진입 | 없음 | 편집 시 옵셔널 3필드(auxFn/bundleId/deviceId) 보존, 새로 생성 시 nil |
 | **P7** | 자동 전환 우선순위: 디바이스 바인딩 > 앱 바인딩 > 기본. 외장→내장만 자동, 외장↔외장 swap 은 마지막 프로필 유지(v1.3.8 보수화) | `WinMacKeyApp` / `AppState` resolve | 디바이스·앱 전환 | 손쉬운 사용 | 정책 변경으로 사용자 기대와 어긋날 수 있음 |
 | **P8** | **안전 삭제 invariant**: active 프로필 삭제 시 `activeMappingProfileId="standardMac"` 리셋 + custom HID 매핑 clear | `AppState.deleteProfileSafely` | DashboardView·ModifierLayoutView 휴지통 | 없음 | service 추출 전(v1.5.1) 회귀 이력 — DashboardView 만 처리하고 새 UI 누락 |
 
-### 2.1 기능 축은 "키코드" — 키캡 표기·물리 위치 무관
+### 2.1 기능 축은 키보드 형태와 표준 키코드
 
-새 위자드는 **macOS 가 모든 키보드를 표준 modifier 키코드(`kVK_Function`·`kVK_Control`·`kVK_Option`·`kVK_Command`)로 정규화한다는 사실** 위에 선다. `hidutil` 매핑도 키코드→키코드이므로 어떤 물리 키보드(Mac/Windows/듀얼모드/펑션 키 위치 다른 외장)든 동일한 키코드를 받는다 → **표 4행이 모든 경우를 망라.** 누를 필요 없음.
-
-- `selectedLegendStyle` (Mac/Windows) = **표시용(cosmetic)** — `Opt` vs `Alt`, `Cmd` vs `Win` 라벨만 전환 (`ModifierSlot.label(for:style:)`). 실제 매핑·키코드는 일체 영향 없음.
-- "Windows 감각" 프리셋 = Mac 에서 `kVK_Command` ↔ `kVK_Control` 스왑 (Windows 키보드 단축키 감각).
-- 옛 "3키 vs 4키 + Space 경계" 자동 판단 / "좌측 끝 = Fn" 인지 / Fn 캡처는 **v1.6.0 에서 모두 제거** — 표가 항상 4행으로 모든 키를 다룬다.
+macOS는 modifier를 표준 키코드로 정규화하지만 물리적 좌우 순서는 키보드마다 다르다. 위자드는 사용자가 선택한 `KeyboardLayout.physicalKeys` 순서로 행을 만들고, 형태별 `localDefaults`와 `vdiDefaults`를 적용한다. `portableMac4key`는 Keys-To-Go 2의 `Ctrl·Fn·Opt·Cmd` 순서를 별도로 표현한다.
 
 > **호환성 정의**: 모델 struct 시그니처는 그대로. 새 표 UI 가 노출하지 않는 옵셔널 3필드(`auxiliaryFnKey`·`bundleId`·`deviceIdentifier`)는 편집 시 기존 값을 **보존**한다. 변경하려면 `auxiliaryFnKey` 는 프로필 삭제 후 재생성, `bundleId`/`deviceIdentifier` 는 Profiles 탭의 "Bind keyboard…" UI 에서.
 

@@ -5,11 +5,20 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard SingleInstanceGuard.shared.decision == .run else {
+            SingleInstanceGuard.shared.activatePreferredInstance()
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
+            return
+        }
+
         // DMG/다운로드에서 실행됐으면 응용 프로그램 폴더로 이동 제안 (v1.5.0)
         ApplicationMover.offerMoveToApplicationsIfNeeded()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        guard SingleInstanceGuard.shared.decision == .run else { return }
         // 앱 종료 시 cleanup — ownership 우회 path 사용.
         // Phase D 에서 pre-existing snapshot 복원 로직 추가 예정.
         HIDRemapper.shared.internalClearAllForTermination()
@@ -19,7 +28,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct WinMacKeyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appState = AppState()
+    @StateObject private var appState: AppState
+
+    init() {
+        let shouldRun = SingleInstanceGuard.shared.prepareForLaunch()
+        _appState = StateObject(wrappedValue: AppState(shouldRunStartup: shouldRun))
+    }
     
     var body: some Scene {
         // Menu Bar Extra - 메뉴바에 상주
@@ -193,7 +207,8 @@ class AppState: ObservableObject {
         Int64(kVK_Control): Int64(kVK_Function),   // Control → Fn
     ]
     
-    init() {
+    init(shouldRunStartup: Bool = true) {
+        guard shouldRunStartup else { return }
         Self.sanitizeSavedWindowFrame(forKey: "NSWindow Frame com_apple_SwiftUI_Settings_window")
 
         // Forward child ObservableObject changes so views observing AppState re-render

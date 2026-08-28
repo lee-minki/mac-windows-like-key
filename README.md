@@ -44,6 +44,7 @@
 - **🧩 Keyboard Profiles**: 현재 입력을 실키로 감지하고 `Mac 로컬` / `VDI` 목표 배치를 따로 저장
 - **🔁 Login Startup**: 재부팅 후 자동 실행과 앱 실행 시 엔진 자동 시작 옵션 제공
 - **📍 Menu Bar Utility**: 상태 확인, 로그, Doctor, 업데이트 창에 빠르게 접근
+- **🧍 Single Instance**: Applications 설치본을 우선하고 다른 복사본의 동시 입력 엔진 실행을 차단
 
 ---
 
@@ -66,7 +67,7 @@
 git clone https://github.com/lee-minki/mac-windows-like-key.git
 cd mac-windows-like-key
 xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -derivedDataPath build/DerivedData build
-open build/DerivedData/Build/Products/Debug/WinMacKey.app
+WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/WinMacKey.app/Contents/MacOS/WinMacKey
 ```
 
 ---
@@ -100,12 +101,11 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 ### 5. 키보드 프로필 참고
 
-- 프로필 위자드는 **3화면 표 기반** (캡처 없음, v1.6.0+):
+- 프로필 위자드는 **3화면 표 기반** (캡처 없음, v1.8.3+):
   - **시작·의도**: 프로필 이름 + 의도 선택 — `"한/영 전환만"`(1클릭 즉시 완료, 식별 프로필) / `"키 배치도 바꾸기"`(표 화면으로)
-  - **매핑 표**: `Fn · Ctrl · Opt · Cmd` 4행 × `Mac 에서` / `VDI 에서` 2열 picker. 각 행에서 목표 키를 직접 선택 (default = 안 바꿈)
+  - **매핑 표**: 선택한 키보드 형태의 3행/4행 × `Mac 에서` / `VDI 에서` 2열 picker. 각 행에서 목표 키를 직접 선택
   - **확인·저장**: 매핑 요약 확인 후 저장
-- 표 상단의 `Mac (Cmd/Opt) ↔ Windows (Win/Alt)` 토글로 키캡 표기 전환 (라벨만 바뀜, 키코드는 동일)
-- `"Windows 감각"` 버튼 — Mac 에서 `Cmd↔Ctrl` 스왑 1클릭 프리셋 (Windows 단축키 감각)
+- Keys-To-Go 2처럼 왼쪽 키가 `Ctrl · Fn · Opt · Cmd` 순서면 **포터블 Mac 4키**를 선택합니다. `키 배치 바꾸기`의 추천값은 `Cmd · Fn · Opt · Ctrl`입니다.
 - macOS 가 모든 키보드를 같은 키코드로 보고하므로 **키보드를 누를 필요 없음** (Mac/Windows 듀얼모드 키보드 포함)
 - 기존 프로필의 보조 Fn 키 설정은 편집 시 자동 보존 (UI 미노출, 변경하려면 삭제 후 재생성)
 - 프로필 이름은 구분용 라벨입니다
@@ -121,6 +121,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 - Windows VDI를 사용한다면 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요
 - 재부팅 후 바로 쓰려면 `설정 → General → Startup`에서 `로그인 시 자동 실행`과 `앱 실행 후 엔진 자동 시작`을 함께 켜세요
 - Ghostty, Terminal.app, iTerm2 같은 터미널류 앱 경로는 F16 노출과 Command shortcut 누출을 막기 위한 별도 경로가 적용되어 있습니다. 1차 안정화는 되었지만 broader verification 전까지 `[57379u` raw sequence나 `Cmd+N` shortcut 누출이 보이면 terminal regression으로 기록해 확인하세요.
+- 새 릴리스 확인은 기본으로 켜져 있으며, 설치는 사용자 확인 후 `/Applications/WinMacKey.app`을 제자리 교체합니다. GitHub의 Draft/Pre-release는 자동 업데이트 대상이 아닙니다.
 
 ---
 

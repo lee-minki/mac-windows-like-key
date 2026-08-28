@@ -70,6 +70,7 @@ enum KeyboardLegendStyle: String, Codable, CaseIterable, Hashable {
 enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
     /// 맥북 내장 또는 외장 4키 Mac (Fn · Ctrl · Opt · Cmd)
     case mac4key
+    case portableMac4key
     /// 외장 Mac 3키 (Ctrl · Opt · Cmd) — Apple Magic Keyboard, Keychron K6 등
     case mac3key
     /// 외장 Windows 3키 (Ctrl · Win · Alt) — 일반 PC 키보드
@@ -82,6 +83,7 @@ enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .mac4key: return "맥북 내장 (Fn · Ctrl · Opt · Cmd)"
+        case .portableMac4key: return "포터블 Mac 4키 (Ctrl · Fn · Opt · Cmd)"
         case .mac3key: return "외장 Mac 3키 (Ctrl · Opt · Cmd)"
         case .win3key: return "외장 Windows 3키 (Ctrl · Win · Alt)"
         case .win4key: return "외장 Windows 4키 (Fn · Ctrl · Win · Alt)"
@@ -94,6 +96,7 @@ enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
     var physicalKeys: [Int64] {
         switch self {
         case .mac4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
+        case .portableMac4key: return [Int64(kVK_Control), Int64(kVK_Function), Int64(kVK_Option), Int64(kVK_Command)]
         case .mac3key: return [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
         case .win3key: return [Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]  // macOS 가 Win 키보드 받을 때: Win→Cmd, Alt→Opt
         case .win4key: return [Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)]
@@ -106,10 +109,20 @@ enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
     var capLabels: [String] {
         switch self {
         case .mac4key: return ["Fn", "Ctrl", "Opt", "Cmd"]
+        case .portableMac4key: return ["Ctrl", "Fn", "Opt", "Cmd"]
         case .mac3key: return ["Ctrl", "Opt", "Cmd"]
         case .win3key: return ["Ctrl", "Win", "Alt"]
         case .win4key: return ["Fn", "Ctrl", "Win", "Alt"]
         case .custom: return []
+        }
+    }
+
+    var localDefaults: [Int64] {
+        switch self {
+        case .portableMac4key:
+            return [Int64(kVK_Command), Int64(kVK_Function), Int64(kVK_Option), Int64(kVK_Control)]
+        default:
+            return physicalKeys
         }
     }
 
@@ -123,6 +136,8 @@ enum KeyboardLayout: String, Codable, CaseIterable, Hashable {
         switch self {
         case .mac4key:
             // [Fn, Ctrl, Opt, Cmd] → VDI [Ctrl, Win, Win, Alt]
+            return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Command), Int64(kVK_Option)]
+        case .portableMac4key:
             return [Int64(kVK_Control), Int64(kVK_Command), Int64(kVK_Command), Int64(kVK_Option)]
         case .mac3key:
             // [Ctrl, Opt, Cmd] → VDI [Ctrl, Win, Alt]

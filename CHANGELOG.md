@@ -6,7 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [1.8.2] — 2026-06-09
+## [Unreleased] — v1.8.3
+
+### Added
+- **포터블 Mac 4키 배열**: Logitech Keys-To-Go 2처럼 스페이스 왼쪽이 `Ctrl · Fn · Opt · Cmd`인 키보드를 프로필 형태로 추가했습니다. 추천 Mac 배열은 `Cmd · Fn · Opt · Ctrl`, VDI 배열은 기존 규칙을 유지한 `Ctrl · Win · Win · Alt`입니다.
+
+### Changed
+- **업데이트 확인 기본 활성화**: `자동 업데이트 확인`을 한 번도 정하지 않은 사용자는 기본적으로 새 릴리스를 확인합니다. 사용자가 직접 끈 값은 그대로 보존합니다.
+- **표준 설치본 우선 실행**: `/Applications/WinMacKey.app`이 있으면 빌드 폴더·다운로드 폴더의 복사본은 입력 엔진을 시작하지 않고 표준 설치본을 엽니다.
+
+### Fixed
+- **동일 버전 앱 중복 실행 차단**: 실행 잠금으로 두 번째 WinMac Key 프로세스가 HID 매핑과 이벤트 탭을 동시에 제어하지 못하게 했습니다. 종료하는 보조 프로세스는 활성 프로세스의 HID 매핑을 지우지 않습니다.
+
+### Note
+- Info.plist 1.8.2/25 → **1.8.3/26**, `MARKETING_VERSION 1.8.3`, `CURRENT_PROJECT_VERSION 26`.
+- Right Command → F16 릴레이 모델과 Horizon의 `F16 → Right Alt` 외부 매핑은 변경하지 않았습니다.
+
+---
+
+## [1.8.2] — Superseded by v1.8.3
 
 **보안·신뢰성 하드닝 패치 (묶음 A).** 코드 검수에서 도출된 저위험 항목만 선별 적용 — 엔진/트리거(`bufferedReplayWindow`) 경로는 일절 건드리지 않아 P9·P10·P13 회귀 표면 0. 입력 매끄러움(비동기 replay)·`@MainActor` 격리 등 엔진 관련 항목은 별도 하네스 게이트 트랙으로 분리(미포함).
 
