@@ -44,8 +44,15 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
+          CURRENT_BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' WinMacKey/Info.plist)
+          BUILD_NUMBER="$CURRENT_BUILD"
+          if [[ "$GITHUB_RUN_NUMBER" =~ ^[0-9]+$ ]] && [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]] && [ "$GITHUB_RUN_NUMBER" -gt "$CURRENT_BUILD" ]; then
+            BUILD_NUMBER="$GITHUB_RUN_NUMBER"
+          fi
+
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" WinMacKey/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" WinMacKey/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" WinMacKey/Info.plist
+          echo "Using bundle version ${VERSION} (${BUILD_NUMBER}); project=${CURRENT_BUILD}, run=${GITHUB_RUN_NUMBER}"
 
       # Code signing setup (only when secrets are configured)
       - name: Import signing certificate

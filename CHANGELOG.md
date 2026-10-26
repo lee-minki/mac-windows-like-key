@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **프로필 UI 의미 정리**: 장치 바인딩 프로필은 `장치별 적용`으로 표시하고, 최근 입력 장치만 `마지막 입력`으로 표시합니다. 장치에 바인딩되지 않은 프로필만 `전체 적용`으로 선택합니다.
 
 ### Fixed
+- **CI 빌드 번호 역행 방지**: GitHub Actions 실행 번호가 프로젝트의 현재 build보다 작아도 `CFBundleVersion`을 낮추지 않습니다. 기존 설치본보다 오래된 빌드로 인식되는 DMG 생성을 차단합니다.
 - **Codex·터미널 전환 직후 첫 글자 유실**: Codex desktop을 터미널 계열 컨텍스트로 분류하고, 직접 입력소스 전환 직후 짧은 settle window에서 일반 문자만 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과시켜 Ghostty/SSH 단축키와 escape sequence 안전성을 유지합니다.
 - **`저장하고 적용` 무반응**: 클린 설치 직후 마지막 입력 키보드가 아직 없으면 버튼이 활성화된 채 저장 함수가 조용히 중단되던 문제를 수정했습니다. 연결된 키보드가 하나면 그 장치에 즉시 바인딩하고, 여러 대면 대상 키보드 입력 전까지 버튼을 비활성화합니다.
 - **내장·외장 프로필 오염**: 단일 `activeMappingProfileId`의 global 매핑이 모든 키보드에 적용되어 내장 키보드와 Keys-To-Go 2 배열이 서로 덮어쓰던 문제를 수정했습니다.
