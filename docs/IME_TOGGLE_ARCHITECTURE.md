@@ -52,7 +52,7 @@
 ```
 onInputSourceToggle:
   if isVdiMode:        beginVdiRelayCooldownWindow()      // (A) VDI
-  else if isTerminalMode: handleTerminalTrigger()          // (B) 터미널
+  else if isTerminalMode: handleTerminalTrigger() + beginTerminalInputSourceSettleWindow()  // (B) 터미널
   else:                beginInputSourceCommitWindow()      // (C) 그 외 GUI
                        + stateManager.handleTrigger(...)
 ```
@@ -65,16 +65,18 @@ onInputSourceToggle:
   (`MappingProfile`: Cmd→Ctrl 등) ②VDI 전용 내장키보드 Fn↔Ctrl 스왑 ③Horizon 자체 매핑표.
   한/영 토글 버그와 혼동하지 말 것.
 
-### (B) 터미널 — Ghostty · iTerm2 · Terminal · Warp · Alacritty · kitty · Claude desktop
+### (B) 터미널 — Ghostty · iTerm2 · Terminal · Warp · Alacritty · kitty · Claude desktop · Codex desktop
 - `ContextManager.terminalApps` 화이트리스트(+ `CustomTerminalApps` UserDefaults).
-- **커밋 윈도우/버퍼를 아예 안 연다.** `handleTerminalTrigger` → `toggleDirectly()`
-  (= `TISSelectInputSource`, 즉시·무버퍼).
+- 일반 GUI 커밋 윈도우는 열지 않는다. `handleTerminalTrigger` → `toggleDirectly()`
+  (= `TISSelectInputSource`) 뒤에 `terminalInputSourceSettle` 윈도우만 짧게 연다.
+- settle 윈도우는 글자/숫자/구두점/Space/Backspace 계열만 잡고, Command/Control/Option 조합과
+  Return/Tab/Escape 계열은 잡지 않는다.
 - **왜?** (P10) 커밋창이 열리면 트리거 직후 ESC/Backspace/paste 가 버퍼됐다 한꺼번에 replay 되어
-  **SSH escape sequence 로 오해석 → 화면 깨짐**. 그래서 터미널은 최소 경로만.
-- 트레이드오프: 무버퍼라 전환 확정 전에 친 글자가 이전 IME 로 샐 수 있음(ㅊ 류). 터미널에선
-  escape 안전 > 조합 정확성 으로 판단.
+  **SSH escape sequence 로 오해석 → 화면 깨짐**. 그래서 터미널은 일반 버퍼가 아니라 제한된 짧은 버퍼만 쓴다.
+- 트레이드오프: 포커스 앱의 텍스트 컨텍스트 갱신이 늦을 때 첫 글자가 이전 IME 로 새는 문제를 줄이되,
+  SSH escape 안전을 위해 control chord/paste/ESC 계열은 즉시 통과시킨다.
 
-### (C) 그 외 GUI — TextEdit · Notes · 브라우저 · 그리고 **Codex 등**
+### (C) 그 외 GUI — TextEdit · Notes · 브라우저 · 일반 Electron/IDE
 - `toggleViaKeyboardShortcut()` = **Control+Space 합성**(조합버퍼 auto-commit + 메뉴바 갱신).
 - `StateManager.startPollingForInputSourceChange`(`:107`): 20×2ms(≈40–80ms) 폴링으로 입력소스
   변경 검증 → 실패 시 **Control+Space 재시도** → 그래도 실패 시 **`toggleDirectly()`(TIS)로 폴백**.
@@ -88,7 +90,7 @@ onInputSourceToggle:
 | 경로 | 절대 하지 말 것 | 이유 |
 |---|---|---|
 | VDI | F16 을 로컬에서 삼키기 | Horizon 이 못 받아 게스트 한/영 죽음 |
-| 터미널 | 커밋창/버퍼 켜기 | SSH escape 화면 깨짐(P10) 재발 |
+| 터미널 | 일반 GUI 커밋창 또는 ESC/paste 버퍼링 켜기 | SSH escape 화면 깨짐(P10) 재발 |
 | GUI | Control+Space 를 TIS 로 **전면** 교체 | 조합 미commit·메뉴바 stale (v1.2.0 이전으로 회귀) |
 | 공통 | `usleep(5_000)` 제거/축소 | Word 등 느린 IME 글자 드롭(P13/P14) 재발 |
 | 공통 | 합성 이벤트 마커 누락 | 탭 재진입/재매핑 → 무한 루프·중복 입력 |
@@ -140,7 +142,7 @@ fix. 후보: 앱의 Ctrl+Space 소비 / HID remap drift / stale grant." → **�
 2. **폴링 창 확대**(20→예: 50–60회) 로 느린 전환을 놓치지 않게 — 단 ㅊ/replay 트레이드오프 실측.
 3. 하네스 게이트(순서/간격 스모크 + §7 6표면 체크리스트) 통과 후 적용.
 
-> **주의:** 앱별 carve-out(Codex 등)은 **오답** — Notes/Chrome 도 실패하므로 근본 해결 아님.
+> **주의:** Control+Space 실패를 앱별 carve-out(Codex 등)만으로 설명하는 것은 **오답** — Notes/Chrome 도 실패하므로 근본 해결 아님.
 
 ---
 
@@ -167,7 +169,7 @@ log stream --level debug \
 | `switched directly for terminal context` | 터미널 경로(TIS 직행) |
 | `Toggle: posted Control down + Space …` | GUI 경로(Control+Space) |
 | `Toggle verification timeout; retrying` | **P9 징후** — Control+Space 안 먹힘 |
-| `Replayed N buffered key events (win, reason)` | 커밋창 flush (reason: `input-source-changed` / `min-hold` / `timeout` / `vdi-relay-settle`) |
+| `Replayed N buffered key events (win, reason)` | 커밋창 flush (reason: `input-source-changed` / `min-hold` / `timeout` / `vdi-relay-settle` / `terminal-input-source-settle`) |
 
 > **⚠️ 앱 귀속 함정.** `winmackey.log` 의 `[Terminal]/[VDI]` 줄은 **터미널/VDI 상태가 바뀔 때만**
 > 찍힌다(`WinMacKeyApp.swift:284`). 비터미널→비터미널 전환(예: Codex↔메모↔Chrome)은 로그가
@@ -182,12 +184,13 @@ log stream --level debug \
 
 ## 7. 변경 전 회귀 체크리스트 (필수)
 
-토글 서브시스템을 건드렸다면, 커밋 전 아래 **6개 표면 전부** 수동 확인:
+토글 서브시스템을 건드렸다면, 커밋 전 아래 **7개 표면 전부** 수동 확인:
 
 - [ ] **일반 GUI** (TextEdit/Notes): 한/영 후 즉시 타자 — 씹힘/이전키 없음
 - [ ] **IME-sensitive** (Word/Pages): 빠른 타자 시 글자 드롭 없음 (P13)
 - [ ] **터미널/SSH** (Ghostty + ssh 세션): ESC/Backspace 화면 안 깨짐 (P10)
-- [ ] **Ctrl+Space 소비 앱** (Codex 등 Electron/IDE): 한/영 간헐 실패 없음 (P9)
+- [ ] **Codex desktop / terminal-like UI**: 포커스 왕복 없이 한글 첫 글자 정상, `dnfl`식 로마자 유출 없음
+- [ ] **Ctrl+Space 소비 앱** (일반 Electron/IDE): 한/영 간헐 실패 없음 (P9)
 - [ ] **VDI** (Horizon): F16→Right Alt 릴레이 유지, 게스트 한/영 정상
 - [ ] **Remote Mac** (Screen Sharing): 로컬 토글이 원격에 문자로 forward
 

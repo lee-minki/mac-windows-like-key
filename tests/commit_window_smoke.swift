@@ -59,12 +59,43 @@ struct CommitWindowSmoke {
         interceptor.completeInputSourceCommitWindow()
         print("  - Invariant 6 (consecutive begin supersede) ✓")
 
+        let terminalInterceptor = KeyInterceptor()
+        terminalInterceptor.beginTerminalInputSourceSettleWindow()
+        guard terminalInterceptor.activeBufferedReplayWindowForTesting == "none" else {
+            print("commit_window_smoke: FAIL — terminal settle should guard non-terminal focus")
+            exit(1)
+        }
+        print("  - Invariant 7 (Terminal settle guards non-terminal focus) ✓")
+
+        terminalInterceptor.isTerminalAppFocused = true
+        terminalInterceptor.beginTerminalInputSourceSettleWindow()
+        guard terminalInterceptor.activeBufferedReplayWindowForTesting == "terminalInputSourceSettle" else {
+            print("commit_window_smoke: FAIL — terminal settle window should open in terminal focus")
+            exit(1)
+        }
+        terminalInterceptor.completeInputSourceCommitWindow()
+        guard terminalInterceptor.activeBufferedReplayWindowForTesting == "terminalInputSourceSettle" else {
+            print("commit_window_smoke: FAIL — input source commit completion should not close terminal settle")
+            exit(1)
+        }
+        terminalInterceptor.cancelTerminalInputSourceSettleWindow()
+        terminalInterceptor.isTerminalAppFocused = false
+        guard terminalInterceptor.activeBufferedReplayWindowForTesting == "none" else {
+            print("commit_window_smoke: FAIL — terminal settle cancel should close active window")
+            exit(1)
+        }
+        guard terminalInterceptor.terminalInputSourceSettleTimeout == 0.120 else {
+            print("commit_window_smoke: FAIL — terminal settle timeout should be 0.120")
+            exit(1)
+        }
+        print("  - Invariant 8 (Terminal settle begin/cancel contract) ✓")
+
         // === Invariant 7: VDI cooldown 도 같은 패턴 ===
         interceptor.isVdiAppFocused = true
         interceptor.beginVdiRelayCooldownWindow()
         interceptor.isVdiAppFocused = false
-        print("  - Invariant 7 (VDI cooldown begin) ✓")
+        print("  - Invariant 9 (VDI cooldown begin) ✓")
 
-        print("commit_window_smoke: PASS (7 invariants)")
+        print("commit_window_smoke: PASS (9 invariants)")
     }
 }

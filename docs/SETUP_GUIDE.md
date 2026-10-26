@@ -286,13 +286,13 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 3. **macOS 입력소스 전환 단축키가 Control+Space인지 확인** (STEP 1)
 4. Event Viewer → Right Cmd 이벤트가 잡히는지 확인
 
-### "Ghostty / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
+### "Ghostty / Codex / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
 
-1. 최신 경로는 Ghostty 같은 terminal context에서 `F16 suppress + direct input-source switch`를 사용합니다.
+1. 최신 경로는 Ghostty/Codex 같은 terminal context에서 `F16 suppress + direct input-source switch + short terminal settle replay`를 사용합니다.
 2. raw sequence뿐 아니라 검색 UI, `Cmd+N`, `Cmd+D` 같은 Command shortcut 누출이 없는지 먼저 확인하세요.
 3. 현재까지는 `pasting text` 오버레이가 사라진 단계까지 확인되었습니다. 남은 확인 포인트는 미세한 끊김이 계속 있는지입니다.
 4. 앱을 업데이트한 뒤 WinMac Key 엔진을 한 번 껐다가 다시 켭니다.
-5. Ghostty가 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
+5. Ghostty 또는 Codex desktop이 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
 
 ### "VDI에서 한영전환이 안 돼요"
 

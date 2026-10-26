@@ -120,7 +120,7 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 - `Caps Lock 키로 ABC 입력 소스 전환`은 로컬 macOS에서 순수 Caps Lock을 쓰려면 꺼두는 것을 권장합니다
 - Windows VDI를 사용한다면 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요
 - 재부팅 후 바로 쓰려면 `설정 → General → Startup`에서 `로그인 시 자동 실행`과 `앱 실행 후 엔진 자동 시작`을 함께 켜세요
-- Ghostty, Terminal.app, iTerm2 같은 터미널류 앱 경로는 F16 노출과 Command shortcut 누출을 막기 위한 별도 경로가 적용되어 있습니다. 1차 안정화는 되었지만 broader verification 전까지 `[57379u` raw sequence나 `Cmd+N` shortcut 누출이 보이면 terminal regression으로 기록해 확인하세요.
+- Ghostty, Terminal.app, iTerm2, Codex desktop 같은 터미널류 앱은 F16을 로컬에서 숨기고 입력소스를 직접 전환한 뒤, 첫 일반 문자만 짧게 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과합니다. `[57379u` raw sequence, `Cmd+N` shortcut 누출, 전환 직후 첫 글자의 로마자 입력이 보이면 terminal regression으로 기록해 확인하세요.
 - 새 릴리스 확인은 기본으로 켜져 있으며, 설치는 사용자 확인 후 `/Applications/WinMacKey.app`을 제자리 교체합니다. GitHub의 Draft/Pre-release는 자동 업데이트 대상이 아닙니다.
 
 ---

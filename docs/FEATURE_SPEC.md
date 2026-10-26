@@ -33,9 +33,9 @@
 | **E1** | Right Cmd 를 HID 레벨에서 F16 으로 리맵 (modifier flag 오염 차단) | `HIDRemapper.applyMappings` | 엔진 ON | 없음(hidutil) | 외부 hidutil 도구(Karabiner)와 충돌; 강제종료 시 매핑 잔존 |
 | **E2** | 로컬 Mac: F16 suppress 후 Control+Space 합성 → 입력소스 토글 | `KeyInterceptor.handleTriggerKey` / `translateMapping` | F16 포착 | 손쉬운 사용 | "이전 입력 소스 선택" 단축키 미설정 시 무동작; 권한 stale |
 | **E3** | VDI(Horizon) 포커스: F16 을 suppress 안 하고 패스스루 | `KeyInterceptor.handleTriggerKey` (`isVdiAppFocused`) | F16 포착 | 손쉬운 사용 | Horizon 측 F16→Right Alt 매핑 필수(외부 설정) |
-| **E4** | 터미널(Ghostty 등) 포커스: 입력소스 직접 전환(합성 우회) | `KeyInterceptor` 터미널 분기 / `ContextManager` | 앱 전환 감지 | 손쉬운 사용 | 이스케이프 시퀀스 누출 회귀 이력; 앱 화이트리스트 의존 |
+| **E4** | 터미널(Ghostty·Codex 등) 포커스: 입력소스 직접 전환 후 첫 일반 문자를 짧게 보류·재생 | `KeyInterceptor` 터미널 분기 / `ContextManager` | 앱 전환 감지 | 손쉬운 사용 | Command/Control/Option 및 Return/Tab/Escape는 즉시 통과; 앱 화이트리스트 의존 |
 | **E5** | Mac→Mac 원격(Screen Sharing): 로컬 입력소스만 토글(원격에 문자 forward) | `KeyInterceptor` (`isRemoteMacAppFocused`) | 앱 전환 감지 | 손쉬운 사용 | Screen Sharing 외 VNC 미검증 |
-| **E6** | Right Cmd 릴리즈 후 20ms commit 윈도우 동안 입력 버퍼링 | `KeyInterceptor` buffered replay | 릴리즈 직후 | 손쉬운 사용 | 과버퍼링 시 입력 지연 |
+| **E6** | 일반 GUI에서 Right Cmd 릴리즈 후 입력소스 변경 검증 동안 입력 버퍼링 | `KeyInterceptor` buffered replay | 릴리즈 직후 | 손쉬운 사용 | 과버퍼링 시 입력 지연; 터미널은 E4의 제한된 settle window 사용 |
 
 상세 동작·상태기계는 [`RIGHT_COMMAND_ONLY_SPEC.md`](RIGHT_COMMAND_ONLY_SPEC.md) 참조.
 
@@ -81,9 +81,9 @@ macOS는 modifier를 표준 키코드로 정규화하지만 물리적 좌우 순
 | ID | 기대 동작 | 담당 | 진입 | 권한 | 엣지/위험 |
 |----|-----------|------|------|------|-----------|
 | **V1** | VDI 앱 자동 감지 (Horizon/Fusion/Parallels/RDP 등 Bundle ID) | `ContextManager` | 앱 전환 | 없음 | Bundle ID 리브랜딩(Horizon→Omnissa) |
-| **V2** | VDI 포커스 시 내장 키보드만 Fn↔Ctrl swap 적용 | `AppState` VDI 매핑 전환 | isVdiMode 변경 | 없음 | 재적용 레이턴시(~30ms) |
+| **V2** | VDI 포커스 시 바인딩된 내장·외장 프로필을 각 장치의 VDI 목표 배열로 동시 전환 | `AppState` 장치별 매핑 레이어 | isVdiMode 변경 | 없음 | 재적용 시 장치 레이어 clear→apply 순서 유지 필요 |
 | **V3** | F16(flag 없음)로 Win+P 등 고스트 단축키 차단 | `HIDRemapper` IME 트리거 매핑 | 엔진 ON | 없음 | hidutil 원복 난이도 |
-| **V4** | 터미널 모드: 컨텍스트 자동 감지로 직접 입력소스 전환 | `ContextManager` 터미널 판정 | 앱 전환 | 손쉬운 사용 | 화이트리스트 외 터미널 미감지 |
+| **V4** | 터미널 모드: 컨텍스트 자동 감지로 직접 입력소스 전환 + 짧은 printable settle replay | `ContextManager` 터미널 판정 / `KeyInterceptor` | 앱 전환 | 손쉬운 사용 | 화이트리스트 외 터미널 미감지 |
 
 ---
 

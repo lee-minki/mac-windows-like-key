@@ -506,6 +506,8 @@ section h2 .emoji{font-size:28px}
   <div class="faq-item"><div class="faq-q">VMware에서 한/영 전환이 안 되나요?</div><div class="faq-a"><p>VDI 환경에서는 <strong>F16 → Right Alt</strong> 매핑이 필요합니다.<br>v1.3.0부터 F16 HID remap 아키텍처로 modifier flag 오염이 원천 차단되어 Win+P, Shift+영문 등의 오발이 해결되었습니다.<br>위의 <a href="#vdi" style="color:var(--accent)">VDI 환경 설정</a> 섹션을 참조하세요.</p></div></div>
   <div class="faq-item"><div class="faq-q">로컬 Mac에서 첫 글자가 영어로 들어가요. 예: xㅓ미널</div><div class="faq-a"><p>입력소스 전환이 실제로 확인되기 전에 첫 글자가 먼저 풀리면 생길 수 있습니다.<br><br>최신 버전은 <strong>입력소스 변경 검증 + 최소 홀드</strong> 뒤에 버퍼를 풀도록 보강했습니다.<br>그래도 재현되면 <code>Control+Space</code> 설정, Caps Lock 한영전환, Karabiner/Hammerspoon 중복 핫키를 먼저 확인하세요.</p></div></div>
 
+  <div class="faq-item"><div class="faq-q">Ghostty 또는 Codex에서 전환 직후 첫 글자가 영문으로 들어가요</div><div class="faq-a"><p>v1.8.4는 Ghostty·Codex 같은 터미널 계열 앱에서 입력소스를 직접 전환한 뒤 첫 일반 문자만 짧게 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과하므로 SSH 단축키와 escape sequence를 가리지 않습니다.<br><br><code>[57379u</code> 같은 문자열, <code>Cmd+N</code> 누출 또는 첫 글자 로마자 입력이 계속되면 엔진을 한 번 껐다 켜고, 현재 앱이 최신 목록에 포함되는지 확인하세요. 상세 절차는 <a href="https://github.com/lee-minki/mac-windows-like-key/blob/main/docs/SETUP_GUIDE.md" style="color:var(--accent)">설정 가이드</a>를 따르세요.</p></div></div>
+
   <div class="faq-item"><div class="faq-q">Karabiner-Elements와 동시에 쓸 수 있나요?</div><div class="faq-a"><p>권장하지 않습니다. 두 프로그램 모두 CGEventTap을 사용하여 같은 레벨에서 키 입력을 가로채므로 충돌합니다.<br><br>Karabiner에서 fn/Cmd/Ctrl/Right Cmd 관련 매핑을 제거하면 공존할 수 있지만, WinMac Key만 사용하는 것을 권장합니다.</p></div></div>
 
   <div class="faq-item"><div class="faq-q">손쉬운 사용 권한을 허용했는데 동작하지 않아요</div><div class="faq-a"><p>macOS에서는 권한 변경 후 앱을 재시작해야 적용됩니다.<br>WinMac Key를 완전히 종료(메뉴바 → "WinMac Key 종료") 후 다시 실행하세요.<br><br>그래도 안 되면 손쉬운 사용 목록에서 WinMac Key를 <strong>제거한 뒤 다시 추가</strong>해보세요.</p></div></div>
@@ -558,8 +560,8 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 </section>
 
 <footer style="text-align:center;padding:40px 0 20px;color:var(--text2);font-size:12px;border-top:1px solid var(--border)">
-  <p>WinMac Key v1.6.0 · Made with ❤️ for Windows → Mac 전환 사용자</p>
-  <p style="margin-top:4px"><a href="https://github.com/lee-minki/mac-windows-like-key" style="color:var(--accent);text-decoration:none">GitHub</a></p>
+  <p>WinMac Key v1.8.4 · Made with ❤️ for Windows → Mac 전환 사용자</p>
+  <p style="margin-top:4px"><a href="https://github.com/lee-minki/mac-windows-like-key" style="color:var(--accent);text-decoration:none">GitHub</a> · <a href="https://github.com/lee-minki/mac-windows-like-key/blob/main/docs/SETUP_GUIDE.md" style="color:var(--accent);text-decoration:none">설정 가이드</a></p>
 </footer>
 
 </div>

@@ -63,7 +63,8 @@ class StateManager: ObservableObject {
         }
     }
 
-    func handleTerminalTrigger() {
+    @discardableResult
+    func handleTerminalTrigger() -> Bool {
         let beforeName = inputSourceManager.currentSourceShortName()
 
         switchCount += 1
@@ -73,9 +74,11 @@ class StateManager: ObservableObject {
             refreshCurrentSource()
             onSystemInputSourceChanged?()
             logger.info("Toggle triggered: was \(beforeName), switched directly for terminal context")
+            return true
         } else {
             logger.warning("Terminal toggle failed via direct TIS toggle")
             onInputSourceToggleVerificationFailed?()
+            return false
         }
     }
 

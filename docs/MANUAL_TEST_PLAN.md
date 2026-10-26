@@ -49,12 +49,13 @@ killall WinMacKey 2>/dev/null
 - [ ] **D-3**: Right Cmd + Shift+P 빠르게 → "다른 화면에 표시" 팝업 **안 뜸**
 - [ ] **D-4**: 한영 전환 직후 빠르게 영문 대문자 입력 → Windows 키 조합 오발 없음
 
-### E. 터미널 컨텍스트 (Ghostty / Claude Code 등)
+### E. 터미널 컨텍스트 (Ghostty / Codex / Claude Code 등)
 
-- [ ] **E-1**: Ghostty 또는 다른 terminal 앱 포커스
+- [ ] **E-1**: Ghostty, Codex desktop 또는 다른 terminal 앱 포커스
 - [ ] **E-2**: Right Cmd → 한영 전환 정상
 - [ ] **E-3**: 출력에 `[57379u` 또는 raw escape sequence 누출 **없음**
 - [ ] **E-4**: `Cmd+N`, `Cmd+T` 등 단축키가 정상 동작 (수동 search UI 누출 없음)
+- [ ] **E-5**: Codex desktop에서 포커스 왕복 없이 `우리` 같은 빠른 한글 입력이 `dnfl`로 새지 않음
 
 ### F. 키보드 디바이스 동시 적용 (내장 + 외장 키보드 가용 시)
 

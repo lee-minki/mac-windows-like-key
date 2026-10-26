@@ -242,7 +242,9 @@ class AppState: ObservableObject {
                     self?.keyInterceptor.beginVdiRelayCooldownWindow()
                     self?.stateManager.switchCount += 1
                 } else if isTerminalMode {
-                    self?.stateManager.handleTerminalTrigger()
+                    if self?.stateManager.handleTerminalTrigger() == true {
+                        self?.keyInterceptor.beginTerminalInputSourceSettleWindow()
+                    }
                 } else {
                     // 로컬 Mac / Mac 원격 (Screen Sharing 등) / 그 외:
                     // F16 suppress 후 로컬 macOS 에 Control+Space 합성 → 로컬 입력소스 토글.
@@ -292,6 +294,9 @@ class AppState: ObservableObject {
 
             if wasTerminal != isNowTerminal {
                 LogService.shared.info("Terminal mode: \(isNowTerminal ? "enabled" : "disabled") (\(appName))", category: "Terminal")
+            }
+            if wasTerminal && !isNowTerminal {
+                self.keyInterceptor.cancelTerminalInputSourceSettleWindow()
             }
             if wasRemoteMac != isNowRemoteMac {
                 LogService.shared.info("Remote Mac mode: \(isNowRemoteMac ? "enabled — F16 will pass through to remote Mac" : "disabled") (\(appName))", category: "RemoteMac")
