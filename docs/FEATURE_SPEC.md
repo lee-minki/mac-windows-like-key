@@ -50,9 +50,9 @@
 | **P3** | 위자드 3화면: `0`프로필 목록 → `1`시작·의도 → `2`매핑 표 → `3`확인·저장 | `ModifierLayoutView` | 설정→Profiles | 없음 (캡처 제거) | 1.5.x 이전의 옛 6화면 흐름은 v1.6.0 에서 완전 제거 |
 | **P4** | **시작·의도**: 프로필 이름 + 두 의도 카드 (① "한/영 전환만" 1클릭 즉시 완료 — 식별 프로필 ② "키 배치도 바꾸기" → 표) | `ModifierLayoutView.startIntentView` | Step 1 진입 | 없음 | — |
 | **P5** | **매핑 표**: 선택한 키보드 형태에 맞는 3행/4행 × 2열(Mac 로컬·VDI) picker. 포터블 Mac 4키는 물리 `Ctrl·Fn·Opt·Cmd`, Mac 추천 `Cmd·Fn·Opt·Ctrl`, VDI 자동 `Ctrl·Win·Win·Alt` | `KeyboardLayout` + `ModifierLayoutView.mappingTableView` | Step 2 진입 | 없음 | 실제 물리 순서와 다른 형태를 고르면 매핑이 뒤바뀜 |
-| **P6** | **확인·저장**: 매핑 요약 + 저장하고 적용 / 변경 저장 (편집 시) | `ModifierLayoutView.confirmSaveView` + `saveAndClose` | Step 3 진입 | 없음 | 편집 시 옵셔널 3필드(auxFn/bundleId/deviceId) 보존, 새로 생성 시 nil |
-| **P7** | 자동 전환 우선순위: 디바이스 바인딩 > 앱 바인딩 > 기본. 외장→내장만 자동, 외장↔외장 swap 은 마지막 프로필 유지(v1.3.8 보수화) | `WinMacKeyApp` / `AppState` resolve | 디바이스·앱 전환 | 손쉬운 사용 | 정책 변경으로 사용자 기대와 어긋날 수 있음 |
-| **P8** | **안전 삭제 invariant**: active 프로필 삭제 시 `activeMappingProfileId="standardMac"` 리셋 + custom HID 매핑 clear | `AppState.deleteProfileSafely` | DashboardView·ModifierLayoutView 휴지통 | 없음 | service 추출 전(v1.5.1) 회귀 이력 — DashboardView 만 처리하고 새 UI 누락 |
+| **P6** | **확인·저장**: 매핑 요약 + 저장하고 적용 / 변경 저장 (편집 시). `이 키보드에만`은 연결 장치가 하나면 즉시 선택하고, 여러 대면 마지막 입력 장치를 사용 | `ModifierLayoutView.confirmSaveView` + `KeyboardBindingResolver` + `saveAndClose` | Step 3 진입 | 입력 모니터링(다중 장치 식별 시) | 대상이 모호하면 저장 버튼 비활성화. 편집 시 옵셔널 3필드 보존 |
+| **P7** | 장치에 바인딩된 프로필을 VID:PID별로 동시에 적용. 마지막 입력 키보드는 표시용이며 매핑 전환 트리거가 아님. VDI 포커스에서는 모든 장치가 각자의 `vdiDesiredKeys`로 함께 전환 | `WinMacKeyApp` / `HIDRemapper` | 프로필·디바이스·VDI 전환 | 손쉬운 사용 | 같은 VID:PID 두 대는 같은 매핑을 공유 |
+| **P8** | **안전 삭제 invariant**: 삭제한 장치 override를 제거하고 남은 global/device 레이어를 즉시 재계산. 선택 중인 global 프로필 삭제 시 `activeMappingProfileId="standardMac"` 리셋 | `AppState.deleteProfileSafely` | DashboardView·ModifierLayoutView 휴지통 | 없음 | 모든 프로필 변경이 store callback 한 경로로 재적용되어야 함 |
 
 ### 2.1 기능 축은 키보드 형태와 표준 키코드
 
@@ -137,7 +137,7 @@ macOS는 modifier를 표준 키코드로 정규화하지만 물리적 좌우 순
 ## 8. 알려진 제약 (By Design / 미구현)
 
 - Caps Lock 은 앱이 처리하지 않음(시스템 위임).
-- 외장↔외장 swap 자동 전환 안 함(마지막 프로필 유지) — 의도된 정책(P7).
+- 바인딩된 내장·외장 프로필은 모두 동시에 active이며, 외장↔외장 입력 전환은 매핑 상태를 바꾸지 않음(P7).
 - 사용자 정의 VDI/Terminal 앱 추가 UI 없음.
 - Karabiner 동시 사용 시 F16 매핑 충돌(Doctor 경고).
 - macOS 13 이하 SMAppService(로그인 항목) 미지원.
@@ -181,4 +181,4 @@ macOS는 modifier를 표준 키코드로 정규화하지만 물리적 좌우 순
 ### 통합 시점 합의 사항
 - **선행 조건**: P9/P10 핫픽스 (사용자 보고 한영 간헐 / Ghostty ESC) 진단·해결, [[14-WinMacKey-v1.6.0-Release]] 의 감사 Top 5 처리.
 - **디자인 일관성**: [[project_winmackey_design_standards]] (`docs/design/`) 의 UI/UX 기준에 맞춰 메뉴바·설정 UI 확장. 두 기능이 메뉴바 권한 섹션과 충돌 없이 들어갈 자리 합의 필요.
-- **유료화 후보**: SCROLL-1 은 *Windows 사용성을 Mac에서* 정체성의 핵심 차별점 — Pro 게이팅 후보로도 검토 (현재 Pro = 디바이스별 자동 전환만, 확장 가능성). CLEAN-1 은 단순 유틸이라 무료 유지.
+- **유료화 후보**: SCROLL-1 은 *Windows 사용성을 Mac에서* 정체성의 핵심 차별점 — Pro 게이팅 후보로도 검토 (현재 Pro = 디바이스별 프로필 기능, 확장 가능성). CLEAN-1 은 단순 유틸이라 무료 유지.

@@ -311,6 +311,7 @@ struct IgnoredDevices: Codable, Equatable {
 class KeyboardProfileStore: ObservableObject {
     @Published var profiles: [SavedKeyboardProfile] = []
     @Published var ignoredDevices: IgnoredDevices = .empty
+    var onMappingConfigurationChanged: (() -> Void)?
     private let storageKey = "savedKeyboardProfiles"
     private let ignoredDevicesKey = "ignoredKeyboardDevices"
 
@@ -335,18 +336,21 @@ class KeyboardProfileStore: ObservableObject {
     func add(_ profile: SavedKeyboardProfile) {
         profiles.append(profile)
         save()
+        onMappingConfigurationChanged?()
     }
 
     func update(_ profile: SavedKeyboardProfile) {
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
             profiles[index] = profile
             save()
+            onMappingConfigurationChanged?()
         }
     }
 
     func delete(id: UUID) {
         profiles.removeAll { $0.id == id }
         save()
+        onMappingConfigurationChanged?()
     }
 
     func profile(idString: String) -> SavedKeyboardProfile? {
@@ -388,12 +392,14 @@ class KeyboardProfileStore: ObservableObject {
     func ignore(_ device: KeyboardDeviceIdentifier) {
         ignoredDevices.devices.insert(device)
         saveIgnoredDevices()
+        onMappingConfigurationChanged?()
     }
 
     /// "Ignored devices" 메뉴에서 사용자가 명시적으로 해제할 때.
     func unignore(_ device: KeyboardDeviceIdentifier) {
         ignoredDevices.devices.remove(device)
         saveIgnoredDevices()
+        onMappingConfigurationChanged?()
     }
 
     func isIgnored(_ device: KeyboardDeviceIdentifier) -> Bool {

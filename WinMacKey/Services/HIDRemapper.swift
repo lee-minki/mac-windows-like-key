@@ -26,11 +26,14 @@ class HIDRemapper {
     private(set) var clearCallCount: Int = 0
     /// ownership 가드 위반이 감지된 횟수 (DEBUG 검증용).
     private(set) var unauthorizedWriteAttempts: Int = 0
+    private(set) var issuedCommandsForTesting: [[String]] = []
+    private var appliedDeviceMappings: [String: KeyboardDeviceIdentifier] = [:]
 
     func resetOperationCounters() {
         applyCallCount = 0
         clearCallCount = 0
         unauthorizedWriteAttempts = 0
+        issuedCommandsForTesting.removeAll()
     }
 
     // MARK: - Ownership Model
@@ -177,41 +180,51 @@ class HIDRemapper {
     /// hidutil --matching 파라미터로 사용
     static let internalKeyboardMatchJSON = "{\"Product\":\"Apple Internal Keyboard / Trackpad\"}"
 
+    private static let internalKeyboardIdentifier = KeyboardDeviceIdentifier(
+        vendorId: 0,
+        productId: 0,
+        productName: "Apple Internal Keyboard / Trackpad"
+    )
+
     // MARK: - Device-Specific Mappings
 
     /// 내장 키보드에만 매핑 적용 (동기)
     /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
     func applyMappingsForInternalKeyboardSync(_ mappings: [Int64: Int64]) {
-        guard checkOwnership(operation: "applyMappingsForInternalKeyboardSync") else { return }
-        applyCallCount += 1
-        hasAppliedAnyMapping = true
-        var combined = mappings
-        if let trigger = imeTriggerMapping, trigger.src != trigger.dst {
-            combined[trigger.src] = trigger.dst
-        }
-        let json = buildUserKeyMappingJSON(combined)
-        guard let json = json else {
-            clearMappingsForInternalKeyboardSync()
-            return
-        }
-        let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", json])
-        if result {
-            logger.info("Internal keyboard mappings applied (sync, \(combined.count) mappings)")
-        } else {
-            logger.error("Failed to apply internal keyboard mappings")
-        }
+        applyDeviceMappingsSync(mappings, matching: Self.internalKeyboardIdentifier)
     }
 
     /// 내장 키보드의 매핑만 해제 (동기)
     func clearMappingsForInternalKeyboardSync() {
-        guard checkOwnership(operation: "clearMappingsForInternalKeyboardSync") else { return }
-        clearCallCount += 1
-        let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", "{\"UserKeyMapping\":[]}"])
-        if result {
-            logger.info("Internal keyboard mappings cleared (sync)")
-        } else {
-            logger.error("Failed to clear internal keyboard mappings")
+        clearDeviceMappingsSync(matching: Self.internalKeyboardIdentifier)
+    }
+
+    func reapplyMappingLayersSync(
+        globalMappings: [Int64: Int64],
+        deviceMappings: [(device: KeyboardDeviceIdentifier, mappings: [Int64: Int64])]
+    ) {
+        guard checkOwnership(operation: "reapplyMappingLayersSync") else { return }
+
+        clearTrackedDeviceMappingsNoGuard()
+        applyGlobalMappingsSyncNoGuard(globalMappings)
+
+        for assignment in deviceMappings.sorted(by: { $0.device.matchingKey < $1.device.matchingKey }) {
+            applyDeviceMappingsSyncNoGuard(assignment.mappings, matching: assignment.device)
         }
+    }
+
+    func applyDeviceMappingsSync(
+        _ mappings: [Int64: Int64],
+        matching device: KeyboardDeviceIdentifier
+    ) {
+        guard checkOwnership(operation: "applyDeviceMappingsSync") else { return }
+        applyDeviceMappingsSyncNoGuard(mappings, matching: device)
+    }
+
+    func clearDeviceMappingsSync(matching device: KeyboardDeviceIdentifier) {
+        guard checkOwnership(operation: "clearDeviceMappingsSync") else { return }
+        clearDeviceMappingsSyncNoGuard(matching: device)
+        appliedDeviceMappings.removeValue(forKey: device.matchingKey)
     }
 
     /// 모든 디바이스의 매핑을 완전히 해제 (앱 종료/리셋용)
@@ -219,11 +232,9 @@ class HIDRemapper {
     /// 종료/Reset/Recovery 등 명시적 cleanup path 는 internalClearAllForTermination() 사용.
     func clearAllMappingsSync() {
         guard checkOwnership(operation: "clearAllMappingsSync") else { return }
-        // 글로벌 매핑 해제
+        clearTrackedDeviceMappingsNoGuard()
         clearMappingsSyncNoGuard()
-        // 내장 키보드 디바이스별 매핑도 해제
-        clearMappingsForInternalKeyboardSyncNoGuard()
-        logger.info("All mappings cleared (global + internal keyboard)")
+        logger.info("All mappings cleared (global + device-scoped)")
     }
 
     /// 종료/Reset/Recovery 시 호출되는 명시적 cleanup path.
@@ -247,6 +258,8 @@ class HIDRemapper {
             return
         }
 
+        clearTrackedDeviceMappingsNoGuard()
+
         // Snapshot 으로 복원 (없거나 비어있으면 결과적으로 clear 와 동일).
         let restored = restorePreExistingSnapshot()
         if !restored {
@@ -254,9 +267,6 @@ class HIDRemapper {
             logger.error("Snapshot restore failed — falling back to clearMappings (other hidutil tools' mappings will be lost)")
             clearMappingsSyncNoGuard()
         }
-
-        // 내장 키보드 디바이스별 매핑은 앱이 추가한 것이므로 항상 clear
-        clearMappingsForInternalKeyboardSyncNoGuard()
 
         // 한 번 cleanup 후엔 동일 lifecycle 에서 또 복원하지 않도록 reset
         hasAppliedAnyMapping = false
@@ -294,18 +304,61 @@ class HIDRemapper {
         }
     }
 
-    /// ownership 가드 없는 내장 키보드 clear — guarded wrapper 에서만 호출.
-    private func clearMappingsForInternalKeyboardSyncNoGuard() {
-        clearCallCount += 1
-        let result = runHidutil(arguments: ["property", "--matching", Self.internalKeyboardMatchJSON, "--set", "{\"UserKeyMapping\":[]}"])
+    // MARK: - Apply Mappings (Global)
+
+    private func applyGlobalMappingsSyncNoGuard(_ mappings: [Int64: Int64]) {
+        applyCallCount += 1
+        hasAppliedAnyMapping = true
+        let json = buildUserKeyMappingJSON(mappings) ?? "{\"UserKeyMapping\":[]}"
+        let result = runHidutil(arguments: ["property", "--set", json])
         if result {
-            logger.info("Internal keyboard mappings cleared (no-guard)")
+            logger.info("Global HID mapping layer applied")
         } else {
-            logger.error("Failed to clear internal keyboard mappings (no-guard)")
+            logger.error("Failed to apply global HID mapping layer")
         }
     }
 
-    // MARK: - Apply Mappings (Global)
+    private func applyDeviceMappingsSyncNoGuard(
+        _ mappings: [Int64: Int64],
+        matching device: KeyboardDeviceIdentifier
+    ) {
+        guard let matchingJSON = device.hidutilMatchingJSON else {
+            logger.error("Invalid hidutil matching data for \(device.displayName)")
+            return
+        }
+
+        applyCallCount += 1
+        hasAppliedAnyMapping = true
+        let json = buildUserKeyMappingJSON(mappings) ?? "{\"UserKeyMapping\":[]}"
+        let result = runHidutil(arguments: ["property", "--matching", matchingJSON, "--set", json])
+        if result {
+            appliedDeviceMappings[device.matchingKey] = device
+            logger.info("Device HID mapping applied: \(device.displayName)")
+        } else {
+            logger.error("Failed to apply device HID mapping: \(device.displayName)")
+        }
+    }
+
+    private func clearDeviceMappingsSyncNoGuard(matching device: KeyboardDeviceIdentifier) {
+        guard let matchingJSON = device.hidutilMatchingJSON else {
+            logger.error("Invalid hidutil matching data for \(device.displayName)")
+            return
+        }
+        clearCallCount += 1
+        let result = runHidutil(arguments: ["property", "--matching", matchingJSON, "--set", "{\"UserKeyMapping\":[]}"])
+        if result {
+            logger.info("Device HID mapping cleared: \(device.displayName)")
+        } else {
+            logger.error("Failed to clear device HID mapping: \(device.displayName)")
+        }
+    }
+
+    private func clearTrackedDeviceMappingsNoGuard() {
+        for device in appliedDeviceMappings.values.sorted(by: { $0.matchingKey < $1.matchingKey }) {
+            clearDeviceMappingsSyncNoGuard(matching: device)
+        }
+        appliedDeviceMappings.removeAll()
+    }
 
     /// keycode 기반 매핑 딕셔너리를 hidutil로 적용 (전체 디바이스)
     /// IME 트리거 리맵이 설정되어 있으면 자동으로 포함됩니다.
@@ -498,6 +551,7 @@ class HIDRemapper {
         // 테스트 환경: hidutil Process spawn 자체를 skip.
         // 카운터/상태 머신 검증은 정상 동작하지만 실제 시스템 hidutil 안 건드림.
         if Self.skipExternalHidutilCallsForTesting {
+            issuedCommandsForTesting.append(arguments)
             logger.info("hidutil call skipped (testing mode): \(arguments.joined(separator: " "))")
             return true
         }

@@ -6,7 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.8.3
+## [Unreleased] — v1.8.4
+
+### Added
+- **장치별 동시 매핑 레이어**: 내장 키보드와 바인딩된 외장 키보드가 각자의 `hidutil --matching` 범위에서 동시에 active 상태를 유지합니다. 키 입력 순간 프로필을 바꾸지 않아 두 키보드를 번갈아 사용해도 첫 키부터 올바른 배열로 동작합니다.
+- **장치 레이어 회귀 검사**: global F16 레이어, 내장 키보드, Keys-To-Go 2 `046D:B38C`가 Mac/VDI 컨텍스트에서 올바른 순서로 동시에 적용되는지 smoke test를 추가했습니다.
+
+### Changed
+- **Horizon VDI 계약 확정**: 내장 키보드와 Keys-To-Go 2 모두 VDI에서는 각 프로필의 `Ctrl · Win · Win · Alt` 목표 배열을 사용합니다. Horizon에서 활성화할 클라이언트 매핑은 `F16 → Right Alt (AltGr)` 하나입니다.
+- **프로필 UI 의미 정리**: 장치 바인딩 프로필은 `장치별 적용`으로 표시하고, 최근 입력 장치만 `마지막 입력`으로 표시합니다. 장치에 바인딩되지 않은 프로필만 `전체 적용`으로 선택합니다.
+
+### Fixed
+- **`저장하고 적용` 무반응**: 클린 설치 직후 마지막 입력 키보드가 아직 없으면 버튼이 활성화된 채 저장 함수가 조용히 중단되던 문제를 수정했습니다. 연결된 키보드가 하나면 그 장치에 즉시 바인딩하고, 여러 대면 대상 키보드 입력 전까지 버튼을 비활성화합니다.
+- **내장·외장 프로필 오염**: 단일 `activeMappingProfileId`의 global 매핑이 모든 키보드에 적용되어 내장 키보드와 Keys-To-Go 2 배열이 서로 덮어쓰던 문제를 수정했습니다.
+- **VDI 전환 불일치**: Horizon 진입·이탈 때 내장 키보드만 별도 override하고 외장은 마지막 active 프로필에 의존하던 경로를 제거하고, 모든 bound profile의 `localDesiredKeys`/`vdiDesiredKeys`를 함께 재적용합니다.
+- **장치 재연결 누락**: 엔진 실행 중 키보드가 연결되면 장치 레이어를 즉시 다시 적용합니다.
+
+### Note
+- Info.plist 1.8.3/26 → **1.8.4/27**, `MARKETING_VERSION 1.8.4`, `CURRENT_PROJECT_VERSION 27`.
+- Caps Lock은 계속 시스템/클라이언트 소유이며 이번 변경에서 처리하지 않습니다.
+
+---
+
+## [1.8.3] — Superseded by v1.8.4
 
 ### Added
 - **포터블 Mac 4키 배열**: Logitech Keys-To-Go 2처럼 스페이스 왼쪽이 `Ctrl · Fn · Opt · Cmd`인 키보드를 프로필 형태로 추가했습니다. 추천 Mac 배열은 `Cmd · Fn · Opt · Ctrl`, VDI 배열은 기존 규칙을 유지한 `Ctrl · Win · Win · Alt`입니다.

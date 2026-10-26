@@ -272,7 +272,7 @@
 |---|---|
 | Severity | high (사용자 직관과 현 모델의 갭) |
 | Confidence | high (사용자 인터뷰 round 1-3 완료) |
-| Status | **요구사항 sealed (2026-05-20)**, plan doc 미작성 |
+| Status | **v1.8.4 구현·자동 검증 완료, 실제 내장 + Keys-To-Go 2 + Horizon 수동 검증 대기 (2026-09-01)** |
 | 충돌 | P2 의 단일 active 모델 가정 — P7 합의 후 P2 흡수/폐기 결정 |
 
 **사용자 인터뷰 sealed 합의 (2026-05-20)**
@@ -289,11 +289,11 @@
 | Migration | 자동 — deviceIdentifier 있으면 동시 active, 없으면 글로벌 레이어 |
 | Release Gate | 매핑이 잘못된 키보드에 적용 = OUT, 한영 트리거 / 글로벌 동작 깨짐 = OUT |
 
-**다음 단계**: P7 plan doc 작성 → 5-조건 harness gate 통과 → Phase A (외장 디바이스별 동시 active 코어) 구현 시작.
+**다음 단계**: 실제 내장 키보드 + Keys-To-Go 2를 번갈아 입력해 local/VDI device layer를 확인하고 release gate를 판정한다.
 
 **P2 흡수/폐기 결정**
 - M1 IgnoredDevices: **유지** — P7 모델에서도 "이 키보드 매핑 만들지 마라" 의미 유효
-- M2 외장→내장 자동 전환: **의미 약화** — 동시 active 면 전환 개념이 사라짐. 코드는 유지하되 사용자 체감 영향 minimal
+- M2 외장→내장 자동 전환: **폐기** — 동시 active 모델에서는 입력 장치가 바뀌어도 매핑 상태를 바꾸지 않음
 - M3 first-seen prompt: **유지** — unbound 외장 첫 입력 시 prompt 가 P7 의 sealed 흐름 ("사용자 인지 → 매핑 만들기") 트리거
 - M4 ignored devices UI / M5 manual test: 보류 → P7 plan 안에서 재배치
 
@@ -310,12 +310,12 @@ P2 의 M1-M3 구현을 사용자가 테스트하던 중 발견. 회사키보드(
 - `KeyInterceptor` + `HIDRemapper.applyMappings` 는 `hidutil property --set` 글로벌 적용. 단 한 시점에 한 set 의 매핑만.
 - 예외: `HIDRemapper.applyMappingsForInternalKeyboardSync` 는 `--matching Product:"Apple Internal Keyboard / Trackpad"` 로 내장 키보드만 매칭 — 이건 디바이스별 매핑이 hidutil 차원에서 가능하다는 증거.
 - 그러나 외장 키보드는 글로벌 set 한 개 only.
-- AppState 의 `activeMappingProfileId` 도 한 번에 하나만 표현 가능.
+- v1.8.3까지 AppState 의 `activeMappingProfileId` 도 한 번에 하나만 표현 가능했다. v1.8.4에서는 bound profile 적용과 분리되고, unbound global profile 선택에만 남는다.
 
 **사용자가 기대한 모델**
 
 - 각 SavedKeyboardProfile 이 자기 deviceIdentifier 의 VID:PID 매칭으로 hidutil 적용
-- 모든 bound 프로필이 동시 active — 키보드 누르는 순간 그 디바이스 매핑이 적용
+- 모든 bound 프로필이 동시 active — 키를 누르기 전에 그 디바이스 매핑이 이미 적용
 - "active profile" 이라는 글로벌 개념 폐기 또는 보조 표시로만
 - swap / 전환 / fallback 개념 자체가 디바이스 단위로 분리되어 의미 약화
 
@@ -323,7 +323,7 @@ P2 의 M1-M3 구현을 사용자가 테스트하던 중 발견. 회사키보드(
 
 P2 sealed 합의 (단일 active 모델 전제) 는 잘못된 출발점. P7 합의 후 P2 의 다음 부분 재검토:
 - M1 IgnoredDevices: **유지** (디바이스별 매핑 모델에서도 "이 키보드는 무시" 는 유의미)
-- M2 외장→내장 자동 전환 정책: **의미 변경** — 동시 active 면 전환 개념이 사라짐. 코드는 안전하게 남아 있지만 사용자 체감에 큰 영향 없어짐
+- M2 외장→내장 자동 전환 정책: **폐기** — 마지막 입력은 표시와 first-seen 안내에만 사용
 - M3 first-seen prompt: **유지** (새 디바이스 → 매핑 만들지 묻기는 여전히 유효)
 - M4 ignored devices UI: 보류 → P7 의 UI 안에 흡수 가능
 - M5 manual test plan: 보류 → P7 의 시나리오로 재작성

@@ -159,7 +159,7 @@ struct HelpView: View {
                         Divider()
                         mappingRow("Right Command (⌘)", "F16", "WinMac Key가 Windows VDI용 릴레이 키를 전송", .red)
                         Divider()
-                        mappingRow("VDI Client", "Right Alt", "Omnissa Horizon 등에서 F16을 Right Alt로 매핑", .orange)
+                        mappingRow("Omnissa Horizon", "Right Alt (AltGr)", "F16을 Right Alt (AltGr)로 매핑", .orange)
                     }
                     
                     Text("※ 로컬 macOS는 Control+Space를 사용합니다. Windows VDI에서는 Right Command가 F16 릴레이를 사용합니다. Caps Lock은 앱이 직접 처리하지 않습니다.")
@@ -184,16 +184,16 @@ struct HelpView: View {
                             Text("   • VDI 자동값: Ctrl · Win · Win · Alt")
                             Text("   • \"초기화\" 버튼: 선택한 형태의 추천값으로")
                             Text("4. 확인·저장: 매핑 요약 확인 후 \"저장하고 적용\"")
-                            Text("※ 키보드를 누를 필요 없음 — macOS 가 모든 키보드를 같은 키코드로 보고하므로 표만으로 충분합니다 (Mac/Windows 듀얼모드 키보드 포함).")
+                            Text("※ 매핑 표 작성에는 키 입력이 필요 없습니다. '이 키보드에만' 저장할 때 연결 장치가 하나면 자동 선택되고, 여러 대면 대상 외장 키보드의 키를 한 번 눌러 식별합니다.")
                                 .padding(.top, 4)
-                            Text("※ 기존 프로필의 보조 Fn 키 설정은 편집 시 보존되며 새 위자드 UI 에 노출되지 않습니다. 변경하려면 프로필을 삭제하고 재생성하세요.")
+                            Text("※ 기존 프로필의 보조 Fn 키 설정은 편집 시 보존되며 새 위자드 UI에 노출되지 않습니다. 변경하려면 프로필을 삭제하고 재생성하세요.")
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     }
                 }
 
-                GroupBox("키보드 디바이스별 자동 전환") {
+                GroupBox("키보드 장치별 동시 적용") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("내장/외장 키보드마다 다른 프로필을 자동 적용할 수 있습니다.")
                             .font(.caption)
@@ -202,8 +202,8 @@ struct HelpView: View {
                             Text("1. 위저드로 프로필을 만들고 저장합니다.")
                             Text("2. Settings → Profiles 탭에서 해당 프로필의 \"Bind keyboard…\" 버튼을 클릭합니다.")
                             Text("3. 바인딩할 키보드에서 아무 키나 한 번 누르면 디바이스(이름·VID:PID·내장/외장)가 감지됩니다.")
-                            Text("4. 감지된 디바이스를 확인하고 \"바인딩\" 을 누릅니다. (키 입력이 어려우면 목록에서 직접 선택)")
-                            Text("5. 바인딩 안 된 외장 키보드로 처음 입력하면 안내 창이 떠 [프로필 바인딩 / 이 키보드 무시 / 나중에] 를 묻습니다.")
+                            Text("4. 감지된 디바이스를 확인하고 \"바인딩\"을 누릅니다. (키 입력이 어려우면 목록에서 직접 선택)")
+                            Text("5. 바인딩 안 된 외장 키보드로 처음 입력하면 안내 창이 떠 [프로필 바인딩 / 이 키보드 무시 / 나중에]를 묻습니다.")
                             Text("6. 내장 MacBook 키보드도 같은 방식으로 바인딩하면 고정 프로필처럼 동작합니다.")
                         }
                         .font(.caption)
@@ -213,7 +213,7 @@ struct HelpView: View {
                             Image(systemName: "info.circle.fill")
                                 .foregroundStyle(.blue)
                                 .font(.caption)
-                            Text("프로필 우선순위: 키보드 디바이스 > 앱(Bundle ID) > 기본 프로필. 자동 전환은 외장→내장 전환에서만 일어나고, 외장끼리 교체할 때는 마지막 프로필을 유지합니다 (원하는 프로필은 메뉴에서 직접 선택).")
+                            Text("바인딩된 키보드 프로필은 모두 장치별로 동시에 적용됩니다. 마지막으로 입력한 키보드는 상태 표시와 처음 보는 키보드 안내에만 사용되며, 입력 순간에 프로필을 교체하지 않습니다.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -429,13 +429,12 @@ struct HelpView: View {
                 )
                 
                 faqItem(
-                    question: "VMware에서 한/영 전환이 안 되나요?",
+                    question: "Omnissa Horizon에서 한/영 전환이 안 되나요?",
                     answer: """
-                    VMware Horizon, Parallels Desktop, Microsoft Remote Desktop 같은 \
-                    원격 데스크톱 앱에서는 Right Command 키가 Windows에 전달되지 않을 수 있습니다.\n\n\
+                    Omnissa Horizon에서는 Right Command 키가 Windows에 직접 전달되지 않을 수 있습니다.\n\n\
                     현재 버전은 별도 드라이버 없이 동작합니다. 로컬 macOS에서는 \
                     \"이전 입력 소스 선택\"이 `Control + Space`로 켜져 있어야 하고, \
-                    Windows VDI 클라이언트에서는 `F16 → Right Alt` 매핑을 추가해야 합니다.\n\n\
+                    Horizon 클라이언트에서는 `F16 → Right Alt (AltGr)` 매핑 하나만 활성화해야 합니다.\n\n\
                     설정 방법은 GitHub 레포의 docs/VDI_SETUP.md를 참조하세요.
                     """
                 )
@@ -460,8 +459,8 @@ struct HelpView: View {
                     1. 위저드에서 키캡 프린팅(Mac/Windows)을 선택하고 실키 감지 후 프로필을 저장합니다.\n\
                     2. Settings → Profiles 탭에서 "Bind keyboard…" 버튼을 누른 뒤, 바인딩할 키보드에서 아무 키나 한 번 누르면 그 키보드에 프로필이 바인딩됩니다 (Press-to-bind).\n\
                     3. 바인딩 안 된 외장 키보드로 처음 입력하면 안내 창이 떠 [프로필 바인딩 / 이 키보드 무시 / 나중에] 중에서 고를 수 있습니다.\n\n\
-                    프로필 우선순위: 키보드 디바이스 프로필 > 앱 프로필 > 기본 프로필.\n\
-                    자동 전환은 외장→내장 전환에서만 일어나고, 외장끼리 교체할 때는 마지막 프로필을 유지합니다.
+                    바인딩된 키보드 프로필은 모두 장치별로 동시에 적용됩니다.\n\
+                    내장/외장 키보드를 번갈아 입력해도 각 장치의 배열이 첫 키부터 유지됩니다.
                     """
                 )
 
@@ -469,7 +468,7 @@ struct HelpView: View {
                     question: "VDI에서 한영전환 후 Shift+영문을 치면 화면녹화가 켜져요.",
                     answer: """
                     최신 버전은 두 단계로 대응합니다.\n\n\
-                    1. 트리거 직후 첫 키를 약 15ms만 버퍼링해 VDI의 `F16 → Right Alt` 변환이 먼저 끝나게 합니다.\n\
+                    1. 트리거 직후 첫 키를 약 15ms만 버퍼링해 Horizon의 `F16 → Right Alt (AltGr)` 변환이 먼저 끝나게 합니다.\n\
                     2. 이어서 50ms 동안 잔여 modifier 플래그를 정리해 `Alt+key` 오발을 막습니다.\n\n\
                     첫 키에만 매우 짧은 정렬이 들어가고, 그 뒤 타이핑은 정상 속도로 통과합니다.
                     """

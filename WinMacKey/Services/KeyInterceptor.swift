@@ -200,12 +200,7 @@ class KeyInterceptor: ObservableObject {
     /// 매핑 dictionary 갱신 + HID 적용. ownership 없으면 dictionary 만 갱신하고 HID 호출 skip.
     /// 위저드가 엔진 OFF 상태에서 부르면 시스템 상태는 안 바뀌지만 다음 engine ON 시 정확한 매핑 사용.
     func applyCustomMappings(_ mappings: [Int64: Int64]) {
-        keyMappings.removeAll()
-        for (src, dst) in mappings {
-            keyMappings[src] = dst
-        }
-        ensureCapsLockUntouched()
-        updateNeedsFlagsChangedProcessing()
+        loadCustomMappings(mappings)
 
         guard HIDRemapper.shared.isOwnedByEngine else {
             logger.info("applyCustomMappings: engine OFF, skipping HID apply (dictionary updated)")
@@ -214,15 +209,19 @@ class KeyInterceptor: ObservableObject {
         HIDRemapper.shared.applyMappings(keyMappings)
     }
 
-    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때.
-    /// engine OFF 면 동일하게 dictionary 만 갱신.
-    func applyCustomMappingsSync(_ mappings: [Int64: Int64]) {
+    func loadCustomMappings(_ mappings: [Int64: Int64]) {
         keyMappings.removeAll()
         for (src, dst) in mappings {
             keyMappings[src] = dst
         }
         ensureCapsLockUntouched()
         updateNeedsFlagsChangedProcessing()
+    }
+
+    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때.
+    /// engine OFF 면 동일하게 dictionary 만 갱신.
+    func applyCustomMappingsSync(_ mappings: [Int64: Int64]) {
+        loadCustomMappings(mappings)
 
         guard HIDRemapper.shared.isOwnedByEngine else {
             logger.info("applyCustomMappingsSync: engine OFF, skipping HID apply (dictionary updated)")

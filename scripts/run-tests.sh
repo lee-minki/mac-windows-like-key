@@ -130,6 +130,14 @@ swiftc \
 build/tests/keyboard_layout_smoke
 
 swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/device_scoped_mapping_smoke.swift \
+  -o build/tests/device_scoped_mapping_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/device_scoped_mapping_smoke
+
+swiftc \
   WinMacKey/Services/StartupPolicy.swift \
   tests/startup_policy_smoke.swift \
   -o build/tests/startup_policy_smoke \

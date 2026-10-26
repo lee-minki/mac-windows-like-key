@@ -27,7 +27,7 @@
 
 > **TL;DR (English):** A native macOS menu-bar utility for people who use Windows-style keyboards or VDI on a Mac.
 > It remaps **Right Command → Korean/English IME toggle** via a HID-level `hidutil` remap (no modifier-flag pollution),
-> auto-switches **per-device keyboard profiles** (built-in vs. external) through IOKit, and enables **Korean/English
+> keeps **per-device keyboard profiles active simultaneously** (built-in and external) through IOKit, and enables **Korean/English
 > switching inside VMware Horizon VDI and Mac-to-Mac screen sharing — without any virtual keyboard driver or system
 > extension.** Signed & Apple-notarized, < 0.5 ms latency, < 20 MB memory, actively maintained with regular releases.
 
@@ -37,7 +37,7 @@
 
 - **⌨️ Right Command 전환**: `hidutil` HID remap으로 Right Command를 F16으로 변환, modifier flag 오염 원천 차단
 - **🖥️ Native VDI Support**: VDI에서는 F16 릴레이로 한/영 전환을 전달하고, 로컬 Mac에서는 `Control+Space`를 합성
-- **🔌 Per-Device Auto Profile**: IOKit 기반 내장/외장 키보드 감지 — 키보드별 프로필 자동 전환
+- **🔌 Simultaneous Per-Device Profiles**: 내장·외장 키보드 프로필을 VID:PID별로 동시에 적용해 번갈아 입력해도 첫 키부터 정확
 - **🛡️ VDI Ghost Key Prevention**: F16 HID remap으로 modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
 - **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
@@ -106,14 +106,14 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
   - **매핑 표**: 선택한 키보드 형태의 3행/4행 × `Mac 에서` / `VDI 에서` 2열 picker. 각 행에서 목표 키를 직접 선택
   - **확인·저장**: 매핑 요약 확인 후 저장
 - Keys-To-Go 2처럼 왼쪽 키가 `Ctrl · Fn · Opt · Cmd` 순서면 **포터블 Mac 4키**를 선택합니다. `키 배치 바꾸기`의 추천값은 `Cmd · Fn · Opt · Ctrl`입니다.
-- macOS 가 모든 키보드를 같은 키코드로 보고하므로 **키보드를 누를 필요 없음** (Mac/Windows 듀얼모드 키보드 포함)
+- 매핑 표를 만드는 데는 키 입력이 필요 없습니다. **이 키보드에만** 저장할 때 연결 장치가 하나면 자동 선택되고, 여러 대면 대상 외장 키보드의 키를 한 번 눌러 식별합니다.
 - 기존 프로필의 보조 Fn 키 설정은 편집 시 자동 보존 (UI 미노출, 변경하려면 삭제 후 재생성)
 - 프로필 이름은 구분용 라벨입니다
-- 저장된 프로필은 현재 앱 컨텍스트에 따라 `Mac 로컬` 목표와 `VDI` 목표 사이를 자동으로 전환합니다
+- 장치에 바인딩한 프로필은 모두 동시에 적용되며, 현재 앱 컨텍스트에 따라 각 장치가 `Mac 로컬` 목표와 `VDI` 목표 사이를 함께 전환합니다
 - 프로필 자동 할당은 키보드 디바이스(VendorID/ProductID) 또는 앱의 Bundle ID 기준으로 동작합니다
 - Profiles 탭에서 **"Bind keyboard…"** 버튼을 누르면 모달이 뜨고, 바인딩할 키보드의 키를 한 번 누르면 디바이스 정보(이름·VID:PID·내장/외장)를 확인한 뒤 바인딩이 완료됩니다 (v1.3.6+ Press-to-bind UX)
 - 한 디바이스에는 하나의 프로필만 바인딩됩니다. 다른 프로필에 이미 바인딩된 키보드를 다시 바인딩하면 자동으로 이전됩니다
-- 키보드 전환 시 프로필이 자동으로 따라갑니다 (디바이스 프로필 > 앱 프로필 > 기본 프로필)
+- 키 입력으로 단일 프로필을 갈아끼우지 않습니다. 바인딩된 내장·외장 프로필은 장치별로 항상 적용되고, `마지막 입력` 표시는 상태 확인용입니다
 
 ### 6. 권장 추가 설정
 

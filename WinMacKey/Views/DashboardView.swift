@@ -377,7 +377,12 @@ struct DashboardView: View {
     }
 
     private func savedProfileRow(_ profile: SavedKeyboardProfile) -> some View {
-        let isActive = appState.activeMappingProfileId == profile.id.uuidString
+        let isDeviceScoped = profile.deviceIdentifier != nil
+        let isGlobalActive = !isDeviceScoped && appState.activeMappingProfileId == profile.id.uuidString
+        let isLastUsedDevice = profile.deviceIdentifier.map {
+            $0.vendorId == appState.lastActiveKeyboard?.vendorId
+                && $0.productId == appState.lastActiveKeyboard?.productId
+        } ?? false
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -391,8 +396,15 @@ struct DashboardView: View {
                     .background(.gray.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
-                if isActive {
-                    Text("Active")
+                if isDeviceScoped {
+                    Text(isLastUsedDevice ? "마지막 입력" : "장치별 적용")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background((isLastUsedDevice ? Color.green : Color.purple).opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else if isGlobalActive {
+                    Text("전체 적용 중")
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -402,12 +414,12 @@ struct DashboardView: View {
 
                 Spacer()
 
-                Button(isActive ? "Active" : "Apply") {
+                Button(isDeviceScoped ? "자동 적용" : (isGlobalActive ? "적용 중" : "전체 적용")) {
                     appState.applyProfile(profile)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(isActive)
+                .disabled(isDeviceScoped || isGlobalActive)
 
                 Button {
                     appState.deleteProfileSafely(profile)
