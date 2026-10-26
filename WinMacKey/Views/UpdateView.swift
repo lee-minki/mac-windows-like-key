@@ -277,6 +277,7 @@ struct UpdateSettingsRow: View {
                 Text("v\(updateService.currentVersion)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
             }
             
             Spacer()

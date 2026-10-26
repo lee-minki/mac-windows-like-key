@@ -89,7 +89,12 @@ struct ModifierLayoutView: View {
     }
 
     private func profileRow(_ profile: SavedKeyboardProfile) -> some View {
-        let isActive = appState.activeMappingProfileId == profile.id.uuidString
+        let isDeviceScoped = profile.deviceIdentifier != nil
+        let isGlobalActive = !isDeviceScoped && appState.activeMappingProfileId == profile.id.uuidString
+        let isLastUsedDevice = profile.deviceIdentifier.map {
+            $0.vendorId == appState.lastActiveKeyboard?.vendorId
+                && $0.productId == appState.lastActiveKeyboard?.productId
+        } ?? false
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -101,8 +106,13 @@ struct ModifierLayoutView: View {
                             .background(Color.gray.opacity(0.15))
                             .clipShape(Capsule())
                     }
-                    if isActive {
-                        Text("Active").font(.caption2)
+                    if isDeviceScoped {
+                        Text(isLastUsedDevice ? "마지막 입력" : "장치별 적용").font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background((isLastUsedDevice ? Color.green : Color.purple).opacity(0.2))
+                            .clipShape(Capsule())
+                    } else if isGlobalActive {
+                        Text("전체 적용 중").font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Color.green.opacity(0.2)).clipShape(Capsule()).foregroundStyle(.green)
                     }
@@ -111,8 +121,10 @@ struct ModifierLayoutView: View {
             }
             Spacer()
             Button("편집") { startEditing(profile) }.buttonStyle(.bordered).controlSize(.small)
-            Button("적용") { appState.applyProfile(profile) }
-                .buttonStyle(.bordered).controlSize(.small).disabled(isActive)
+            Button(isDeviceScoped ? "자동 적용" : (isGlobalActive ? "적용 중" : "전체 적용")) {
+                appState.applyProfile(profile)
+            }
+            .buttonStyle(.bordered).controlSize(.small).disabled(isDeviceScoped || isGlobalActive)
             Button { appState.deleteProfileSafely(profile) } label: {
                 Image(systemName: "trash").foregroundStyle(.red)
             }
@@ -126,6 +138,7 @@ struct ModifierLayoutView: View {
     private func layoutBadge(_ layout: KeyboardLayout) -> String {
         switch layout {
         case .mac4key: return "Mac 4키"
+        case .portableMac4key: return "포터블 4키"
         case .mac3key: return "Mac 3키"
         case .win3key: return "Win 3키"
         case .win4key: return "Win 4키"
@@ -159,7 +172,7 @@ struct ModifierLayoutView: View {
                          selected: selectedIntent == .koreanOnly) {
                     selectedIntent = .koreanOnly
                 }
-                radioRow("키 배치 바꾸기  (다음 화면 표에서 직접)",
+                radioRow("키 배치 바꾸기  (선택한 형태의 추천 배열 적용)",
                          selected: selectedIntent == .customize) {
                     selectedIntent = .customize
                 }
@@ -202,7 +215,7 @@ struct ModifierLayoutView: View {
     private var mappingTableView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("키 배치").font(.title3).bold()
-            Text("바꿀 키만 골라요. 안 만지면 그대로 (\"기본\"). VDI 는 자동으로 표준 Windows 키 배열로 보냅니다.")
+            Text("선택한 키보드 형태의 추천 배열로 시작합니다. 필요한 키만 바꿀 수 있고, VDI 는 표준 Windows 키 배열로 자동 설정됩니다.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
             // 헤더
@@ -221,6 +234,7 @@ struct ModifierLayoutView: View {
                     mappingRow(
                         sourceKey: sourceKey,
                         capLabel: selectedLayout.capLabels[idx],
+                        localDefault: selectedLayout.localDefaults[idx],
                         vdiDefault: selectedLayout.vdiDefaults[idx],
                         legendStyle: layoutLegend(selectedLayout)
                     )
@@ -259,8 +273,14 @@ struct ModifierLayoutView: View {
         }
     }
 
-    private func mappingRow(sourceKey: Int64, capLabel: String, vdiDefault: Int64, legendStyle: KeyboardLegendStyle) -> some View {
-        let macTarget = localMappings[sourceKey] ?? sourceKey
+    private func mappingRow(
+        sourceKey: Int64,
+        capLabel: String,
+        localDefault: Int64,
+        vdiDefault: Int64,
+        legendStyle: KeyboardLegendStyle
+    ) -> some View {
+        let macTarget = localMappings[sourceKey] ?? localDefault
         let isDefault = (localMappings[sourceKey] == nil)
         let macChoices: [Int64] = [
             Int64(kVK_Function), Int64(kVK_Control), Int64(kVK_Option), Int64(kVK_Command)
@@ -273,7 +293,10 @@ struct ModifierLayoutView: View {
             .frame(width: 90, alignment: .leading)
 
             Menu {
-                Button("바꾸지 않음 (기본)") { localMappings[sourceKey] = nil }
+                Button("추천 기본값으로") { localMappings[sourceKey] = nil }
+                if localDefault != sourceKey {
+                    Button("바꾸지 않음 (키캡 그대로)") { localMappings[sourceKey] = sourceKey }
+                }
                 Divider()
                 ForEach(macChoices, id: \.self) { choice in
                     Button(ModifierSlot.label(for: choice, style: .mac)) {
@@ -283,7 +306,8 @@ struct ModifierLayoutView: View {
             } label: {
                 HStack(spacing: 4) {
                     if isDefault {
-                        Text("\(capLabel)  (기본 — 안 바꿈)").foregroundStyle(.secondary)
+                        Text(ModifierSlot.label(for: localDefault, style: .mac) + "  (추천 기본값)")
+                            .foregroundStyle(.secondary)
                     } else {
                         Text(ModifierSlot.label(for: macTarget, style: .mac))
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.blue)
@@ -410,7 +434,10 @@ struct ModifierLayoutView: View {
                 Spacer()
                 Button(editingProfileId == nil ? "저장하고 적용" : "변경 저장") { saveAndClose() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(
+                        newProfileName.trimmingCharacters(in: .whitespaces).isEmpty
+                            || (bindingScope == .thisKeyboardAuto && automaticBindingDevice == nil)
+                    )
             }
         }
     }
@@ -461,18 +488,26 @@ struct ModifierLayoutView: View {
         currentStep = 2
     }
 
-    /// v1.8.1 — "이 키보드에만" 라디오의 동적 라벨 (HIGH 3 fix).
-    /// lastActiveKeyboard 가 nil 이면 사용자에게 명확히 안내 (이전 'first 입력 시 식별' 문구는 동작 불일치 거짓말).
     private func bindThisLabel() -> String {
-        if let device = appState.lastActiveKeyboard {
-            return "이 키보드에만  (현재 활성 외장 \(device.displayName) 자동 바인딩)"
+        if let device = automaticBindingDevice {
+            return "이 키보드에만  (현재 \(device.displayName) 자동 바인딩)"
         } else {
             return "이 키보드에만  ⚠️ 외장 키보드에서 키를 1번 누른 뒤 저장하세요"
         }
     }
 
+    private var automaticBindingDevice: KeyboardDeviceIdentifier? {
+        KeyboardBindingResolver.resolve(
+            lastActive: appState.lastActiveKeyboard,
+            connected: appState.keyboardDeviceManager.connectedKeyboards
+        )
+    }
+
     private func inferLayout(from profile: SavedKeyboardProfile) -> KeyboardLayout {
         let keys = profile.physicalKeys
+        if keys == KeyboardLayout.portableMac4key.physicalKeys {
+            return .portableMac4key
+        }
         let hasFn = keys.contains(Int64(kVK_Function))
         switch (profile.legendStyle, hasFn) {
         case (.mac, true):     return .mac4key
@@ -496,7 +531,7 @@ struct ModifierLayoutView: View {
 
     private func layoutLegend(_ layout: KeyboardLayout) -> KeyboardLegendStyle {
         switch layout {
-        case .mac4key, .mac3key: return .mac
+        case .mac4key, .portableMac4key, .mac3key: return .mac
         case .win3key, .win4key: return .windows
         case .custom: return .mac
         }
@@ -514,28 +549,27 @@ struct ModifierLayoutView: View {
             localDesired = physicalKeys  // identity
             vdiDesired = physicalKeys
         } else {
-            localDesired = physicalKeys.map { localMappings[$0] ?? $0 }
+            let localDefaults = selectedLayout.localDefaults
+            localDesired = physicalKeys.enumerated().map { idx, source in
+                localMappings[source] ?? (idx < localDefaults.count ? localDefaults[idx] : source)
+            }
             let defaults = selectedLayout.vdiDefaults
             vdiDesired = physicalKeys.enumerated().map { idx, source in
                 vdiOverrides[source] ?? (idx < defaults.count ? defaults[idx] : source)
             }
         }
 
-        // 바인딩 스코프 → deviceIdentifier 자동 설정
-        // v1.8.1 — HIGH 3 fix: "이 키보드에만" 선택했는데 lastActiveKeyboard 가 nil 이면 저장 막음.
-        // 이전 v1.8.0 은 silent 로 nil 저장 (= "모든 키보드" 와 같은 상태) → UI 안내 거짓말.
-        let lastActiveDevice = appState.lastActiveKeyboard
-        if bindingScope == .thisKeyboardAuto && lastActiveDevice == nil {
+        let bindingDevice = automaticBindingDevice
+        if bindingScope == .thisKeyboardAuto && bindingDevice == nil {
             LogService.shared.warning(
-                "위자드 저장 막힘: 'thisKeyboardAuto' 선택했지만 lastActiveKeyboard nil — 사용자에게 외장 키 입력 안내 필요",
+                "위자드 저장 막힘: 'thisKeyboardAuto' 선택했지만 바인딩 대상이 모호함 — 사용자에게 외장 키 입력 안내 필요",
                 category: "Wizard"
             )
-            // TODO(v1.8.x): UI Alert 추가 — 현재는 라디오 라벨이 ⚠️ 안내로 대체 (bindThisLabel).
-            return  // 저장 멈춤
+            return
         }
         let deviceId: KeyboardDeviceIdentifier? = {
             switch bindingScope {
-            case .thisKeyboardAuto: return lastActiveDevice
+            case .thisKeyboardAuto: return bindingDevice
             case .allKeyboards:     return nil
             case .decideLater:      return nil
             }

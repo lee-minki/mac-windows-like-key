@@ -9,7 +9,7 @@
 
 | 상황 | 권장 |
 |------|------|
-| 자동 업데이트(Sparkle)가 멈춰있거나 새 버전이 안 잡힘 | 수동 재설치 |
+| 앱 내 업데이트가 멈춰있거나 새 버전이 안 잡힘 | 수동 재설치 |
 | `WM` 메뉴바 아이콘이 안 뜨거나 엔진이 켜지지 않음 | 수동 재설치 |
 | 설정/프로필이 꼬여서 깨끗하게 처음부터 시작하고 싶음 | **클린 재설치** |
 | 손쉬운 사용 권한이 자꾸 빠짐 / TCC 가 망가짐 | **클린 재설치** + TCC 리셋 |
@@ -112,9 +112,8 @@ rm -f ~/Library/Preferences/com.winmackey.app.plist
 # Application Support 데이터
 rm -rf ~/Library/Application\ Support/WinMacKey
 
-# (선택) Sparkle 업데이트 캐시
+# (선택) 앱 업데이트 캐시
 rm -rf ~/Library/Caches/com.winmackey.app
-rm -rf ~/Library/Application\ Support/Sparkle
 ```
 
 ### 6. (선택) hidutil 매핑 클리어
@@ -190,14 +189,18 @@ open /Applications/WinMacKey.app
 
 ## 자동 업데이트 vs 수동 재설치
 
-| 항목 | 자동 업데이트 (Sparkle) | 수동 재설치 |
+| 항목 | 앱 내 업데이트 | 수동 재설치 |
 |------|-----------------------|------------|
 | 트리거 | 메뉴바 `WM` → 업데이트 확인... | 사용자가 DMG 직접 다운로드 |
 | 대상 버전 | GitHub Releases 의 **Published / Latest** 만 | 모든 릴리스 (Draft 제외) |
 | 권한 재허용 | 보통 자동 유지 | 새 위치로 인식되어 재허용 필요할 수 있음 |
 | 추천 상황 | 일상적 마이너 업데이트 | 자동 업데이트가 막힐 때 / 클린 재설치 |
 
-> GitHub Releases 에서 **Draft 로 남아있는 중간 패치 버전은 자동 업데이트가 건너뜁니다**. v1.3.5 사용자가 v1.3.7 로 자동으로 못 넘어가는 경우 (중간 v1.3.6 이 Draft) 가 대표 사례이며, 이때는 위 수동 재설치 절차로 해결합니다.
+> 새 릴리스 확인은 기본으로 켜져 있지만 설치는 자동으로 실행되지 않습니다. 사용자가 업데이트 창에서 확인해야 `/Applications/WinMacKey.app`을 제자리 교체합니다. GitHub의 **Draft와 Pre-release는 자동 업데이트가 건너뜁니다**.
+
+### 버전이 두 개 동시에 보일 때
+
+v1.8.3부터 Applications 설치본이 있으면 다른 위치의 복사본은 입력 엔진을 시작하지 않습니다. 기존에 등록된 개발 빌드는 완전히 종료하고, 시스템 설정의 로그인 항목에서 Applications가 아닌 경로의 WinMacKey 항목을 제거하세요. 앱 파일을 덮어쓰는 업그레이드는 프로필과 설정을 지우지 않습니다.
 
 ---
 

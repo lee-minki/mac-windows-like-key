@@ -108,22 +108,8 @@ class DoctorService: ObservableObject {
         appState.keyInterceptor.events.removeAll()
         logger.info("✅ Event logs cleared")
         
-        // 4. UserDefaults 초기화
-        let keys = [
-            "WinMacKey.Profiles",
-            "LastUpdateCheck",
-            "AutoCheckUpdates",
-            "CustomVirtualizationApps",
-            "CustomTerminalApps",
-            "activeMappingProfileId",
-            "visualCustomMappings",
-            "eventViewerAlwaysOnTop",
-            "savedKeyboardProfiles",
-            "languagePairSource1",
-            "languagePairSource2",
-            "startEngineOnAppLaunch"
-        ]
-        for key in keys {
+        // 4. UserDefaults 초기화 — ResetService 와 동일한 단일 키 목록 사용 (drift 방지).
+        for key in AppManagedDefaultsKeys.all {
             UserDefaults.standard.removeObject(forKey: key)
         }
         logger.info("✅ UserDefaults cleared")

@@ -1,11 +1,11 @@
 # P7 — Device-Scoped Mapping Plan (디바이스별 동시 active)
 
-> Status: **DRAFT — 검토 + 합의 대기**
+> Status: **APPROVED 2026-09-01 — v1.8.4 구현·검증 중**
 > 작성: 2026-05-20
 > 작성자: Claude + lee-minki
 > 모태 doc: `OPEN_PROBLEMS_ROADMAP.md` §2 P7 (sealed)
 >
-> 본 plan 합의 전 코드 변경 금지.
+> 사용자 합의: Mac에서는 장치별 Mac 배열, 유일한 Windows VDI인 Horizon에서는 장치별 Windows 배열, Horizon 키 매핑은 `F16 → Right Alt (AltGr)` 하나만 활성화.
 > P2 의 M1-M3 commit 은 보존, M4/M5 는 P7 안에 흡수 결정됨.
 
 ---
@@ -133,27 +133,27 @@ func reapplyAllDeviceMappings(_ store: KeyboardProfileStore)
 
 ### MVP Phase A — 디바이스 레이어 코어 (먼저)
 
-- [ ] **A1.** `HIDRemapper`: `applyDeviceMappings(matching:)`, `clearDeviceMappings(matching:)` 신설. 기존 `applyMappingsForInternalKeyboardSync` 는 generic device matching 으로 통합 (내장 = `productName.contains("Internal")` 매칭 또는 VID 5AC + Apple Internal Keyboard product 매칭).
-- [ ] **A2.** `KeyboardDeviceIdentifier`: hidutil matching JSON 생성 헬퍼 (`var hidutilMatchingJSON: String { ... }`) — VID:PID 또는 Internal Keyboard 특별 처리
-- [ ] **A3.** `AppState.reapplyDeviceLayer()` 신설 — profileStore.profiles 순회하면서 deviceIdentifier 있는 프로필을 디바이스 레이어로 동시 적용. Context (Local/VDI) 반영.
-- [ ] **A4.** 엔진 ON / 프로필 update / unignore / 앱 시작 시 `reapplyDeviceLayer()` 호출
-- [ ] **A5.** Smoke 자동 검증 — 두 프로필 (다른 VID:PID) 가 동시 적용되어 각자 매핑이 hidutil 출력에 보이는지
+- [x] **A1.** `HIDRemapper`: generic device apply/clear + 전체 레이어 재적용 구현
+- [x] **A2.** `KeyboardDeviceIdentifier`: 내장 product 또는 외장 VID:PID matching JSON 구현
+- [x] **A3.** `AppState`: 모든 bound profile을 context별 device layer로 동시 적용
+- [x] **A4.** 엔진 ON / 프로필 변경 / ignore 변경 / 디바이스 연결 시 재적용
+- [x] **A5.** 내장 + Keys-To-Go 2 local/VDI 동시 적용 smoke 검증 추가
 
 ### MVP Phase B — VDI 분기 정리
 
-- [ ] **B1.** `switchToVdiMapping` / `switchToMacMapping` 제거 + 호출부 정리
-- [ ] **B2.** `vdiInternalKeyboardMappings` 하드코딩 제거
-- [ ] **B3.** VDI 모드 토글 시 `reapplyDeviceLayer()` 만 호출하도록 변경
+- [x] **B1.** `switchToVdiMapping` / `switchToMacMapping` 제거 + 호출부 정리
+- [x] **B2.** `vdiInternalKeyboardMappings` 하드코딩 제거
+- [x] **B3.** VDI 모드 토글 시 모든 mapping layer 재적용
 
 ### MVP Phase C — 글로벌 레이어 분리
 
-- [ ] **C1.** `HIDRemapper.applyGlobalMappings(_:)` 신설 — 한영 트리거 (Right Command → F16) 만 담당
-- [ ] **C2.** `imeTriggerMapping` 흐름을 글로벌 레이어로 격리. 디바이스 레이어 reapply 와 분리.
+- [x] **C1.** global mapping을 device override보다 먼저 적용하는 레이어 API 구현
+- [x] **C2.** F16 trigger를 global 및 각 device override에 유지해 Horizon relay 보존
 
 ### MVP Phase D — UI 변경
 
-- [ ] **D1.** Profiles 탭의 "Active" 배지 → "마지막 입력" 표시로 변경
-- [ ] **D2.** "Apply" 버튼 (현재 단일 active 선택용) → 의미 약화 또는 제거 (deviceIdentifier 없는 프로필은 여전히 "선택해 사용" 의 user-selected global 로 남길 수 있음)
+- [x] **D1.** Profiles 탭의 "Active" 배지 → `장치별 적용` / `마지막 입력` 표시로 변경
+- [x] **D2.** bound profile은 `자동 적용`, unbound profile만 `전체 적용`으로 변경
 - [ ] **D3.** MenuBarView 현재 active profile 표시 → "각 키보드별로 다른 매핑 적용 중" 같은 새 표현
 - [ ] **D4.** Ignored devices 메뉴 (P2/M4 였던 것) 흡수
 
@@ -225,7 +225,7 @@ S-DSM5 (한영) + 기존 MANUAL_TEST_PLAN 의 모든 시나리오 통과. baseli
 
 - [ ] OQ1. `hidutil property --matching` 의 multi-set 지원 — 같은 sudoer 세션에서 여러 매칭을 동시에 set 가능한지, 또는 한 매칭만 active 인지 확인 필요 (CLI 실험)
 - [ ] OQ2. 같은 디바이스에 다른 매핑이 두 번 set 되면 overwrite 인가 append 인가? (Phase A 검증 첫 번째)
-- [ ] OQ3. Feature flag 도입 여부 — 인터뷰의 "migration 자동" 과 충돌 가능성. 사용자 결정 필요 후 §6 갱신
+- [x] OQ3. Feature flag 없음 — 사용자 요구대로 v1.8.4에서 자동 migration
 - [ ] OQ4. `kIOHIDProductKey` 매칭이 Apple Internal Keyboard 외 다른 키보드의 productName 과 잘 매칭되는지 (유니코드, 공백 등 escape 이슈)
 - [ ] OQ5. 디바이스 disconnect/reconnect 시 hidutil 매핑이 자동 유지되는지 — macOS 가 unmatched 상태에서 매핑 lost 가능. S-DSM6 시나리오로 검증.
 - [ ] OQ6. `imeTriggerMapping` 이 현재 `HIDRemapper.applyMappings` 안에 inject 되는데, 글로벌 레이어 분리하면 device 레이어 reapply 시 빠져나가는 문제 없는지

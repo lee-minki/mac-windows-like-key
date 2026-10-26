@@ -8,6 +8,8 @@
 - Mac → Mac 원격 / 화면 공유: 로컬 맥북의 입력소스만 토글 → 변환된 문자가 원격 화면에 forward (원격 Mac 에는 설치 불필요, v1.3.5+)
 
 ### 개선된 점
+- **(v1.8.4) 내장·외장 키보드 동시 적용**: 연결된 키보드마다 자기 프로필을 VID:PID 범위로 항상 적용한다. 키 입력 순간 프로필을 바꾸지 않으므로 내장 키보드와 Keys-To-Go 2를 번갈아 사용해도 첫 키부터 각자의 배열로 동작한다. Horizon 포커스에서는 각 프로필의 Windows VDI 배열을 함께 적용한다.
+- **(v1.8.3) 중복 실행 차단 + 포터블 4키 지원**: Applications 설치본을 우선해 개발 빌드와 동시에 입력 엔진이 켜지는 일을 막고, `Ctrl · Fn · Opt · Cmd` 키캡 배열을 정식 지원한다.
 - **(v1.6.0) 프로필 위자드 — 키코드 기반 직접 매핑 표**: 캡처 없이 표에서 "각 키를 무엇으로 쓸지" 직접 고른다. macOS 가 모든 키보드를 표준 modifier 키코드(Ctrl/Opt/Cmd/Fn)로 정규화하므로 어떤 키보드든 누를 필요 없다 — Mac/Win 듀얼모드 키보드(로지텍 등)에서도 동일하게 동작. "한/영 전환만"은 1클릭으로 즉시 완료, "키 배치도 바꾸기"는 4행×2열 표 + Mac/Windows 키캡 토글 + "Windows 감각" 1클릭 프리셋. (이전: 물리 키 캡처 + Step 1~5)
 - **F16 HID remap 아키텍처**: `hidutil`로 Right Command를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
 - VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
@@ -15,7 +17,7 @@
 - 메뉴바 아이콘이 macOS 네이티브 입력소스 표시기로 동기화
 - Windows VDI(Omnissa Horizon 등)에서 F16 패스스루 → Right Alt 변환으로 동작
 - Karabiner DriverKit 완전 불필요
-- IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 자동 전환
+- IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 동시 적용
 
 ---
 
@@ -105,10 +107,25 @@ xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -
 ### 실행
 
 ```bash
-open build/DerivedData/Build/Products/Debug/WinMacKey.app
+WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/WinMacKey.app/Contents/MacOS/WinMacKey
 ```
 
 또는 Xcode에서 `Cmd+R`
+
+> `/Applications/WinMacKey.app`이 설치된 상태에서는 다른 위치의 복사본이 입력 엔진을 시작하지 않습니다. 위 환경 변수는 개발 검증 전용이며 로그인 항목에는 개발 빌드를 등록하지 마세요.
+
+### Keys-To-Go 2 포터블 배열
+
+1. 키보드에서 `Fn + O`를 3초간 눌러 macOS 모드로 맞춥니다.
+2. 설정의 키보드 프로필에서 **새 프로필 만들기**를 누릅니다.
+3. **포터블 Mac 4키 (Ctrl · Fn · Opt · Cmd)**와 **키 배치 바꾸기**를 선택합니다.
+4. Mac 추천값 `Cmd · Fn · Opt · Ctrl`, VDI 자동값 `Ctrl · Win · Win · Alt`를 확인합니다.
+5. Keys-To-Go 2에서 아무 키나 한 번 누른 뒤 **이 키보드에만**으로 저장합니다.
+6. 저장 후에는 내장 키보드와 Keys-To-Go 2 프로필이 동시에 유지됩니다. 키보드를 번갈아 눌러도 프로필을 다시 선택할 필요가 없습니다.
+
+내장 키보드만 연결된 상태에서는 **이 키보드에만**이 내장 키보드를 자동 선택하므로 별도 키 입력 없이 바로 저장할 수 있습니다. 여러 키보드가 연결돼 대상이 모호할 때만 저장할 키보드에서 키를 한 번 누릅니다.
+
+잘못 적용되면 엔진을 끄거나 아래 문제 해결의 `hidutil` 초기화 명령으로 즉시 되돌릴 수 있습니다.
 
 ### 엔진 활성화
 
@@ -123,6 +140,7 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 1. 메뉴바 `wm/WM` 클릭 → **설정...**
 2. **General → Startup** 카드에서 **로그인 시 자동 실행** ON
 3. 같은 카드에서 **앱 실행 후 엔진 자동 시작** ON
+4. **새 버전 자동 확인**은 기본 ON이며 필요하면 같은 카드에서 끌 수 있습니다.
 4. 상태가 `승인 필요`로 나오면 **로그인 항목 설정 열기**를 눌러 시스템 설정에서 WinMac Key를 허용
 
 주의:
@@ -150,12 +168,13 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 [Mac 로컬 포커스]
   Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → macOS 입력소스 전환
   Caps Lock → 시스템 기본 동작 유지
-  내장 키보드: Fn→Cmd, Cmd→Ctrl, Ctrl→Fn (Mac 프로필)
+  내장 키보드: Cmd · Fn · Opt · Ctrl (내장 장치 프로필)
+  Keys-To-Go 2: Cmd · Fn · Opt · Ctrl (046D:B38C 장치 프로필)
 
 [VDI 앱 포커스] (자동 전환)
   Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon이 F16 → Right Alt 변환
   Caps Lock → 시스템 기본 동작 유지 (앱이 소유하지 않음)
-  내장 키보드: Fn→Ctrl, Ctrl→Fn (VDI 프로필 - 자동 적용)
+  내장 키보드 + Keys-To-Go 2: 각 장치 프로필의 Ctrl · Win · Win · Alt 배열 동시 적용
 
 [원격 Mac / 화면 공유]
   Right Cmd → 별도 검증 필요
@@ -267,13 +286,13 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 3. **macOS 입력소스 전환 단축키가 Control+Space인지 확인** (STEP 1)
 4. Event Viewer → Right Cmd 이벤트가 잡히는지 확인
 
-### "Ghostty / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
+### "Ghostty / Codex / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
 
-1. 최신 경로는 Ghostty 같은 terminal context에서 `F16 suppress + direct input-source switch`를 사용합니다.
+1. 최신 경로는 Ghostty/Codex 같은 terminal context에서 `F16 suppress + direct input-source switch + short terminal settle replay`를 사용합니다.
 2. raw sequence뿐 아니라 검색 UI, `Cmd+N`, `Cmd+D` 같은 Command shortcut 누출이 없는지 먼저 확인하세요.
 3. 현재까지는 `pasting text` 오버레이가 사라진 단계까지 확인되었습니다. 남은 확인 포인트는 미세한 끊김이 계속 있는지입니다.
 4. 앱을 업데이트한 뒤 WinMac Key 엔진을 한 번 껐다가 다시 켭니다.
-5. Ghostty가 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
+5. Ghostty 또는 Codex desktop이 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
 
 ### "VDI에서 한영전환이 안 돼요"
 

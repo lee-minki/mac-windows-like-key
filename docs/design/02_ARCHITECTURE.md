@@ -19,7 +19,7 @@ flowchart TD
     C -->|Local macOS| D[Suppress F16]
     C -->|Windows VDI| E[Pass through F16]
     C -->|Remote Mac / Screen Sharing| F[Verification Required]
-    C -->|Terminal / Claude Code| G[Verification Required]
+    C -->|Terminal / Codex / Claude Code| G[Verification Required]
     D --> H[Control+Space synthesis]
     H --> I[Input-source verification]
     E --> J[VDI client maps F16 to Right Alt]
@@ -38,7 +38,7 @@ flowchart TD
 1. **Local macOS**
 2. **Windows VDI**
 3. **Remote Mac / Screen Sharing**
-4. **Terminal / Claude Code**
+4. **Terminal / Codex / Claude Code**
 
 ### Rule
 
@@ -68,12 +68,13 @@ The resolver selects the mechanism.
 - status: unresolved
 - rule: do not assume Local macOS transport is sufficient until tested
 
-### Transport D — Terminal / Claude Code
+### Transport D — Terminal / Codex / Claude Code
 
 - status: mitigation added
 - rejected experiment: terminal-like apps disabled the HID `Right Command -> F16` remap and used bare Right Command tap detection before direct input-source switching
-- current mitigation: keep the F16 boring-key trigger, suppress it locally, and use direct input-source switching for terminal-like apps to avoid replay-induced paste overlays
-- remaining work: runtime verification is still required in Ghostty and similar terminal apps
+- current mitigation: keep the F16 boring-key trigger, suppress it locally, use direct input-source switching for terminal-like apps, then hold only early printable keys briefly while the terminal text context settles
+- included apps: Ghostty, Terminal, iTerm2, Warp, Alacritty, kitty, Claude desktop, and Codex desktop (`com.openai.codex`)
+- remaining work: runtime verification is still required in Ghostty, Codex desktop, and similar terminal apps
 
 ### Terminal Regression Guardrail
 

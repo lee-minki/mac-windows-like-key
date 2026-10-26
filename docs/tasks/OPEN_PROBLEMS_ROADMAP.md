@@ -1,6 +1,6 @@
 # Open Problems Roadmap
 
-> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 진단 대기, P11/P12 commit**
+> Status: **v0.7.0 — v1.7.0 Published (안정화 + bufferedReplayWindow 전수 리뷰), P9 원인 확정·패치 대기 (2026-07-06, 메모 단독 airtight 재현 → GUI verification 타이밍 + 재시도 oscillation), P11/P12 commit**
 > 작성: 2026-05-16, 갱신: 2026-05-31 (same-day 4건: v1.6.0 → v1.6.1 → v1.6.2 → v1.7.0)
 > 작성자: Claude + lee-minki
 >
@@ -18,7 +18,7 @@
 | **P5/P6** 오타/공백 사라짐 | Out-of-scope (윈맥키 책임 아님) | 등록 안 함 | — |
 | **P7** 디바이스별 독립 매핑 (동시 active) | **Sealed** (인터뷰 1-3 완료) | plan doc 작성 | P2 흡수 결정됨 |
 | **P8** 위자드 표 기반 재설계 | **Done (v1.6.0, commit 8ecf24a, Latest Published 2026-05-30)** | — | — |
-| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **신규 보고 (v1.5.1 환경), 재현 진단 대기** — 엔진 unchanged 라 v1.6.0 도 동일 가능성 99% | 사용자 v1.6.0 업데이트 후 재현 여부 → 핫픽스 PR | 독립 |
+| **P9** 한영 간헐 실패 (특정 앱, 재시작 fix) | **원인 확정·패치 대기 (2026-07-06)** — 메모 단독 airtight 재현(14토글 중 timeout ~12). app-specific 반증. **원인=폴링 창(40–80ms) 미스 + 재시도가 Control+Space 토글을 되돌림(oscillation)** | 재시도 idempotent화(되돌림 금지) 또는 `toggleDirectly` 대체 + 폴링 창 확대. 트리거 코어·usleep 무변경, 하네스 게이트 | 독립, `IME_TOGGLE_ARCHITECTURE.md §5` |
 | **P10** Ghostty/SSH 에서 ESC \u2192 이상 문자 | **DONE (v1.6.1, commit f7c7f6b, 2026-05-31)** — `KeyInterceptor.isTerminalAppFocused` 신설 + 가드 2곳 + `WinMacKeyApp` 동기화 | — | — |
 | **P11** 키보드 클리닝 모드 (CLEAN-1) | **사용자 commit (2026-05-31), 구현 대기** — 키보드 닦는 동안 전체 키 입력 차단, 마우스로만 토글. `KeyboardCleanTool` ($9.99) 대체. | P9/P10 핫픽스 + 디자인 표준화 이후 합의 | 독립, `FEATURE_SPEC §10 CLEAN-1` |
 | **P12** 입력 장치별 스크롤 방향 분리 (SCROLL-1) | **사용자 commit (2026-05-31), 구현 대기** — 트랙패드 자연 / 마우스 휠 반전. **현재 사용자 Logi Options 워크어라운드 대체** (브랜드 무관, 데몬 1개). | P9 진단 + 디자인 표준화 이후 합의 | 독립, Pro 게이팅 후보, `FEATURE_SPEC §10 SCROLL-1` |
@@ -41,6 +41,21 @@
 3. **Stale grant 표시 사용자 미인지** — 재시작으로 권한 재평가
 
 **대기 정보**: 어떤 앱·번들 ID, 그 앱에서 Ctrl+Space 직접 동작 여부, 메뉴바 ON 확인, v1.6.0 으로도 재현되는지
+
+**🔎 원인 확정 (2026-07-06, v1.8.1, frontmost 병렬 로깅 airtight 캡처)**:
+- **메모(Notes) 단독 재현**: `17:11:13–34` 폴러가 내내 `Notes` 확인. 약 14 토글 중 verification
+  timeout ~12. 순정 애플 메모 = Electron/브라우저/IDE 아님 → **app-specific 완전 반증** (후보 #1 사망).
+- **진단 여정(교훈)**: Codex→"Ctrl+Space 소비" 성급 확정 → Chrome 도 실패 → 메모 단독으로 일반
+  타이밍 확정. **대조군 없이 첫 재현으로 결론내면 오진** (두 번 뒤집힘). winmackey.log 의
+  비터미널↔비터미널 로깅 gap 이 초기 오귀속(메모→Codex) 유발 → 병렬 폴러로 우회.
+- **확정 원인**: 폴링 창(`StateManager:112`, 40–80ms)이 느린 전환을 놓쳐 timeout → `StateManager:131`
+  재시도가 **Control+Space(토글)를 다시 발사 = 전환을 되돌림(oscillation)** → 씹힘/엉뚱한 IME.
+  아이러니: v1.2.1 의 "신뢰성 재시도"가 실제로는 느린 전환을 뒤집는 원흉.
+- **패치 방향** (트리거 코어·`usleep`·버퍼 무변경, 하네스 게이트):
+  1) 재시도 idempotent화 — 재발사 전 현재 소스 재확인, 이미 바뀌었으면 재발사 금지 (또는
+     `toggleDirectly` 목표소스 명시 세팅으로 대체). 2) 폴링 창 확대(ㅊ 트레이드오프 실측).
+  - ❌ 앱별 carve-out 은 오답(Notes/Chrome 도 실패).
+- **상세**: [`docs/IME_TOGGLE_ARCHITECTURE.md`](../IME_TOGGLE_ARCHITECTURE.md) §5
 
 ## P10 · Ghostty/SSH 에서 ESC → 이상 문자 ✅ DONE (v1.6.1, 2026-05-31)
 
@@ -257,7 +272,7 @@
 |---|---|
 | Severity | high (사용자 직관과 현 모델의 갭) |
 | Confidence | high (사용자 인터뷰 round 1-3 완료) |
-| Status | **요구사항 sealed (2026-05-20)**, plan doc 미작성 |
+| Status | **v1.8.4 구현·자동 검증 완료, 실제 내장 + Keys-To-Go 2 + Horizon 수동 검증 대기 (2026-09-01)** |
 | 충돌 | P2 의 단일 active 모델 가정 — P7 합의 후 P2 흡수/폐기 결정 |
 
 **사용자 인터뷰 sealed 합의 (2026-05-20)**
@@ -274,11 +289,11 @@
 | Migration | 자동 — deviceIdentifier 있으면 동시 active, 없으면 글로벌 레이어 |
 | Release Gate | 매핑이 잘못된 키보드에 적용 = OUT, 한영 트리거 / 글로벌 동작 깨짐 = OUT |
 
-**다음 단계**: P7 plan doc 작성 → 5-조건 harness gate 통과 → Phase A (외장 디바이스별 동시 active 코어) 구현 시작.
+**다음 단계**: 실제 내장 키보드 + Keys-To-Go 2를 번갈아 입력해 local/VDI device layer를 확인하고 release gate를 판정한다.
 
 **P2 흡수/폐기 결정**
 - M1 IgnoredDevices: **유지** — P7 모델에서도 "이 키보드 매핑 만들지 마라" 의미 유효
-- M2 외장→내장 자동 전환: **의미 약화** — 동시 active 면 전환 개념이 사라짐. 코드는 유지하되 사용자 체감 영향 minimal
+- M2 외장→내장 자동 전환: **폐기** — 동시 active 모델에서는 입력 장치가 바뀌어도 매핑 상태를 바꾸지 않음
 - M3 first-seen prompt: **유지** — unbound 외장 첫 입력 시 prompt 가 P7 의 sealed 흐름 ("사용자 인지 → 매핑 만들기") 트리거
 - M4 ignored devices UI / M5 manual test: 보류 → P7 plan 안에서 재배치
 
@@ -295,12 +310,12 @@ P2 의 M1-M3 구현을 사용자가 테스트하던 중 발견. 회사키보드(
 - `KeyInterceptor` + `HIDRemapper.applyMappings` 는 `hidutil property --set` 글로벌 적용. 단 한 시점에 한 set 의 매핑만.
 - 예외: `HIDRemapper.applyMappingsForInternalKeyboardSync` 는 `--matching Product:"Apple Internal Keyboard / Trackpad"` 로 내장 키보드만 매칭 — 이건 디바이스별 매핑이 hidutil 차원에서 가능하다는 증거.
 - 그러나 외장 키보드는 글로벌 set 한 개 only.
-- AppState 의 `activeMappingProfileId` 도 한 번에 하나만 표현 가능.
+- v1.8.3까지 AppState 의 `activeMappingProfileId` 도 한 번에 하나만 표현 가능했다. v1.8.4에서는 bound profile 적용과 분리되고, unbound global profile 선택에만 남는다.
 
 **사용자가 기대한 모델**
 
 - 각 SavedKeyboardProfile 이 자기 deviceIdentifier 의 VID:PID 매칭으로 hidutil 적용
-- 모든 bound 프로필이 동시 active — 키보드 누르는 순간 그 디바이스 매핑이 적용
+- 모든 bound 프로필이 동시 active — 키를 누르기 전에 그 디바이스 매핑이 이미 적용
 - "active profile" 이라는 글로벌 개념 폐기 또는 보조 표시로만
 - swap / 전환 / fallback 개념 자체가 디바이스 단위로 분리되어 의미 약화
 
@@ -308,7 +323,7 @@ P2 의 M1-M3 구현을 사용자가 테스트하던 중 발견. 회사키보드(
 
 P2 sealed 합의 (단일 active 모델 전제) 는 잘못된 출발점. P7 합의 후 P2 의 다음 부분 재검토:
 - M1 IgnoredDevices: **유지** (디바이스별 매핑 모델에서도 "이 키보드는 무시" 는 유의미)
-- M2 외장→내장 자동 전환 정책: **의미 변경** — 동시 active 면 전환 개념이 사라짐. 코드는 안전하게 남아 있지만 사용자 체감에 큰 영향 없어짐
+- M2 외장→내장 자동 전환 정책: **폐기** — 마지막 입력은 표시와 first-seen 안내에만 사용
 - M3 first-seen prompt: **유지** (새 디바이스 → 매핑 만들지 묻기는 여전히 유효)
 - M4 ignored devices UI: 보류 → P7 의 UI 안에 흡수 가능
 - M5 manual test plan: 보류 → P7 의 시나리오로 재작성

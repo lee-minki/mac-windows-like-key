@@ -11,6 +11,12 @@ if 'KEYCHAIN_PASSWORD=***' in text:
     raise SystemExit('release workflow check failed: placeholder/corrupt KEYCHAIN_PASSWORD assignment remains')
 if 'KEYCHAIN_PASSWORD=$(openssl rand -hex 16)' not in text:
     raise SystemExit('release workflow check failed: expected openssl-generated KEYCHAIN_PASSWORD assignment missing')
+if 'CURRENT_BUILD=$(/usr/libexec/PlistBuddy' not in text:
+    raise SystemExit('release workflow check failed: project bundle version read is missing')
+if '[ "$GITHUB_RUN_NUMBER" -gt "$CURRENT_BUILD" ]' not in text:
+    raise SystemExit('release workflow check failed: monotonic bundle version guard is missing')
+if 'Set :CFBundleVersion ${BUILD_NUMBER}' not in text:
+    raise SystemExit('release workflow check failed: guarded bundle version is not applied')
 PY
 
 bash -n <(python3 - <<'PY'

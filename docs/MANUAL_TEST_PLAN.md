@@ -49,18 +49,22 @@ killall WinMacKey 2>/dev/null
 - [ ] **D-3**: Right Cmd + Shift+P 빠르게 → "다른 화면에 표시" 팝업 **안 뜸**
 - [ ] **D-4**: 한영 전환 직후 빠르게 영문 대문자 입력 → Windows 키 조합 오발 없음
 
-### E. 터미널 컨텍스트 (Ghostty / Claude Code 등)
+### E. 터미널 컨텍스트 (Ghostty / Codex / Claude Code 등)
 
-- [ ] **E-1**: Ghostty 또는 다른 terminal 앱 포커스
+- [ ] **E-1**: Ghostty, Codex desktop 또는 다른 terminal 앱 포커스
 - [ ] **E-2**: Right Cmd → 한영 전환 정상
 - [ ] **E-3**: 출력에 `[57379u` 또는 raw escape sequence 누출 **없음**
 - [ ] **E-4**: `Cmd+N`, `Cmd+T` 등 단축키가 정상 동작 (수동 search UI 누출 없음)
+- [ ] **E-5**: Codex desktop에서 포커스 왕복 없이 `우리` 같은 빠른 한글 입력이 `dnfl`로 새지 않음
 
-### F. 키보드 디바이스 자동 전환 (외장 키보드 가용 시)
+### F. 키보드 디바이스 동시 적용 (내장 + 외장 키보드 가용 시)
 
-- [ ] **F-1**: 외장 키보드 연결 + 외장용 프로필을 "Assign current keyboard"로 바인딩
-- [ ] **F-2**: 외장 키보드로 키 입력 → Profiles 탭에서 활성 프로필이 외장용으로 표시
-- [ ] **F-3**: 내장 키보드로 키 입력 → 활성 프로필이 기본/내장용으로 즉시 전환
+- [ ] **F-1**: 내장 키보드와 외장 키보드에 서로 다른 프로필을 각각 바인딩
+- [ ] **F-2**: 엔진 ON 후 global, internal, 외장 VID:PID의 `hidutil --get UserKeyMapping`을 각각 기록하고 두 장치 override가 동시에 존재하는지 확인
+- [ ] **F-3**: 내장 ↔ 외장 키보드를 한 키씩 번갈아 입력해도 첫 키부터 각 장치의 Mac 배열로 동작
+- [ ] **F-4**: Profiles 탭에서 두 프로필 모두 `장치별 적용`, 최근 사용 장치만 `마지막 입력`으로 표시
+- [ ] **F-5**: Horizon 포커스 진입 시 두 장치가 각자의 `Ctrl · Win · Win · Alt` 배열로 함께 전환하고, 이탈 시 Mac 배열로 함께 복귀
+- [ ] **F-6**: 외장 키보드 연결 해제 후 재연결해도 앱 재시작이나 첫 키 프로필 전환 없이 매핑 재적용
 
 ### G. Doctor 재시작 (HIGH #2)
 

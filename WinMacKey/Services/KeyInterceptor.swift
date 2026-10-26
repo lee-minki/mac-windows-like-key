@@ -11,6 +11,7 @@ class KeyInterceptor: ObservableObject {
     private enum BufferedReplayWindow: String {
         case none
         case inputSourceCommit
+        case terminalInputSourceSettle
         case vdiRelayCooldown
     }
 
@@ -60,18 +61,19 @@ class KeyInterceptor: ObservableObject {
     //  - **일반 앱** (Notes/TextEdit/Safari 일반 입력 등): 0.100 (100ms) — TIS notification 빠르게 옴
     //  - **IME-sensitive 앱** (Word/Pages/Keynote/PowerPoint 등): 0.180 (180ms) — TIS notification 늦어
     //    풀 타임아웃까지 대기 빈도 높음. v1.6.2 의 단일 0.150 보다 안정적.
-    //  - 터미널: commit window 자체 비활성 (`isTerminalAppFocused` 가드, v1.6.1)
     //  - VDI: 별도 cooldown (`beginVdiRelayCooldownWindow`, 30ms)
     //  - Remote Mac: 일반 앱과 동일 (필요 시 별도 카테고리 도입 가능)
     // (internal 가시성 — 스모크 테스트 `buffered_replay_smoke.swift` 가 값 검증)
     let inputSourceCommitTimeoutDefault: TimeInterval = 0.100   // 일반
     let inputSourceCommitTimeoutIMESensitive: TimeInterval = 0.180  // Word/Pages 등
+    let terminalInputSourceSettleTimeout: TimeInterval = 0.120
     var currentInputSourceCommitTimeout: TimeInterval {
         isIMESensitiveAppFocused ? inputSourceCommitTimeoutIMESensitive : inputSourceCommitTimeoutDefault
     }
 
     private let vdiRelayCooldownTimeout: TimeInterval = 0.030
     private let maxBufferedEventCount = 8
+    private let maxTerminalSettleBufferedEventCount = 24
 
     /// 합성 이벤트 식별자 — 재진입 방지용 (탭이 자신이 주입한 이벤트를 재처리하지 않도록)
     private static let syntheticEventMarker: Int64 = 0x57494E4B  // "WINK"
@@ -84,10 +86,11 @@ class KeyInterceptor: ObservableObject {
     var isVdiAppFocused: Bool = false
 
     // 터미널 앱 포커스 여부 (Ghostty/iTerm2/Terminal/Warp/Alacritty/kitty 등 — ContextManager 화이트리스트).
-    // true 면 `beginInputSourceCommitWindow` + handleMappedKey 의 buffer 분기 모두 비활성화.
-    // 터미널은 `handleTerminalTrigger` → `toggleDirectly()` 가 처리하므로 220ms commit window 가 불필요하고,
-    // SSH/escape sequence(ESC, Backspace, paste 등)과 충돌해 화면 깨짐(P10 / v1.6.1 hotfix) 발생.
     var isTerminalAppFocused: Bool = false
+
+    var activeBufferedReplayWindowForTesting: String {
+        bufferedReplayWindow.rawValue
+    }
 
     // IME-sensitive 앱 포커스 여부 (Microsoft Word/Pages/Keynote/PowerPoint 등 — ContextManager 화이트리스트).
     // true 면 `currentInputSourceCommitTimeout` 이 180ms 로 길어진다 (일반 100ms).
@@ -200,12 +203,7 @@ class KeyInterceptor: ObservableObject {
     /// 매핑 dictionary 갱신 + HID 적용. ownership 없으면 dictionary 만 갱신하고 HID 호출 skip.
     /// 위저드가 엔진 OFF 상태에서 부르면 시스템 상태는 안 바뀌지만 다음 engine ON 시 정확한 매핑 사용.
     func applyCustomMappings(_ mappings: [Int64: Int64]) {
-        keyMappings.removeAll()
-        for (src, dst) in mappings {
-            keyMappings[src] = dst
-        }
-        ensureCapsLockUntouched()
-        updateNeedsFlagsChangedProcessing()
+        loadCustomMappings(mappings)
 
         guard HIDRemapper.shared.isOwnedByEngine else {
             logger.info("applyCustomMappings: engine OFF, skipping HID apply (dictionary updated)")
@@ -214,15 +212,19 @@ class KeyInterceptor: ObservableObject {
         HIDRemapper.shared.applyMappings(keyMappings)
     }
 
-    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때.
-    /// engine OFF 면 동일하게 dictionary 만 갱신.
-    func applyCustomMappingsSync(_ mappings: [Int64: Int64]) {
+    func loadCustomMappings(_ mappings: [Int64: Int64]) {
         keyMappings.removeAll()
         for (src, dst) in mappings {
             keyMappings[src] = dst
         }
         ensureCapsLockUntouched()
         updateNeedsFlagsChangedProcessing()
+    }
+
+    /// 동기 버전 — 위저드 Step 3 등 완료 보장이 필요할 때.
+    /// engine OFF 면 동일하게 dictionary 만 갱신.
+    func applyCustomMappingsSync(_ mappings: [Int64: Int64]) {
+        loadCustomMappings(mappings)
 
         guard HIDRemapper.shared.isOwnedByEngine else {
             logger.info("applyCustomMappingsSync: engine OFF, skipping HID apply (dictionary updated)")
@@ -388,6 +390,22 @@ class KeyInterceptor: ObservableObject {
         startBufferedReplayWindow(.vdiRelayCooldown, timeout: vdiRelayCooldownTimeout, timeoutReason: "vdi-relay-settle")
     }
 
+    func beginTerminalInputSourceSettleWindow() {
+        assert(Thread.isMainThread, "beginTerminalInputSourceSettleWindow must run on main thread (buffered replay contract)")
+        guard isTerminalAppFocused, !isVdiAppFocused else { return }
+        startBufferedReplayWindow(
+            .terminalInputSourceSettle,
+            timeout: terminalInputSourceSettleTimeout,
+            timeoutReason: "terminal-input-source-settle"
+        )
+    }
+
+    func cancelTerminalInputSourceSettleWindow() {
+        assert(Thread.isMainThread, "cancelTerminalInputSourceSettleWindow must run on main thread (buffered replay contract)")
+        guard bufferedReplayWindow == .terminalInputSourceSettle else { return }
+        cancelPendingBufferedReplay(dropBufferedEvents: true)
+    }
+
     func completeInputSourceCommitWindow() {
         assert(Thread.isMainThread, "completeInputSourceCommitWindow must run on main thread (buffered replay contract)")
         guard bufferedReplayWindow == .inputSourceCommit else { return }
@@ -529,12 +547,13 @@ class KeyInterceptor: ObservableObject {
 
         logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
 
-        // P10 fix (v1.6.1): 터미널 컨텍스트는 buffer 안 함 (focus race 안전망).
-        // bufferedReplayWindow 가 어떤 이유로 열려 있어도 (이전 비-터미널 앱에서 시작했고 아직 안 닫힘),
-        // 터미널로 전환된 직후에는 SSH escape sequence 충돌을 피하기 위해 즉시 통과시킨다.
-        if bufferedReplayWindow != .none && !isTerminalAppFocused {
+        if shouldBufferMappedEvent(finalEvent, mappedKeyCode: mappedKeyCode) {
             bufferKeyEvent(finalEvent)
             return nil
+        }
+
+        if bufferedReplayWindow == .terminalInputSourceSettle {
+            flushBufferedKeyEvents(reason: "terminal-settle-bypass")
         }
 
         if finalEvent !== event {
@@ -591,9 +610,37 @@ class KeyInterceptor: ObservableObject {
     private func bufferKeyEvent(_ event: CGEvent) {
         assert(Thread.isMainThread, "bufferKeyEvent must run on main thread (buffered replay contract)")
         bufferedKeyEvents.append(event)
-        if bufferedKeyEvents.count >= maxBufferedEventCount {
+        let limit = bufferedReplayWindow == .terminalInputSourceSettle
+            ? maxTerminalSettleBufferedEventCount
+            : maxBufferedEventCount
+        if bufferedKeyEvents.count >= limit {
             flushBufferedKeyEvents(reason: "buffer-limit")
         }
+    }
+
+    private func shouldBufferMappedEvent(_ event: CGEvent, mappedKeyCode: Int64) -> Bool {
+        switch bufferedReplayWindow {
+        case .none:
+            return false
+        case .inputSourceCommit, .vdiRelayCooldown:
+            return !isTerminalAppFocused
+        case .terminalInputSourceSettle:
+            return isTerminalAppFocused && isTerminalSettleBufferEligible(event, mappedKeyCode: mappedKeyCode)
+        }
+    }
+
+    private func isTerminalSettleBufferEligible(_ event: CGEvent, mappedKeyCode: Int64) -> Bool {
+        guard event.type == .keyDown || event.type == .keyUp else { return false }
+
+        let disallowedFlags: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskSecondaryFn]
+        guard event.flags.intersection(disallowedFlags).isEmpty else { return false }
+
+        let code = Int(mappedKeyCode)
+        if code == Int(kVK_Return) || code == Int(kVK_Tab) || code == Int(kVK_Escape) {
+            return false
+        }
+
+        return (0...Int(kVK_ANSI_Grave)).contains(code) || code == Int(kVK_Delete)
     }
 
     private func startBufferedReplayWindow(
