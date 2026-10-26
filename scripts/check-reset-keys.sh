@@ -11,13 +11,15 @@ from pathlib import Path
 reset = Path('WinMacKey/Services/ResetService.swift').read_text()
 doctor = Path('WinMacKey/Services/DoctorService.swift').read_text()
 
-shared_match = re.search(r'static let all: \[String\] = \[(.*?)\]', reset, re.S)
+shared_match = re.search(
+    r'enum\s+AppManagedDefaultsKeys\s*\{.*?static\s+let\s+all:\s*\[String\]\s*=\s*\[(.*?)\]',
+    reset,
+    re.S,
+)
+reset_uses_shared = 'private let userDefaultsKeys = AppManagedDefaultsKeys.all' in reset
+doctor_uses_shared = 'for key in AppManagedDefaultsKeys.all' in doctor
 if not shared_match:
     raise SystemExit('reset key check failed: AppManagedDefaultsKeys.all not found')
-if 'userDefaultsKeys = AppManagedDefaultsKeys.all' not in reset:
-    raise SystemExit('reset key check failed: ResetService does not use shared keys')
-if 'for key in AppManagedDefaultsKeys.all' not in doctor:
-    raise SystemExit('reset key check failed: DoctorService does not use shared keys')
 
 extract = lambda body: set(re.findall(r'"([A-Za-z0-9_.]+)"', body))
 shared_keys = extract(shared_match.group(1))
@@ -27,6 +29,7 @@ required = {
     'AutoCheckUpdates',
     'CustomVirtualizationApps',
     'CustomTerminalApps',
+    'CustomRemoteMacApps',
     'activeMappingProfileId',
     'visualCustomMappings',
     'eventViewerAlwaysOnTop',
@@ -34,12 +37,23 @@ required = {
     'languagePairSource1',
     'languagePairSource2',
     'startEngineOnAppLaunch',
+    'hasCompletedFirstRunOnboarding',
+    'WinMacKey.AccessibilityWasEverGranted',
 }
 
-missing = required - shared_keys
-if missing:
-    print('reset key check failed: shared keys missing: ' + ', '.join(sorted(missing)))
-    print('Shared keys:', ', '.join(sorted(shared_keys)))
+problems = []
+if not reset_uses_shared:
+    problems.append('ResetService does not use AppManagedDefaultsKeys.all')
+if not doctor_uses_shared:
+    problems.append('DoctorService does not use AppManagedDefaultsKeys.all')
+missing_shared = required - shared_keys
+if missing_shared:
+    problems.append('AppManagedDefaultsKeys missing: ' + ', '.join(sorted(missing_shared)))
+
+if problems:
+    for problem in problems:
+        print('reset key check failed:', problem)
+    print('AppManagedDefaultsKeys:', ', '.join(sorted(shared_keys)))
     raise SystemExit(1)
 
 print('reset key parity: PASS')
