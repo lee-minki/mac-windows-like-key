@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.8.5
+## [1.8.5] — 2026-10-27
 
 ### Added
 - **업데이트 시작 확인·실패 복구**: 기존 프로세스 종료 후 앱을 교체하고, 새 프로세스의 초기화 응답을 확인한 뒤 이전 앱 백업을 정리합니다. 실행 실패·응답 시간 초과 시 안전한 종료 확인 후 이전 앱을 복원합니다.
