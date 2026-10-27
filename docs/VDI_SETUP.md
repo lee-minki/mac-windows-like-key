@@ -112,6 +112,10 @@ A.
 2. WinMac Key는 Right Command 단일 트리거 모델입니다. 메뉴바가 `WM` 상태인지, 손쉬운 사용 권한이 허용되어 있는지 확인하세요.
 3. Karabiner-Elements에서 Complex Rules (특히 Right Command -> F16/F18, 한/영 등)가 켜져 있다면, **WinMac Key와 충돌하므로 반드시 꺼야 합니다.** F18은 과거 relay 실험/외부 규칙 잔재로만 취급하세요.
 
+v1.8.5에서는 Doctor가 손쉬운 사용·입력 모니터링, 실제 이벤트 탭 상태, 최근 입력/F16 관측, 보안 입력, 마지막 HID 읽기 검증 결과를 따로 보여줍니다. 상세 해석과 복원 절차는 [설정 가이드](SETUP_GUIDE.md#문제-해결)를 따르세요. F16 관측은 Mac에서 릴레이 키를 받았다는 증거이며 Windows에서 한/영 전환이 완료됐다는 증거는 아닙니다.
+
+이번 변경에서도 Horizon의 `F16 → Right Alt (AltGr)`와 내장·외장 키보드의 `Ctrl · Win · Win · Alt` 목표 배열은 유지합니다. 기존 Horizon 매핑을 다시 만들 필요는 없습니다.
+
 ### Q. 글자가 밀리거나 씹히는 현상은 없나요?
 
 A. 네! 기존 `TISSelectInputSource` API의 고질적인 버그(조합 중인 한국어 글자 지워짐)를 원천적으로 우회하는 **OS 레벨 단축키 합성**을 사용하기 때문에 매우 매끄럽게 입력됩니다.
