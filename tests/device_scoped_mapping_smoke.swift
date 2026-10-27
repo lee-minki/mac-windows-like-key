@@ -81,9 +81,8 @@ struct DeviceScopedMappingSmoke {
         )
 
         let vdiCommands = Array(remapper.issuedCommandsForTesting.dropFirst(commandCountBeforeVdi))
-        require(vdiCommands.count == 5, "VDI transition must clear two devices and reapply all layers")
-        require(isEmptyMappingCommand(vdiCommands[0]) && isEmptyMappingCommand(vdiCommands[1]), "device clears must precede VDI reapply")
-        require(!vdiCommands[2].contains("--matching"), "VDI global layer must precede device overrides")
+        require(vdiCommands.count == 2, "VDI transition must update two changed devices; unchanged global F16 needs no write")
+        require(!vdiCommands.contains(where: isEmptyMappingCommand), "VDI transition must not temporarily clear device mappings")
 
         let internalVdi = command(for: internalKeyboard, in: vdiCommands)!
         let portableVdi = command(for: keysToGo, in: vdiCommands)!
