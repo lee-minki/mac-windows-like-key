@@ -58,6 +58,15 @@ struct StartupPolicySmoke {
             exit(1)
         }
 
-        print("startup_policy_smoke: PASS (6 invariants)")
+        let normalLaunch = StartupReadiness(isManagedUpdate: false)
+        assert(normalLaunch.canStartEngine)
+        var updateLaunch = StartupReadiness(isManagedUpdate: true)
+        assert(!updateLaunch.canStartEngine, "Update candidate must not remap before readiness")
+        updateLaunch.acknowledge(false)
+        assert(!updateLaunch.canStartEngine, "Failed acknowledgement must keep engine stopped")
+        updateLaunch.acknowledge(true)
+        assert(updateLaunch.canStartEngine, "Accepted candidate may start engine")
+
+        print("startup_policy_smoke: PASS (10 invariants)")
     }
 }

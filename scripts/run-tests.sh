@@ -22,6 +22,7 @@ COMMON_SOURCES=(
   WinMacKey/Services/HIDRemapper.swift
   WinMacKey/Services/LogService.swift
   WinMacKey/Services/KeyInterceptor.swift
+  WinMacKey/Services/InputDiagnostics.swift
   WinMacKey/Services/ContextManager.swift
   WinMacKey/Services/KeyboardDeviceManager.swift
 )
@@ -144,6 +145,28 @@ swiftc \
   -framework AppKit
 
 build/tests/startup_policy_smoke
+
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/hid_verification_smoke.swift \
+  -o build/tests/hid_verification_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/hid_verification_smoke
+
+swiftc \
+  WinMacKey/Services/InputDiagnostics.swift \
+  tests/input_diagnostics_smoke.swift \
+  -o build/tests/input_diagnostics_smoke
+
+build/tests/input_diagnostics_smoke
+
+swiftc \
+  WinMacKey/Services/UpdateInstaller.swift \
+  tests/update_installer_smoke.swift \
+  -o build/tests/update_installer_smoke
+
+build/tests/update_installer_smoke
 
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh

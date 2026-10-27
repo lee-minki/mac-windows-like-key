@@ -188,16 +188,16 @@ class UpdateService: ObservableObject {
             downloadProgress = 0.85
             try verifyExtractedApp(at: extractedAppURL)
 
-            // 5. 앱 교체
-            updateStatus = "설치 중..."
+            // The helper validates its staged copy, then waits for this process to exit.
+            updateStatus = "업데이트 재시작 준비 중..."
             downloadProgress = 0.9
-            let appPath = Bundle.main.bundleURL
-            try replaceApp(currentApp: appPath, newApp: extractedAppURL)
-            
-            // 4. 재시작
+            let handoffDirectory = try UpdateInstaller.prepareHandoff(installed: Bundle.main.bundleURL,
+                                                                       candidate: extractedAppURL,
+                                                                       version: latestVersion ?? "")
+            LogService.shared.info("업데이트 재시작 준비 완료. 실패 시 복구 기록: \(handoffDirectory.path)", category: "Update")
             updateStatus = "재시작 중..."
             downloadProgress = 1.0
-            relaunchApp(at: appPath)
+            NSApplication.shared.terminate(nil)
             
         } catch let updateErr as UpdateError {
             error = updateErr
@@ -460,51 +460,6 @@ class UpdateService: ObservableObject {
             }
         }
         throw UpdateError.appNotFoundInArchive
-    }
-    
-    /// 현재 앱을 새 버전으로 교체
-    /// quarantine 속성은 의도적으로 건드리지 않음 — Ed25519 서명 검증으로 무결성을 보장하므로
-    /// Gatekeeper의 user-acknowledgment를 강제 해제할 이유가 없다.
-    private func replaceApp(currentApp: URL, newApp: URL) throws {
-        let fm = FileManager.default
-        let backupURL = currentApp.deletingLastPathComponent()
-            .appendingPathComponent("WinMacKey.app.bak")
-
-        // 백업 (기존 백업 제거)
-        try? fm.removeItem(at: backupURL)
-
-        // 현재 앱 → 백업
-        try fm.moveItem(at: currentApp, to: backupURL)
-
-        do {
-            // 새 앱 → 현재 위치로 이동
-            try fm.moveItem(at: newApp, to: currentApp)
-
-            // 성공 시 백업 제거
-            try? fm.removeItem(at: backupURL)
-        } catch {
-            // 실패 시 백업 복원
-            try? fm.moveItem(at: backupURL, to: currentApp)
-            throw UpdateError.installFailed("앱 교체 실패: \(error.localizedDescription)")
-        }
-    }
-
-    /// 앱 재시작 — 인자 배열로 /usr/bin/open 직접 호출 (shell interpolation 회피)
-    private func relaunchApp(at appURL: URL) {
-        let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = [appURL.path]
-
-        // 현재 프로세스가 종료될 약간의 시간을 확보 — open은 비동기이므로
-        // 종료 sequence 와 동시에 실행되어도 새 인스턴스가 안전하게 launch됨.
-        try? task.run()
-
-        // HID 매핑 해제 후 종료 — ownership 우회 (update install 도 명시적 cleanup path).
-        if HIDRemapper.shared.isOwnedByEngine {
-            HIDRemapper.shared.releaseOwnership()
-        }
-        HIDRemapper.shared.internalClearAllForTermination()
-        NSApplication.shared.terminate(nil)
     }
     
     /// GitHub Releases 페이지 열기

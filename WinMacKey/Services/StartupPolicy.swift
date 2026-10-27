@@ -34,6 +34,18 @@ enum StartupDefaults {
     }
 }
 
+struct StartupReadiness {
+    private(set) var canStartEngine: Bool
+
+    init(isManagedUpdate: Bool) {
+        canStartEngine = !isManagedUpdate
+    }
+
+    mutating func acknowledge(_ succeeded: Bool) {
+        if succeeded { canStartEngine = true }
+    }
+}
+
 final class SingleInstanceGuard {
     static let shared = SingleInstanceGuard()
 
@@ -115,7 +127,7 @@ final class SingleInstanceGuard {
         }
 
         let lockURL = directoryURL.appendingPathComponent("instance.lock")
-        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else { return false }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
             close(descriptor)

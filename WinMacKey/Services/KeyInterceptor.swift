@@ -20,6 +20,20 @@ class KeyInterceptor: ObservableObject {
     private var isRunning = false
     private var tapIncludesFlagsChanged = false
     private var reactivationTimer: Timer?
+    private var diagnosticObservation = InputDiagnostics.Observation()
+
+    /// Like the event callback, read on the main run loop. No key contents are retained.
+    @MainActor
+    var diagnosticSnapshot: InputDiagnostics.TapSnapshot {
+        let valid = eventTap.map { CFMachPortIsValid($0) } ?? false
+        return InputDiagnostics.TapSnapshot(
+            isRunning: isRunning,
+            exists: eventTap != nil,
+            isValid: valid,
+            isEnabled: valid && (eventTap.map { CGEvent.tapIsEnabled(tap: $0) } ?? false),
+            observation: diagnosticObservation
+        )
+    }
 
     @Published var events: [KeyEvent] = []
     @Published var averageLatencyMs: Double = 0.0
@@ -331,6 +345,7 @@ class KeyInterceptor: ObservableObject {
         CGEvent.tapEnable(tap: tap, enable: true)
         
         isRunning = true
+        diagnosticObservation = InputDiagnostics.Observation()
         logger.info("Engine started successfully (CGEventTap).")
         DispatchQueue.main.async {
             LogService.shared.info(
@@ -474,6 +489,13 @@ class KeyInterceptor: ObservableObject {
         }
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        interceptor.diagnosticObservation.record(
+            isKeyboardEvent: type == .keyDown || type == .keyUp || type == .flagsChanged,
+            isOwnSyntheticEvent: false, // The synthetic marker guard above already excluded our events.
+            isTriggerPress: keyCode == interceptor.triggerKeyCode && type == .keyDown,
+            isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+            uptime: startTime.uptimeNanoseconds
+        )
 
         // 트리거 키(F16)는 매핑/버퍼링과 무관한 별도 경로
         if keyCode == interceptor.triggerKeyCode && (type == .keyDown || type == .keyUp) {

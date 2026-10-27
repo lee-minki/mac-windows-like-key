@@ -69,7 +69,8 @@ struct UpdateView: View {
             Text("""
             v\(updateService.latestVersion ?? "?")을 다운로드하고 설치합니다.
             앱이 자동으로 재시작됩니다.
-            접근성 권한은 유지됩니다.
+            시작 확인까지 이전 앱을 백업합니다.
+            권한은 macOS 상태에 따라 다시 허용해야 할 수 있습니다.
             """)
         }
     }

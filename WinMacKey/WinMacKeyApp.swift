@@ -4,6 +4,8 @@ import Carbon.HIToolbox
 import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    var onLaunchReadiness: ((Bool) -> Void)?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard SingleInstanceGuard.shared.decision == .run else {
             SingleInstanceGuard.shared.activatePreferredInstance()
@@ -13,14 +15,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        Task { @MainActor in
+            let acknowledged = UpdateInstaller.acknowledgeLaunch()
+            let accepted = acknowledged ? await UpdateInstaller.waitForLaunchAcceptance() : false
+            onLaunchReadiness?(accepted)
+        }
+
         // DMG/다운로드에서 실행됐으면 응용 프로그램 폴더로 이동 제안 (v1.5.0)
         ApplicationMover.offerMoveToApplicationsIfNeeded()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         guard SingleInstanceGuard.shared.decision == .run else { return }
-        // 앱 종료 시 cleanup — ownership 우회 path 사용.
-        // Phase D 에서 pre-existing snapshot 복원 로직 추가 예정.
+        // 정상 종료 시 아직 앱이 소유한 HID 항목만 적용 전 값으로 복원합니다.
         HIDRemapper.shared.internalClearAllForTermination()
     }
 }
@@ -31,8 +38,15 @@ struct WinMacKeyApp: App {
     @StateObject private var appState: AppState
 
     init() {
+        if let status = UpdateInstaller.runHelperIfRequested() {
+            exit(status)
+        }
         let shouldRun = SingleInstanceGuard.shared.prepareForLaunch()
-        _appState = StateObject(wrappedValue: AppState(shouldRunStartup: shouldRun))
+        let state = AppState(shouldRunStartup: shouldRun)
+        _appState = StateObject(wrappedValue: state)
+        appDelegate.onLaunchReadiness = { [weak state] succeeded in
+            state?.completeLaunchReadiness(succeeded)
+        }
     }
     
     var body: some Scene {
@@ -197,6 +211,8 @@ class AppState: ObservableObject {
     private var activationObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     private var defaultMappingProfileId: String?
+    private var startupReadiness = StartupReadiness(isManagedUpdate: UpdateInstaller.isManagedLaunch)
+    var canStartInputEngine: Bool { startupReadiness.canStartEngine }
     
     init(shouldRunStartup: Bool = true) {
         guard shouldRunStartup else { return }
@@ -265,8 +281,7 @@ class AppState: ObservableObject {
         }
         stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2)
 
-        // 다른 hidutil 도구 (Karabiner 등) 의 매핑을 보존하기 위해 앱이 HID 를 건드리기 전 snapshot 저장.
-        // applicationWillTerminate / Reset / Recovery 에서 이 snapshot 으로 복원된다.
+        // 호환용 lifecycle hook. 실제 원본 값은 각 HID 서비스에 쓰기 직전에 보존합니다.
         HIDRemapper.shared.captureSystemSnapshotIfNeeded()
 
         updateIMETriggerRemap()
@@ -380,14 +395,26 @@ class AppState: ObservableObject {
     }
 
     private func startEngineOnLaunchIfNeeded() {
-        guard startEngineOnAppLaunch else { return }
+        guard startEngineOnAppLaunch, startupReadiness.canStartEngine, !isEngineRunning else { return }
 
         if hasAccessibilityPermission {
             toggleEngine()
-            LogService.shared.info("Bootstrap: started engine from launch preference", category: "App")
+            if isEngineRunning {
+                LogService.shared.info("Bootstrap: started engine from launch preference", category: "App")
+            }
         } else {
             LogService.shared.warning("Bootstrap: launch engine preference blocked by missing Accessibility permission", category: "App")
         }
+    }
+
+    func completeLaunchReadiness(_ succeeded: Bool) {
+        let wasReady = startupReadiness.canStartEngine
+        startupReadiness.acknowledge(succeeded)
+        if !succeeded {
+            LogService.shared.error("Update launch acknowledgement failed; engine start deferred for rollback", category: "Update")
+            return
+        }
+        if !wasReady { startEngineOnLaunchIfNeeded() }
     }
     
     private func setupPermissionObserver() {
@@ -549,6 +576,7 @@ class AppState: ObservableObject {
     }
 
     func toggleEngine() {
+        guard startupReadiness.canStartEngine else { return }
         if isEngineRunning {
             // 엔진 OFF lifecycle:
             //   1. keyInterceptor.stop(clearHIDMappings: false) — EventTap 만 정지, HID 는 아래에서 명시 처리
@@ -559,7 +587,7 @@ class AppState: ObservableObject {
             HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
             HIDRemapper.shared.releaseOwnership()
             isEngineRunning = false
-            LogService.shared.info("Engine stopped (snapshot restored, internal cleared)", category: "Engine")
+            LogService.shared.info("Engine stopped; HID restoration attempted — see Doctor verification result", category: "Engine")
         } else {
             checkPermissions()
             guard hasAccessibilityPermission else {
@@ -617,6 +645,7 @@ class AppState: ObservableObject {
         // 포함된 설치 경로에서도 셸 인젝션 없이 안전하게 재시작 (UpdateService.relaunchApp 와 일관).
         // sleep 0.6 으로 현재 인스턴스 종료 후 새 인스턴스 launch 순서 보존.
         task.arguments = ["-c", #"sleep 0.6; exec /usr/bin/open "$0""#, path]
+        task.environment = UpdateInstaller.ordinaryLaunchEnvironment()
         try? task.run()
         LogService.shared.info("Relaunch requested (self-relaunch helper)", category: "App")
         NSApp.terminate(nil)

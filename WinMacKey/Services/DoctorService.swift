@@ -36,12 +36,14 @@ class DoctorService: ObservableObject {
         
         enum Status {
             case ok        // ✅
+            case information
             case warning   // ⚠️
             case error     // ❌
         }
         
         enum FixAction {
             case openAccessibility
+            case openInputMonitoring
             case stopEngine
             case restartEngine
             case resetAll
@@ -62,8 +64,10 @@ class DoctorService: ObservableObject {
         Task {
             // 동기 체크: 즉시 실행
             checkAccessibilityPermission()
+            checkInputMonitoringPermission()
             checkEngineHealth(appState: appState)
             checkEventTapHealth(appState: appState)
+            checkHIDMappingHealth()
 
             // 비동기 체크: pgrep 프로세스를 백그라운드 스레드에서 실행 (메인 스레드 블로킹 방지)
             await checkKarabinerConflict()
@@ -80,7 +84,7 @@ class DoctorService: ObservableObject {
             let warningCount = checks.filter { $0.status == .warning }.count
 
             if errorCount == 0 && warningCount == 0 {
-                logger.info("🩺 Doctor: All checks passed ✅")
+                logger.info("🩺 Doctor: No errors or warnings; review observation details separately.")
             } else {
                 logger.warning("🩺 Doctor: \(errorCount) errors, \(warningCount) warnings")
             }
@@ -89,7 +93,7 @@ class DoctorService: ObservableObject {
     
     // MARK: - Emergency Recovery (원복)
     
-    /// 앱이 건드린 모든 것을 원복합니다.
+    /// 엔진과 설정을 초기화하고 앱 소유 매핑 복원을 시도합니다. 복원 결과는 별도로 표시합니다.
     @MainActor
     func emergencyRecovery(appState: AppState) {
         logger.info("🚨 Emergency Recovery: Starting...")
@@ -120,7 +124,14 @@ class DoctorService: ObservableObject {
             HIDRemapper.shared.releaseOwnership()
         }
         HIDRemapper.shared.internalClearAllForTermination()
-        logger.info("✅ HID mappings cleared via termination path (global + internal keyboard)")
+        let hidResult = HIDRemapper.shared.diagnosticSnapshot
+        if hidResult.status == .failed || hidResult.pendingScopeCount > 0 {
+            logger.error("HID restoration remains unresolved (\(hidResult.pendingScopeCount) scopes): \(hidResult.lastError ?? "No failure detail")")
+        } else if hidResult.status == .verified {
+            logger.info("HID owned-mapping restoration finished with verified readback; unrelated mappings are preserved.")
+        } else {
+            logger.info("HID restoration requested; no verified mapping operation is available.")
+        }
 
         // 6. monitoring 재시작 — emergency recovery 후 앱은 정상 lifecycle 로 복귀해야 한다.
         // 이 단계가 없으면 reset 후 앱 재시작 없이는 디바이스 자동 전환·VDI 컨텍스트 감지가 죽은 상태.
@@ -129,31 +140,26 @@ class DoctorService: ObservableObject {
         appState.lastActiveKeyboard = nil
         logger.info("✅ ContextManager & KeyboardDeviceManager monitoring restarted")
 
-        logger.info("🎉 Emergency Recovery completed — system is clean, monitoring active")
+        checkHIDMappingHealth()
+        logger.info("Emergency Recovery finished — engine stopped, settings reset, monitoring active. See the HID verification result for restoration status.")
     }
     
     // MARK: - Individual Checks
     
     private func checkAccessibilityPermission() {
         let hasPermission = AXIsProcessTrusted()
-        
-        if hasPermission {
-            checks.append(DoctorCheck(
-                category: .permission,
-                title: "손쉬운 사용 권한",
-                detail: "접근성 권한이 정상적으로 부여되어 있습니다.",
-                status: .ok,
-                fixAction: nil
-            ))
-        } else {
-            checks.append(DoctorCheck(
-                category: .permission,
-                title: "손쉬운 사용 권한",
-                detail: "접근성 권한이 없습니다. 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 WinMac Key를 허용하세요.",
-                status: .error,
-                fixAction: .openAccessibility
-            ))
-        }
+        appendFinding(InputDiagnostics.accessibility(
+            granted: hasPermission,
+            previouslyGranted: PermissionService.accessibilityWasPreviouslyGranted
+        ), category: .permission, title: "손쉬운 사용 권한",
+           fixAction: hasPermission ? nil : .openAccessibility)
+    }
+
+    private func checkInputMonitoringPermission() {
+        let granted = CGPreflightListenEventAccess()
+        appendFinding(InputDiagnostics.inputMonitoring(granted: granted),
+                      category: .permission, title: "입력 모니터링 권한",
+                      fixAction: granted ? nil : .openInputMonitoring)
     }
     
     private func checkEngineHealth(appState: AppState) {
@@ -161,7 +167,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .engine,
                 title: "인터셉터 엔진",
-                detail: "엔진이 정상 실행 중입니다.",
+                detail: "앱의 엔진 실행 상태가 켜져 있습니다. 실제 이벤트 탭과 매핑 검증은 아래에서 별도로 확인합니다.",
                 status: .ok,
                 fixAction: nil
             ))
@@ -177,17 +183,48 @@ class DoctorService: ObservableObject {
     }
     
     private func checkEventTapHealth(appState: AppState) {
-        // Engine running이면 EventTap도 활성화된 것으로 간주
-        // (eventTap은 private이므로 직접 접근 불가)
-        if appState.isEngineRunning {
-            checks.append(DoctorCheck(
-                category: .engine,
-                title: "CGEventTap 상태",
-                detail: "EventTap이 정상 동작 중입니다.",
-                status: .ok,
-                fixAction: nil
-            ))
+        let snapshot = appState.keyInterceptor.diagnosticSnapshot
+        let finding = InputDiagnostics.eventTap(snapshot)
+        appendFinding(finding, category: .engine, title: "CGEventTap 상태",
+                      fixAction: finding.severity == .error || finding.severity == .warning ? .restartEngine : nil)
+        appendFinding(InputDiagnostics.secureInput(enabled: IsSecureEventInputEnabled()),
+                      category: .system, title: "Secure Input")
+        appendFinding(InputDiagnostics.observedInput(snapshot, now: DispatchTime.now().uptimeNanoseconds),
+                      category: .engine, title: "최근 입력 / F16 관찰")
+    }
+
+    private func checkHIDMappingHealth() {
+        checks.removeAll { $0.category == .engine && $0.title == "HID 매핑 검증" }
+        let snapshot = HIDRemapper.shared.diagnosticSnapshot
+        let detail: String
+        let status: DoctorCheck.Status
+        switch snapshot.status {
+        case .notChecked:
+            status = .information
+            detail = "아직 HID 매핑 읽기 검증 결과가 없습니다. 엔진 적용 후 다시 확인하세요."
+        case .verified:
+            status = .ok
+            let time = snapshot.lastVerifiedAt?.formatted(date: .omitted, time: .standard) ?? "알 수 없음"
+            detail = "마지막 적용·복원 시 읽어온 매핑이 일치했습니다 (\(time)). 이후 다른 앱이 변경했는지와 VDI 입력 결과는 별도 확인이 필요합니다."
+        case .failed:
+            status = .error
+            detail = "매핑 검증 실패: \(snapshot.lastError ?? "원인 정보 없음"). 미해결 매핑 범위: \(snapshot.pendingScopeCount). 적용 완료로 판단하지 마세요."
         }
+        checks.append(DoctorCheck(category: .engine, title: "HID 매핑 검증",
+                                  detail: detail, status: status, fixAction: nil))
+    }
+
+    private func appendFinding(_ finding: InputDiagnostics.Finding, category: DoctorCheck.Category,
+                               title: String, fixAction: DoctorCheck.FixAction? = nil) {
+        let status: DoctorCheck.Status
+        switch finding.severity {
+        case .ok: status = .ok
+        case .information: status = .information
+        case .warning: status = .warning
+        case .error: status = .error
+        }
+        checks.append(DoctorCheck(category: category, title: title, detail: finding.detail,
+                                  status: status, fixAction: fixAction))
     }
     
     private func checkKarabinerConflict() async {
@@ -463,6 +500,8 @@ class DoctorService: ObservableObject {
         case .openAccessibility:
             let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
             NSWorkspace.shared.open(url)
+        case .openInputMonitoring:
+            appState.permissionService.openInputMonitoringSettings()
             
         case .stopEngine:
             // MEDIUM fix: ownership release + snapshot restore까지 정상 OFF 흐름과 동일.
@@ -477,11 +516,16 @@ class DoctorService: ObservableObject {
             // HIGH 3 fix: stop → cleanup → release → 비동기 → take → start → refresh.
             // 정상 toggleEngine OFF→ON 흐름과 ownership lifecycle 일치.
             appState.keyInterceptor.stop(clearHIDMappings: false)
+            appState.isEngineRunning = false
             HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
             if HIDRemapper.shared.isOwnedByEngine {
                 HIDRemapper.shared.releaseOwnership()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                guard appState.canStartInputEngine else {
+                    self.logger.info("Engine restart deferred until update readiness is accepted.")
+                    return
+                }
                 HIDRemapper.shared.takeOwnership()
                 let started = appState.keyInterceptor.start()
                 appState.isEngineRunning = started

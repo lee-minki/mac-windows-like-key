@@ -38,6 +38,8 @@
 		LLL00001 /* GlobalHotKeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = LLL00002 /* GlobalHotKeyService.swift */; };
 		MMM00001 /* FirstSeenKeyboardPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MMM00002 /* FirstSeenKeyboardPromptView.swift */; };
 		NNN00001 /* StartupPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = NNN00002 /* StartupPolicy.swift */; };
+		OOO00001 /* UpdateInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = OOO00002 /* UpdateInstaller.swift */; };
+		PPP00001 /* InputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = PPP00002 /* InputDiagnostics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -75,6 +77,8 @@
 		LLL00002 /* GlobalHotKeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyService.swift; sourceTree = "<group>"; };
 		MMM00002 /* FirstSeenKeyboardPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstSeenKeyboardPromptView.swift; sourceTree = "<group>"; };
 		NNN00002 /* StartupPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupPolicy.swift; sourceTree = "<group>"; };
+		OOO00002 /* UpdateInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateInstaller.swift; sourceTree = "<group>"; };
+		PPP00002 /* InputDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputDiagnostics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +146,8 @@
 			isa = PBXGroup;
 			children = (
 				NNN00002 /* StartupPolicy.swift */,
+				OOO00002 /* UpdateInstaller.swift */,
+				PPP00002 /* InputDiagnostics.swift */,
 				AAA00008 /* KeyInterceptor.swift */,
 				AAA00010 /* PermissionService.swift */,
 				AAA00012 /* ContextManager.swift */,
@@ -256,6 +262,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				NNN00001 /* StartupPolicy.swift in Sources */,
+				OOO00001 /* UpdateInstaller.swift in Sources */,
+				PPP00001 /* InputDiagnostics.swift in Sources */,
 				8619BB80B1644CDF8DD8B031 /* ModifierLayoutView.swift in Sources */,
 				42AD7ED7DF7B4F2594E16069 /* MappingProfile.swift in Sources */,
 				AAA00001 /* WinMacKeyApp.swift in Sources */,
