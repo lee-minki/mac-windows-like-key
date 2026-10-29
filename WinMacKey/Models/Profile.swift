@@ -166,6 +166,26 @@ enum KeyboardUsageContext: String, Codable, CaseIterable, Hashable {
     }
 }
 
+/// Shared by wizard preview, persistence, and edit restoration. Missing
+/// overrides mean layout defaults; an explicit identity is still an override.
+enum KeyboardMappingResolution {
+    static func targets(physicalKeys: [Int64], defaults: [Int64], overrides: [Int64: Int64]) -> [Int64] {
+        physicalKeys.enumerated().map { index, source in
+            overrides[source] ?? (index < defaults.count ? defaults[index] : source)
+        }
+    }
+
+    static func overrides(physicalKeys: [Int64], defaults: [Int64], desiredKeys: [Int64]) -> [Int64: Int64] {
+        var result: [Int64: Int64] = [:]
+        for (index, source) in physicalKeys.enumerated() where index < desiredKeys.count {
+            let target = desiredKeys[index]
+            let defaultTarget = index < defaults.count ? defaults[index] : source
+            if target != defaultTarget { result[source] = target }
+        }
+        return result
+    }
+}
+
 /// Per-app keyboard mapping profile.
 struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
     var id: UUID = UUID()
@@ -307,50 +327,87 @@ struct IgnoredDevices: Codable, Equatable {
     static let empty = IgnoredDevices()
 }
 
+enum ProfileActivationPolicy {
+    /// A bound profile ID previously used the standard fallback globally.
+    /// Releasing its device binding must not promote its layout to a global one.
+    static func preservingGlobalSelection(_ current: String, displacedDeviceProfiles: Set<UUID>) -> String {
+        guard let id = UUID(uuidString: current), displacedDeviceProfiles.contains(id) else { return current }
+        return "standardMac"
+    }
+
+    static func globalSelection(applying profile: SavedKeyboardProfile, current: String,
+                                currentProfile: SavedKeyboardProfile?) -> String {
+        guard profile.deviceIdentifier != nil else { return profile.id.uuidString }
+        return currentProfile?.deviceIdentifier != nil ? "standardMac" : current
+    }
+}
+
 /// Profile storage (UserDefaults-backed)
 class KeyboardProfileStore: ObservableObject {
-    @Published var profiles: [SavedKeyboardProfile] = []
+    @Published private(set) var profiles: [SavedKeyboardProfile] = []
     @Published var ignoredDevices: IgnoredDevices = .empty
-    var onMappingConfigurationChanged: (() -> Void)?
+    /// Production mutations run on the UI thread. Notify after persistence with
+    /// IDs whose device binding was transferred to another profile.
+    var onMappingConfigurationChanged: ((Set<UUID>) -> Void)?
+    private let defaults: UserDefaults
     private let storageKey = "savedKeyboardProfiles"
     private let ignoredDevicesKey = "ignoredKeyboardDevices"
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         load()
         loadIgnoredDevices()
     }
 
     func load() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
+        if let data = defaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([SavedKeyboardProfile].self, from: data) {
+            // Preserve legacy duplicate bindings and their existing first-match
+            // behavior until the user explicitly saves a profile for that device.
             profiles = decoded
         }
     }
 
     func save() {
         if let data = try? JSONEncoder().encode(profiles) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+            defaults.set(data, forKey: storageKey)
         }
     }
 
     func add(_ profile: SavedKeyboardProfile) {
-        profiles.append(profile)
-        save()
-        onMappingConfigurationChanged?()
+        persist(profiles + [profile], bindingTo: profile)
     }
 
     func update(_ profile: SavedKeyboardProfile) {
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
-            profiles[index] = profile
-            save()
-            onMappingConfigurationChanged?()
+            var updated = profiles
+            updated[index] = profile
+            persist(updated, bindingTo: profile)
         }
+    }
+
+    private func persist(_ updated: [SavedKeyboardProfile], bindingTo profile: SavedKeyboardProfile) {
+        var resolved = updated
+        var displacedDeviceProfiles = Set<UUID>()
+        if let matchingKey = profile.deviceIdentifier?.matchingKey {
+            for index in resolved.indices where resolved[index].id != profile.id {
+                if resolved[index].deviceIdentifier?.matchingKey == matchingKey {
+                    displacedDeviceProfiles.insert(resolved[index].id)
+                    resolved[index].deviceIdentifier = nil
+                }
+            }
+        }
+        // Publish and notify once, after the selected profile owns this VID:PID.
+        // Keep the other profiles and both their local/VDI layouts intact.
+        profiles = resolved
+        save()
+        onMappingConfigurationChanged?(displacedDeviceProfiles)
     }
 
     func delete(id: UUID) {
         profiles.removeAll { $0.id == id }
         save()
-        onMappingConfigurationChanged?()
+        onMappingConfigurationChanged?([])
     }
 
     func profile(idString: String) -> SavedKeyboardProfile? {
@@ -375,7 +432,7 @@ class KeyboardProfileStore: ObservableObject {
     // MARK: - Ignored devices (P2)
 
     private func loadIgnoredDevices() {
-        if let data = UserDefaults.standard.data(forKey: ignoredDevicesKey),
+        if let data = defaults.data(forKey: ignoredDevicesKey),
            let decoded = try? JSONDecoder().decode(IgnoredDevices.self, from: data) {
             ignoredDevices = decoded
         }
@@ -383,7 +440,7 @@ class KeyboardProfileStore: ObservableObject {
 
     private func saveIgnoredDevices() {
         if let data = try? JSONEncoder().encode(ignoredDevices) {
-            UserDefaults.standard.set(data, forKey: ignoredDevicesKey)
+            defaults.set(data, forKey: ignoredDevicesKey)
         }
     }
 
@@ -392,14 +449,14 @@ class KeyboardProfileStore: ObservableObject {
     func ignore(_ device: KeyboardDeviceIdentifier) {
         ignoredDevices.devices.insert(device)
         saveIgnoredDevices()
-        onMappingConfigurationChanged?()
+        onMappingConfigurationChanged?([])
     }
 
     /// "Ignored devices" 메뉴에서 사용자가 명시적으로 해제할 때.
     func unignore(_ device: KeyboardDeviceIdentifier) {
         ignoredDevices.devices.remove(device)
         saveIgnoredDevices()
-        onMappingConfigurationChanged?()
+        onMappingConfigurationChanged?([])
     }
 
     func isIgnored(_ device: KeyboardDeviceIdentifier) -> Bool {

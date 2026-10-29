@@ -355,15 +355,7 @@ struct DashboardView: View {
                 profileName: target.name,
                 existingBindingOnSameDevice: nil, // 동적으로 view 가 검사
                 onConfirm: { identifier in
-                    // 다른 프로필이 동일 디바이스 바인딩 중이면 해당 바인딩 제거 (이전).
-                    for existing in appState.profileStore.profiles where existing.id != target.id {
-                        if existing.deviceIdentifier == identifier {
-                            var demoted = existing
-                            demoted.deviceIdentifier = nil
-                            appState.profileStore.update(demoted)
-                        }
-                    }
-                    // 새 바인딩 적용.
+                    // Store transfers any existing VID:PID binding atomically.
                     var updated = target
                     updated.deviceIdentifier = identifier
                     appState.profileStore.update(updated)

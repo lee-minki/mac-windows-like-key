@@ -36,12 +36,28 @@ struct ModifierLayoutView: View {
     @State private var newProfileName: String = ""
     @State private var selectedLayout: KeyboardLayout = .mac4key
     @State private var selectedIntent: WizardIntent = .koreanOnly
-    /// 사용자가 변경한 Mac 매핑. nil(없음) = "안 바꿈".
+    /// 사용자 Mac 매핑. nil(없음) = layout.localDefaults 사용.
     @State private var localMappings: [Int64: Int64] = [:]
     /// 사용자가 직접 편집한 VDI 매핑. nil(없음) = layout.vdiDefaults 사용.
     @State private var vdiOverrides: [Int64: Int64] = [:]
     @State private var bindingScope: BindingScope = .thisKeyboardAuto
     @State private var showVDIAdvanced: Bool = false
+
+    private var resolvedLocalKeys: [Int64] {
+        selectedIntent == .koreanOnly ? selectedLayout.physicalKeys : KeyboardMappingResolution.targets(
+            physicalKeys: selectedLayout.physicalKeys,
+            defaults: selectedLayout.localDefaults,
+            overrides: localMappings
+        )
+    }
+
+    private var resolvedVdiKeys: [Int64] {
+        selectedIntent == .koreanOnly ? selectedLayout.physicalKeys : KeyboardMappingResolution.targets(
+            physicalKeys: selectedLayout.physicalKeys,
+            defaults: selectedLayout.vdiDefaults,
+            overrides: vdiOverrides
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -388,8 +404,8 @@ struct ModifierLayoutView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(selectedLayout.physicalKeys.enumerated()), id: \.offset) { idx, sourceKey in
                             let cap = selectedLayout.capLabels[idx]
-                            let macTarget = localMappings[sourceKey] ?? sourceKey
-                            let vdiTarget = vdiOverrides[sourceKey] ?? selectedLayout.vdiDefaults[idx]
+                            let macTarget = resolvedLocalKeys[idx]
+                            let vdiTarget = resolvedVdiKeys[idx]
                             let changed = (localMappings[sourceKey] != nil) || (vdiOverrides[sourceKey] != nil)
                             HStack(spacing: 6) {
                                 Text(cap).frame(width: 50, alignment: .leading).font(.caption.monospaced())
@@ -463,24 +479,16 @@ struct ModifierLayoutView: View {
                          profile.vdiDesiredKeys == profile.physicalKeys
         selectedIntent = isIdentity ? .koreanOnly : .customize
         // 3) 사용자 매핑 복원
-        localMappings.removeAll()
-        vdiOverrides.removeAll()
-        for (i, source) in profile.physicalKeys.enumerated() {
-            if i < profile.localDesiredKeys.count {
-                let target = profile.localDesiredKeys[i]
-                if target != source { localMappings[source] = target }
-            }
-        }
-        // VDI overrides 는 layout.vdiDefaults 와 다를 때만 저장
-        let defaults = selectedLayout.vdiDefaults
-        if defaults.count == profile.vdiDesiredKeys.count {
-            for (i, source) in profile.physicalKeys.enumerated() {
-                let target = profile.vdiDesiredKeys[i]
-                if i < defaults.count, target != defaults[i] {
-                    vdiOverrides[source] = target
-                }
-            }
-        }
+        localMappings = KeyboardMappingResolution.overrides(
+            physicalKeys: profile.physicalKeys,
+            defaults: selectedLayout.localDefaults,
+            desiredKeys: profile.localDesiredKeys
+        )
+        vdiOverrides = KeyboardMappingResolution.overrides(
+            physicalKeys: profile.physicalKeys,
+            defaults: selectedLayout.vdiDefaults,
+            desiredKeys: profile.vdiDesiredKeys
+        )
         // 4) v1.8.1 — bindingScope 복원 (HIGH 4 fix)
         //    편집 진입 기본값을 .decideLater 로 두면, 사용자가 명시적으로 안 바꾸면 기존 deviceIdentifier 보존.
         //    이전 v1.8.0 은 .thisKeyboardAuto 기본값이라 사용자 의도와 무관하게 lastActiveKeyboard 로 덮어쓸 위험.
@@ -542,22 +550,8 @@ struct ModifierLayoutView: View {
         guard !name.isEmpty else { return }
 
         let physicalKeys = selectedLayout.physicalKeys
-        let localDesired: [Int64]
-        let vdiDesired: [Int64]
-
-        if selectedIntent == .koreanOnly {
-            localDesired = physicalKeys  // identity
-            vdiDesired = physicalKeys
-        } else {
-            let localDefaults = selectedLayout.localDefaults
-            localDesired = physicalKeys.enumerated().map { idx, source in
-                localMappings[source] ?? (idx < localDefaults.count ? localDefaults[idx] : source)
-            }
-            let defaults = selectedLayout.vdiDefaults
-            vdiDesired = physicalKeys.enumerated().map { idx, source in
-                vdiOverrides[source] ?? (idx < defaults.count ? defaults[idx] : source)
-            }
-        }
+        let localDesired = resolvedLocalKeys
+        let vdiDesired = resolvedVdiKeys
 
         let bindingDevice = automaticBindingDevice
         if bindingScope == .thisKeyboardAuto && bindingDevice == nil {

@@ -222,9 +222,24 @@ class AppState: ObservableObject {
         profileStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
-        profileStore.onMappingConfigurationChanged = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.refreshActiveProfileForCurrentContext()
+        profileStore.onMappingConfigurationChanged = { [weak self] displacedDeviceProfiles in
+            // Profile mutations originate in the UI. Normalize a displaced
+            // legacy selection before a caller can apply the newly saved profile.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let defaultId = self.defaultMappingProfileId {
+                    self.defaultMappingProfileId = ProfileActivationPolicy.preservingGlobalSelection(
+                        defaultId, displacedDeviceProfiles: displacedDeviceProfiles
+                    )
+                }
+                let selection = ProfileActivationPolicy.preservingGlobalSelection(
+                    self.activeMappingProfileId, displacedDeviceProfiles: displacedDeviceProfiles
+                )
+                if selection != self.activeMappingProfileId {
+                    self.activeMappingProfileId = selection
+                } else {
+                    self.refreshActiveProfileForCurrentContext()
+                }
             }
         }
         stateManager.objectWillChange
@@ -450,7 +465,16 @@ class AppState: ObservableObject {
     
     /// Apply a keyboard layout profile's mappings
     func applyProfile(_ profile: SavedKeyboardProfile) {
-        activeMappingProfileId = profile.id.uuidString
+        let selection = ProfileActivationPolicy.globalSelection(
+            applying: profile,
+            current: activeMappingProfileId,
+            currentProfile: profileStore.profile(idString: activeMappingProfileId)
+        )
+        if selection != activeMappingProfileId {
+            activeMappingProfileId = selection
+        } else {
+            refreshActiveProfileForCurrentContext()
+        }
     }
 
     /// 프로필 삭제 안전 처리 — active 프로필 삭제 시 `activeMappingProfileId` 를

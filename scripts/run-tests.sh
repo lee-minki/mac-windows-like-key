@@ -139,6 +139,14 @@ swiftc \
 build/tests/device_scoped_mapping_smoke
 
 swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/profile_store_binding_smoke.swift \
+  -o build/tests/profile_store_binding_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/profile_store_binding_smoke
+
+swiftc \
   WinMacKey/Services/StartupPolicy.swift \
   tests/startup_policy_smoke.swift \
   -o build/tests/startup_policy_smoke \
