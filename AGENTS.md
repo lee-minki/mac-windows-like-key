@@ -50,3 +50,9 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 - The app depends on Accessibility/Input-style permissions and real device context; code-only reasoning is not enough for final verification.
 - `hidutil` remaps are safety-sensitive. Document rollback/reset steps when changing related behavior.
 - VDI behavior depends on external client mapping (`F16 -> Right Alt`) and should not be assumed purely from local code.
+
+## Council PR Review Trial
+- Use the standalone `council` skill from `t3dotgg/tstack` for the next WinMacKey PR review; follow [docs/COUNCIL_REVIEW.md](docs/COUNCIL_REVIEW.md).
+- Use three verified providers with read-only delegates. Report unavailable providers; do not substitute same-provider reviewers or claim consensus without all three.
+- Keep local macOS, Horizon F16 relay, Windows App RDP, and device/profile switching evidence distinct. Model agreement does not replace real keyboard or remote-session verification.
+- Keep fixes within the authorized PR scope and retain the repository's commit, push, merge, and privacy-setting limits.

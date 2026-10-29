@@ -6,10 +6,12 @@ WinMac Key는 VDI (가상 데스크톱) 환경에서도 Windows와 동일한 감
 
 ---
 
-## 💡 지원되는 환경 (검증됨)
+## 💡 v1.8.5 실사용 확인 환경
 
-- **Omnissa Horizon Client** (VMware Horizon)
-- **Windows 10 / 11** (VDI 내부 OS)
+- **Omnissa Horizon Client** (VMware Horizon), 원격 **Windows 11**
+- 2026-10-28 사용자가 내장 오른쪽 Command와 K380의 한/영 전환 키를 번갈아 각각 3회 사용하고 기존 왼쪽 Ctrl/Command 단축키가 유지됨을 확인했습니다. Mac 입력창에서도 같은 확인을 마쳤습니다.
+
+이는 해당 구성의 확인입니다. Windows 10, 다른 키보드 모델·클라이언트, 장시간 안정성을 이번 시험으로 검증한 것은 아닙니다. 원격 Mac / Apple Screen Sharing과 Windows App의 별도 개선 후보도 포함되지 않습니다. 자세한 범위는 [설정 가이드](SETUP_GUIDE.md#v185-실사용-확인-범위)를 참고하세요.
 
 ---
 

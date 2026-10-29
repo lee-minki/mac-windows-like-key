@@ -127,7 +127,7 @@ section h2 .emoji{font-size:28px}
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <h1>⌨️ WinMac Key</h1>
-    <p>v1.6.0 사용 매뉴얼</p>
+    <p>사용 매뉴얼 · 최신 설정은 가이드 참조</p>
   </div>
   <nav id="nav">
     <a href="#intro" class="active"><span class="icon">👋</span>소개</a>
@@ -166,7 +166,7 @@ section h2 .emoji{font-size:28px}
       <tr><td style="color:var(--text2)">CPU 사용률</td><td><span class="badge b-green">&lt; 0.5%</span></td></tr>
       <tr><td style="color:var(--text2)">메모리</td><td><span class="badge b-green">&lt; 20MB</span></td></tr>
       <tr><td style="color:var(--text2)">지원 OS</td><td>macOS 14.0 (Sonoma) 이상</td></tr>
-      <tr><td style="color:var(--text2)">아키텍처</td><td>Apple Silicon &amp; Intel 유니버설</td></tr>
+      <tr><td style="color:var(--text2)">아키텍처</td><td>v1.8.5 배포본: Apple Silicon (arm64)</td></tr>
     </table>
   </div>
 </section>
@@ -342,9 +342,8 @@ section h2 .emoji{font-size:28px}
 [로컬 Mac]
   Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → 입력소스 전환
 
-[Mac → Mac 원격 / 화면 공유] (v1.3.5+)
-  Right Cmd → 로컬 맥북 입력소스 토글 → 변환된 문자를 Screen Sharing이 원격 화면에 forward
-  (로컬 맥북에만 설치하면 됨)
+[Mac → Mac 원격 / 화면 공유]
+  별도 검증 필요 — 전달 방식과 원격 Mac의 설치 필요 여부 미확정
 
 [VDI 앱 포커스] (자동 전환)
   Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon: F16 → Right Alt
@@ -353,16 +352,10 @@ section h2 .emoji{font-size:28px}
   </div>
 
   <div class="card">
-    <h3>🖥️ Mac → Mac 원격접속 (Screen Sharing)</h3>
-    <p style="font-size:13px;color:var(--text2)">맥북에서 맥미니·맥스튜디오 등에 Apple 화면 공유로 접속할 때의 한/영 전환입니다.</p>
-    <ol class="step-list">
-      <li><strong>로컬 맥북에만 WinMac Key 설치</strong> — 원격 Mac에는 설치 불필요</li>
-      <li>화면 공유로 원격 Mac에 연결한 뒤 원격 창에 포커스</li>
-      <li>맥북의 <strong>Right Command</strong>를 누르면 <strong>맥북 메뉴바의 입력소스</strong>가 토글됩니다 (EN ↔ 한)</li>
-      <li>이후 타이핑하면 맥북에서 변환된 문자가 원격 화면에 그대로 입력됩니다</li>
-    </ol>
-    <div class="info-box">ℹ️ Apple 화면 공유는 키 스캔코드가 아니라 <strong>변환된 문자(Unicode)</strong>를 원격에 전달합니다. 그래서 한/영 처리는 로컬 맥북에서 끝나면 충분하고, 원격 Mac의 입력소스 상태는 결과에 영향을 주지 않습니다. (VDI와 동작 모델이 다릅니다 — VDI는 F16 패스스루, Mac 원격은 로컬 토글.)</div>
-    <div class="warn">⚠️ Jump Desktop · AnyDesk · RealVNC · TeamViewer 등 타사 도구는 키 forwarding 방식이 달라 동작이 보장되지 않습니다. 실측을 권장합니다.</div>
+    <h3>🖥️ Mac → Mac 원격접속 (검증 대기)</h3>
+    <p style="font-size:13px;color:var(--text2)">Apple Screen Sharing을 포함한 원격 Mac / 화면 공유의 한/영 전환은 별도 검증 전입니다. 로컬 macOS와 동일한 동작을 보장하지 않습니다.</p>
+    <div class="info-box">로컬 입력소스 표시만으로 성공을 판단하지 말고 원격 화면의 실제 입력 결과를 확인하세요. 입력 전달 방식, 원격 입력소스의 영향, 원격 Mac의 WinMac Key 설치 필요 여부도 확인이 필요합니다. Jump Desktop · AnyDesk · RealVNC · TeamViewer에도 같은 검증 기준을 적용합니다.</div>
+    <p style="font-size:13px;color:var(--text2);margin-top:8px">현재 확인 범위와 설정 기준은 <a href="SETUP_GUIDE.md#v185-실사용-확인-범위">설정 가이드</a>와 <a href="VDI_SETUP.md">VDI 가이드</a>를 따르세요. v1.8.5의 내장 키보드·K380 확인은 Mac 입력창과 Horizon 메모장의 사용자 시험 결과입니다.</p>
   </div>
 
   <div class="card">

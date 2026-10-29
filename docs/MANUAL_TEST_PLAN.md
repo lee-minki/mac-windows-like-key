@@ -1,6 +1,6 @@
 # Manual Test Plan — IME · HID · Permission 회귀 검증
 
-이 체크리스트는 KeyInterceptor / HIDRemapper / PermissionService / AppState lifecycle 을 건드리는 모든 패치 후 반드시 통과해야 한다. 자동 테스트로 잡기 어려운 영역이라 사람이 한 번 돌린다.
+KeyInterceptor / HIDRemapper / PermissionService / AppState lifecycle 변경 후 관련 항목을 실제 환경에서 확인하는 체크리스트입니다. 자동 테스트 결과와 실기 결과를 나누어 기록합니다.
 
 ## 사전 준비
 
@@ -13,35 +13,46 @@ bash scripts/run-tests.sh
 업데이트 테스트는 임시 앱/프로세스를, HID 테스트는 메모리 backend를 사용합니다. 설치된 앱이나 시스템 HID 매핑을 교체하지 않습니다.
 
 ```bash
-# 1. 외부 hidutil 상태 백업 (사용자가 다른 도구로 hidutil 매핑을 두고 있을 수 있음)
-hidutil property --get UserKeyMapping > /tmp/wmkey-test-precondition.json
-cat /tmp/wmkey-test-precondition.json
+# 1. 읽기 전용 기본 상태 기록 (아래 서비스별 기록도 함께 필요)
+hidutil list --ndjson > /tmp/wmkey-test-devices.ndjson
+hidutil property --get UserKeyMapping > /tmp/wmkey-global-before.txt
+hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --get UserKeyMapping > /tmp/wmkey-internal-before.txt
+# K380 예시. 다른 외장 장치는 목록에서 확인한 VendorID/ProductID로 변경
+hidutil property --matching '{"VendorID":1133,"ProductID":45890}' --get UserKeyMapping > /tmp/wmkey-external-before.txt
 
 # 2. 빌드된 .app 경로 확인
 APP=/Applications/WinMacKey.app  # 또는 build/DerivedData/Build/Products/Debug/WinMacKey.app
 ls -la "$APP"
 
-# 3. 이전 세션의 흔적 클린업 (필요 시)
-killall WinMacKey 2>/dev/null
+# 3. 이전 앱을 멈춰야 하면 메뉴바 WM → 종료를 사용하고 프로세스 종료를 확인
+# 강제 종료는 정상 종료 복원 시험을 대체하지 않음
 ```
+
+### 서비스별 HID 기록
+
+`hidutil --get`의 글로벌 값이 `(null)`이어도 장치별 매핑은 정상 적용 중일 수 있습니다. 위 Product·VID:PID 조회는 여러 `RegistryID` 행을 반환할 수 있으므로 각 행의 `UserKeyMapping`을 모두 저장하고 비교합니다. `hidutil list --ndjson`의 RegistryID·Product·VendorID·ProductID·usage 정보를 함께 보관해 내장 일반 키보드·Fn 서비스·외장 키보드를 구분합니다. 순수 트랙패드 서비스는 키보드 적용 대상으로 세지 않습니다.
+
+엔진 ON·OFF·정상 종료 후 위 읽기 명령을 다시 실행해 각각 다른 파일에 저장하세요. 서비스 ID는 재연결 후 바뀔 수 있으므로 목록을 다시 열거합니다. 명령 실패, 대상 서비스 누락, 해석 실패는 빈 매핑으로 간주하지 않습니다. 필요하면 읽기 전용 IOKit 도구의 `IOHIDServiceClientCopyProperty(..., "UserKeyMapping")` 결과로 교차 확인할 수 있지만 필수 준비물은 아닙니다.
+
+앱 시작 전 또는 정상 종료 후의 서비스별 상태를 baseline으로 보관하고, 엔진 ON·OFF·정상 종료 후 같은 범위를 비교합니다. Doctor의 마지막 검증 상태는 보조 근거이며 현재 상태를 다시 읽은 결과를 대체하지 않습니다.
 
 ## 체크리스트
 
-각 항목은 **PASS / FAIL** 둘 중 하나로 명시. 한 건이라도 FAIL이면 commit 금지.
+각 항목은 **PASS / FAIL / SKIP / NOT RUN**으로 기록합니다. `SKIP`에는 해당하지 않는 이유, `NOT RUN`에는 필요한 장치·권한·업데이트 등 실행 조건을 적습니다. 사용자 확인은 그 출처와 실제 시험 범위를 명시하고, 자동 테스트 통과나 일부 키 입력 확인으로 나머지 실기 항목을 PASS로 바꾸지 않습니다. 관련 항목의 FAIL은 원인을 해결한 뒤 재검증합니다.
 
 ### A. 앱 실행만으로 시스템 영향 없음 (HIGH #1 invariant)
 
-- [ ] **A-1**: `hidutil property --get UserKeyMapping` 결과 기록 (앱 실행 전)
+- [ ] **A-1**: 글로벌 조회와 모든 대상 키보드 서비스의 매핑을 기록 (앱 실행 전 baseline)
 - [ ] **A-2**: 앱 실행 (engine OFF 상태). 메뉴바에 `wm` 소문자 표시 확인
-- [ ] **A-3**: `hidutil property --get UserKeyMapping` 결과가 **A-1과 동일**
+- [ ] **A-3**: 글로벌·서비스별 매핑이 **A-1과 동일**
 - [ ] **A-4**: DEBUG 빌드일 경우, 콘솔에 `"Invariant violated"` 메시지 없음
 - [ ] **A-5**: 로그 파일(`~/Library/Application Support/WinMacKey/winmackey.log`)에 `"Lifecycle invariant violation"` 없음
 
 ### B. 엔진 ON 시 HID 적용 (정상 동작)
 
 - [ ] **B-1**: 메뉴바 → 토글 ON. `WM` 대문자로 변경 확인
-- [ ] **B-2**: `hidutil property --get UserKeyMapping` 결과에 RightCmd(`0x7000000E7`) → F16(`0x70000006B`) 매핑 포함
-- [ ] **B-3**: 기본 프로필이라면 추가로 Fn↔Cmd↔Ctrl 매핑도 포함
+- [ ] **B-2**: 각 대상 키보드 서비스의 실제 매핑에 프로필의 전환 키 → F16(`0x70000006B`) 포함 (RightCmd source는 `0x7000000E7`). 글로벌 `(null)`만으로 실패 처리하지 않음
+- [ ] **B-3**: 내장·외장 서비스별 나머지 매핑을 각 저장 프로필의 현재 Mac/VDI 목표와 비교. 기본 프로필을 모든 장치에 동일하게 가정하지 않음
 
 ### C. IME 한영 전환 — 핵심 동작
 
@@ -68,7 +79,7 @@ killall WinMacKey 2>/dev/null
 ### F. 키보드 디바이스 동시 적용 (내장 + 외장 키보드 가용 시)
 
 - [ ] **F-1**: 내장 키보드와 외장 키보드에 서로 다른 프로필을 각각 바인딩
-- [ ] **F-2**: 엔진 ON 후 global, internal, 외장 VID:PID의 `hidutil --get UserKeyMapping`을 각각 기록하고 두 장치 override가 동시에 존재하는지 확인
+- [ ] **F-2**: 엔진 ON 후 글로벌 조회와 내장·외장 키보드의 모든 대상 서비스별 매핑을 기록하고 두 장치 override가 동시에 존재하는지 확인
 - [ ] **F-3**: 내장 ↔ 외장 키보드를 한 키씩 번갈아 입력해도 첫 키부터 각 장치의 Mac 배열로 동작
 - [ ] **F-4**: Profiles 탭에서 두 프로필 모두 `장치별 적용`, 최근 사용 장치만 `마지막 입력`으로 표시
 - [ ] **F-5**: Horizon 포커스 진입 시 두 장치가 각자의 `Ctrl · Win · Win · Alt` 배열로 함께 전환하고, 이탈 시 Mac 배열로 함께 복귀
@@ -79,9 +90,11 @@ killall WinMacKey 2>/dev/null
 - [ ] **G-1**: 엔진 ON 상태 → 메뉴바 → Doctor (진단/복구) 윈도우 열기
 - [ ] **G-2**: 진단 통과 후 Doctor 안에서 어떤 항목에 "재시작" 액션이 있다면 실행
 - [ ] **G-3**: 재시작 직후 Right Cmd → 한영 전환 **여전히 동작**
-- [ ] **G-4**: `hidutil property --get UserKeyMapping` → RightCmd→F16 매핑 **여전히 존재**
+- [ ] **G-4**: 대상 키보드 서비스별로 프로필의 전환 키→F16 매핑 **여전히 존재**
 
 ### H. 설정 초기화 / Emergency Recovery (MED #3)
+
+설정 백업과 복구 방법을 준비한 격리 테스트 계정/장비에서만 실행합니다. 일상 사용 중인 프로필을 검증 목적으로 초기화하지 않습니다.
 
 - [ ] **H-1**: 엔진 ON 상태 → 외장 키보드 프로필 바인딩 셋업 완료
 - [ ] **H-2**: 메뉴바 → "설정 초기화" → "초기화" 확인
@@ -90,44 +103,39 @@ killall WinMacKey 2>/dev/null
 
 ### I. 권한 부여 후 자동 엔진 시작 (MED #4)
 
+권한 초기화·재허용은 사용자가 승인한 격리 테스트 환경에서만 수행합니다. 현재 정상 동작하는 설치본의 TCC를 시험 목적으로 초기화하지 않습니다.
+
 - [ ] **I-1**: 사전: `tccutil reset Accessibility com.winmackey.app` 으로 권한 리셋
 - [ ] **I-2**: "앱 실행 후 엔진 자동 시작" 옵션 ON
 - [ ] **I-3**: 앱 실행 → 권한 요청 다이얼로그 → 손쉬운 사용 허용
 - [ ] **I-4**: 권한 허용 1~2초 내 메뉴바 `WM`으로 자동 전환
 
-### J. 앱 종료 시 hidutil 복원
+### J. 엔진 OFF 및 정상 종료 시 HID 복원
 
-- [ ] **J-1**: 엔진 ON 상태에서 hidutil 매핑 적용된 것 확인
-- [ ] **J-2**: 메뉴바 → "WinMac Key 종료"
-- [ ] **J-3**: `hidutil property --get UserKeyMapping` 결과가 **A-1과 동일** (외부 사전 상태로 복귀)
+- [ ] **J-1**: 엔진 ON 상태에서 모든 대상 키보드 서비스의 매핑 적용을 읽어 확인
+- [ ] **J-2**: 메뉴바 → 엔진 OFF. 앱 프로세스가 유지되고 엔진만 멈췄는지 확인
+- [ ] **J-3**: 서비스별 앱 소유 항목이 **A-1 baseline**으로 복원되고 관련 없는 항목은 보존됨. 이후 외부 도구가 바꾼 항목은 P-4의 조건부 보존 기준 적용
+- [ ] **J-4**: 엔진 ON 후 매핑 재적용을 확인하고 메뉴바 → "WinMac Key 종료"로 정상 종료
+- [ ] **J-5**: 정확한 앱 프로세스가 종료됐고 모든 대상 서비스가 J-3의 복원 기준을 만족
+- [ ] **J-6**: 원래 사용하던 앱을 다시 실행해 엔진·프로필·매핑이 시험 전 상태로 돌아옴
 
-### K. Pre-existing hidutil ownership 보존 (v1.3.3+, v1.3.4 보강)
+엔진 OFF와 정상 종료를 각각 시험합니다. 이전 버전의 정상 종료 결과나 강제 종료 결과를 현재 버전의 두 경로 모두에 대한 증거로 사용하지 않습니다.
 
-다른 hidutil 도구 매핑이 앱에 의해 지워지지 않는지 검증.
+### K. Pre-existing HID ownership 보존
 
-```bash
-# 1. 미리 외부 hidutil 매핑 설정 (예: Karabiner 흉내)
-hidutil property --set '{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0x7000000E0,"HIDKeyboardModifierMappingDst":0x7000000E1}]}'
+다른 도구의 매핑을 지우지 않는지 검증합니다. 인공 매핑을 쓰는 시험은 원래 값을 서비스별로 백업한 격리 테스트 계정/장비에서만 수행합니다. 일상 사용 중인 키보드에 시험 매핑을 주입하거나 빈 배열로 일괄 초기화하지 않습니다. 자동 HID backend 시험 결과는 별도로 기록합니다.
 
-# Global + Internal keyboard 각각 baseline 저장
-hidutil property --get UserKeyMapping > /tmp/wmkey-global-baseline.json
-hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --get UserKeyMapping > /tmp/wmkey-internal-baseline.json
-```
-
-- [ ] **K-1**: 위 매핑이 적용된 상태에서 앱 실행 → 메뉴바 `wm` 확인 (engine OFF)
-- [ ] **K-2**: Global + Internal `hidutil --get` 결과가 **K-1 직전과 동일** (앱 실행만으론 변경 없음)
-- [ ] **K-3**: 엔진 ON → Global 에 WinMacKey 매핑 등장
-- [ ] **K-4**: 엔진 OFF → Global `hidutil --get` 결과가 K-1 사전 상태로 복원 ← **v1.3.4 fix**
-- [ ] **K-5**: 엔진 ON → 앱 종료 → Global 결과가 K-1 사전 상태로 복원
-- [ ] **K-6**: VDI 진입 → 엔진 OFF → Internal `hidutil --get` 결과가 K-1 사전 상태로 복원 ← **v1.3.4 fix (VDI internal cleanup)**
-
-```bash
-# 정리
-hidutil property --set '{"UserKeyMapping":[]}'
-hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --set '{"UserKeyMapping":[]}'
-```
+- [ ] **K-1**: 테스트 키보드의 관련 없는 source와 앱이 바꿀 source에 외부 매핑을 준비하고 서비스별 baseline 저장
+- [ ] **K-2**: 앱 실행 (engine OFF) 후 글로벌·서비스별 결과가 baseline과 동일
+- [ ] **K-3**: 엔진 ON → 각 대상 서비스에 해당 프로필의 매핑 등장, 관련 없는 매핑 보존
+- [ ] **K-4**: 엔진 OFF → 앱 소유 항목이 baseline으로 복원
+- [ ] **K-5**: 엔진 ON → 앱 정상 종료 → K-4와 같은 복원
+- [ ] **K-6**: VDI 진입 → 엔진 OFF → 내장·외장 대상 서비스가 baseline으로 복원
+- [ ] **K-7**: 시험 후 정상 종료하고, 이번 시험에서 추가한 인공 매핑만 백업값으로 되돌린 뒤 서비스별 재조회로 확인
 
 ### L. TCC reset 자동 실행 confirmation (v1.3.3+)
+
+실제 초기화가 필요한 항목은 사용자가 승인한 격리 테스트 환경에서만 실행합니다. 취소 경로 확인과 실제 초기화 경로 확인을 구분합니다.
 
 - [ ] **L-1**: 메뉴바에 stale grant 경고가 표시된 상황 만들기 (이전 빌드 권한 잔존)
 - [ ] **L-2**: "터미널에서 실행…" 버튼 클릭
@@ -138,9 +146,11 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 
 ### M. Update install .app 검증 (v1.3.3+)
 
-패키지 생성만으로 업데이트를 통과로 간주하지 않습니다. 자동 fixture 테스트와 실제 서명된 앱의 교체 시험을 구분합니다.
+패키지 생성만으로 업데이트를 통과로 간주하지 않습니다. 자동 fixture 테스트와 실제 서명된 앱의 GUI 교체 시험을 구분합니다. 수동 설치는 앱 내 업데이트 시험을 대체하지 않습니다.
 
-- [ ] **M-1**: `./scripts/release.sh <next-version> --no-release` 로 정상 빌드된 자산은 통과
+현재 설치본이 최신 v1.8.5이고 새 정식 릴리스가 없다면 GUI에서 최신 버전 표시까지는 확인할 수 있지만 교체 경로 M-2/M-4~M-7은 **NOT RUN**으로 남깁니다. 이 경로를 시험하기 위해 일상 사용 앱을 임의로 다운그레이드하거나 버전·업데이트 응답을 변조하지 않습니다. 실제 교체 시험은 승인된 격리 환경과 검증된 이전/신규 서명 앱으로 수행하고, 변조 자산·실행 실패 주입도 격리 환경으로 제한합니다.
+
+- [ ] **M-1**: 배포 자산의 버전·서명·공증·업데이트 서명을 확인하고 그 결과만 기록 (패키지 생성은 GUI 통과 근거가 아님)
 - [ ] **M-2**: 앱 내 "업데이트 확인" → 자동 설치 시 verifyExtractedApp 단계가 메시지로 표시
 - [ ] **M-3**: (인공) 변조 자산: dmg 안의 .app Info.plist 의 CFBundleIdentifier 변경 후 같은 키로 재서명 → 업데이트 시 거부 메시지
 - [ ] **M-4**: 이전 프로세스가 살아 있는 동안 앱 교체가 시작되지 않음
@@ -149,6 +159,8 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 - [ ] **M-7**: 새 프로세스 종료/복원 실패 시 백업과 진단 파일 보존
 
 ### P. HID 읽기 검증과 외부 변경 보존
+
+읽기/쓰기 실패 및 외부 매핑 변경 주입은 자동 backend 또는 승인된 격리 환경에서만 수행하고 어떤 방식으로 시험했는지 기록합니다.
 
 - [ ] **P-1**: 글로벌·내장·외장 범위의 관련 없는 매핑이 적용 후에도 유지됨
 - [ ] **P-2**: 쓰기 성공이어도 읽은 값이 다르면 검증 실패로 표시
@@ -175,43 +187,29 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 - [ ] **N-4**: "복사" 클릭 → 클립보드에 로그 내용 들어감
 - [ ] **N-5**: Event Viewer 에서 익명화된 표시 (`app-xxxxxxxx`, `modifier`/`letter`/`function` 카테고리) 확인 (privacy mode ON 시)
 
-### O. Mac → Mac 원격접속 한영전환 (v1.3.5+)
+### O. Mac → Mac 원격접속 한영전환 (검증 대기)
 
-본인 맥북에서 맥미니 등에 Apple Screen Sharing 으로 원격접속 시 한영전환.
+Apple Screen Sharing의 전달 방식과 원격 Mac의 설치 필요 여부는 미확정입니다. 로컬 입력소스 표시나 코드의 앱 감지만으로 원격 입력 성공을 판정하지 않습니다.
 
-**핵심**: Screen Sharing 은 character 단위로 forward 하므로 **로컬 맥북의 입력소스 토글만으로** 원격 화면에 올바른 문자가 들어감. 원격 Mac 에는 WinMacKey 설치 불필요.
+**사전 준비**: 로컬·원격 OS, 클라이언트 버전, 양쪽 WinMacKey 설치·엔진 상태, 입력소스와 권한 상태를 기록합니다. 원격 Mac의 앱 설치 유무를 바꾸는 비교 시험은 별도 승인된 환경에서 수행합니다.
 
-**사전 준비**:
-- 맥북에 WinMacKey v1.3.5+ 설치, 손쉬운 사용 권한 + 엔진 ON
-- 맥북 macOS 입력소스 단축키 = `Control+Space`
-- 맥미니: 그냥 보통 Mac 상태 (WinMacKey 설치 안 해도 됨)
+- [ ] **O-1**: Screen Sharing으로 원격 Mac에 연결하고 원격 텍스트 편집기에 포커스
+- [ ] **O-2**: 로컬·원격 입력소스 상태를 각각 기록
+- [ ] **O-3**: 영어 `abc`를 입력하고 원격 화면의 결과를 확인
+- [ ] **O-4**: Right Command를 누른 뒤 양쪽 입력소스 상태와 원격 입력 결과를 각각 기록
+- [ ] **O-5**: 한글 전환 후 `asd` 키 입력이 원격 화면에 `ㅁㄴㅇ`으로 나타나는지 확인
+- [ ] **O-6**: 다시 영어로 전환해 `qwe`가 원격 화면에 입력되는지 확인
+- [ ] **O-7**: 원격 입력소스와 앱 설치 상태를 달리한 비교 결과로 필요한 구성을 결정. 미시험 구성은 미검증으로 유지
 
-**검증 절차**:
-- [ ] **O-1**: 맥북에서 Screen Sharing.app 으로 맥미니 연결
-- [ ] **O-2**: 원격 (맥미니) 의 텍스트 편집기에 포커스
-- [ ] **O-3**: 맥북 입력소스 = 영어 상태에서 "abc" 타이핑 → 맥미니 텍스트에 "abc" 들어감
-- [ ] **O-4**: 맥북에서 Right Command 누름 → **맥북 메뉴바 입력소스가 EN ↔ 한 으로 토글** (정상 동작)
-- [ ] **O-5**: 이어서 "asd" 타이핑 → 맥미니 텍스트에 "ㅁㄴㅇ" 들어감
-- [ ] **O-6**: 다시 Right Command → 맥북 영어로 토글 → "qwe" → "qwe" 들어감
-- [ ] **O-7**: 맥미니 자체 입력소스는 변경되든 안 되든 무관 (참고용 — Screen Sharing 이 character forward 라 결과에 영향 없음)
-
-**실패 시 분석**:
-- O-4 위반 (맥북 입력소스 안 바뀜) → 로컬 모드 동작 안 함. Doctor 로 진단.
-- O-5 위반 (영어가 들어감) → 맥북 입력소스가 실제로 한국어로 안 바뀌었거나 한국어 입력 소스가 macOS 에 추가 안 됨.
-- O-3 자체가 안 됨 → Screen Sharing 자체 문제 (WinMacKey 무관).
-
-**다른 원격접속 도구 (Jump Desktop, AnyDesk, ARD)**:
-이론적으로 같은 character forwarding 이라면 동일 동작. 실측 권장. 예외적으로 raw scan code forwarding 하는 도구가 있다면 다른 동작 가능.
+실패하면 로컬 키 관측·F16 전달·원격 입력소스·원격 실제 입력 결과를 구분해 기록합니다. 로컬 표시만으로 원인을 단정하지 않습니다. Jump Desktop, AnyDesk, ARD 등은 별도 클라이언트 시험으로 기록합니다.
 
 ## 통과 기준
 
-- 모든 체크 PASS → 패치 commit 가능
-- 한 건이라도 FAIL → 원인 분석 후 fix, 처음부터 다시 돌림
+- 변경 범위의 실행 항목이 PASS이고 관련 FAIL이 없어야 검증 완료로 기록합니다.
+- FAIL은 원인 수정 후 관련 회귀 항목을 다시 시험합니다.
+- SKIP / NOT RUN은 사유와 남은 조건을 명시합니다. 미실행 항목을 통과로 간주하거나 전체 실기 검증 완료라고 표시하지 않습니다.
+- 커밋·푸시·머지는 별도 사용자 승인 범위를 따릅니다.
 
 ## 사후 정리
 
-```bash
-# 외부 hidutil 사전 상태 복원 검증
-diff /tmp/wmkey-test-precondition.json <(hidutil property --get UserKeyMapping)
-# 동일하면 OK
-```
+앱을 정상 종료하거나 엔진을 끈 뒤 글로벌·내장·외장 서비스별 매핑을 다시 읽어 baseline과 비교합니다. 앱 소유 항목의 복원, 관련 없는 항목과 이후 외부 변경의 보존을 각각 확인합니다. 차이가 남으면 Doctor와 서비스별 기록을 보존하고 원인을 확인하며, 빈 매핑으로 일괄 초기화하지 않습니다. 마지막에는 사용자가 원래 사용하던 앱·엔진 상태로 복귀했는지 확인합니다.

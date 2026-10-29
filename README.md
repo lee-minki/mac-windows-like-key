@@ -28,8 +28,9 @@
 > **TL;DR (English):** A native macOS menu-bar utility for people who use Windows-style keyboards or VDI on a Mac.
 > It remaps **Right Command → Korean/English IME toggle** via a HID-level `hidutil` remap (no modifier-flag pollution),
 > keeps **per-device keyboard profiles active simultaneously** (built-in and external) through IOKit, and enables **Korean/English
-> switching inside VMware Horizon VDI and Mac-to-Mac screen sharing — without any virtual keyboard driver or system
-> extension.** Signed & Apple-notarized, < 0.5 ms latency, < 20 MB memory, actively maintained with regular releases.
+> switching inside Omnissa Horizon VDI — without any virtual keyboard driver or system
+> extension.** Mac-to-Mac / Apple Screen Sharing remains unverified; see the [setup guide](docs/SETUP_GUIDE.md).
+> Official v1.8.5 downloads are signed, Apple-notarized builds for Apple Silicon.
 
 ---
 
@@ -130,33 +131,16 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Command를 F16으로 HID 레벨 remap하여:
 - 로컬 macOS에서는 F16을 suppress하고 `Control+Space` 합성
 - Windows VDI 앱 포커스에서는 F16을 **패스스루** — Horizon이 Right Alt로 직접 변환
-- **Mac → Mac 원격접속** (Screen Sharing 등) 에서는 로컬 맥북의 입력소스만 토글 — 변환된 문자가 원격 화면에 forward (원격 Mac 에는 설치 불필요, v1.3.5+)
 
 을 상황에 맞게 처리합니다.
 
-### 🖥️ Mac → Mac 원격접속 (v1.3.5+)
+### 🖥️ Mac → Mac 원격접속 (검증 대기)
 
-맥북에서 맥미니/맥스튜디오 등에 Apple Screen Sharing 으로 원격접속 시 한영전환:
+Apple Screen Sharing을 포함한 원격 Mac / 화면 공유의 한/영 전환은 **별도 검증 전**입니다. 로컬 macOS와 동일한 동작을 보장하지 않습니다.
 
-1. **로컬 맥북에만 WinMacKey 설치** (원격 Mac 에는 설치 불필요)
-2. Screen Sharing 으로 원격 Mac 연결
-3. 원격 Mac 창에 포커스 → 맥북의 Right Command 누름
-4. **맥북의 입력소스가 토글** (메뉴바 EN ↔ 한)
-5. 이후 타이핑 → 맥북의 입력소스에서 변환된 문자가 Screen Sharing 거쳐 원격 화면에 입력
+로컬 입력소스 표시만으로 원격 한/영 전환 성공을 판단하지 말고, 원격 화면의 실제 입력 결과를 확인하세요. 입력 전달 방식, 원격 입력소스의 영향, 원격 Mac의 WinMac Key 설치 필요 여부도 확인이 필요합니다. Jump Desktop, AnyDesk, RealVNC, TeamViewer 등 다른 클라이언트에도 같은 검증 기준을 적용합니다.
 
-#### 작동 원리
-
-Apple Screen Sharing 은 **키 스캔코드가 아니라 변환된 character(Unicode)** 를 원격에 전달합니다. 즉 로컬 맥북의 IME 가 'a' → 'ㅁ' 으로 변환하면 원격 화면에 'ㅁ' 이 들어갑니다. 따라서 한영전환 처리는 로컬 맥북에서 일어나면 충분하고, 원격 Mac 의 입력소스 상태는 결과에 영향을 주지 않습니다.
-
-#### 주의 사항
-
-- 맥북 메뉴바의 입력소스 표시기 (EN / 한) 가 토글됩니다 — 이게 정상 동작
-- 원격 Mac 자체의 입력소스는 안 바뀝니다 (Screen Sharing 이 character 단위 forward 라 무관)
-- VDI (Omnissa Horizon) 와 동작 모델이 다름 — VDI 는 F16 패스스루, Mac 원격은 로컬 토글
-
-#### 다른 원격접속 도구
-
-Jump Desktop, AnyDesk, RealVNC, TeamViewer 등은 키 forwarding 방식이 다를 수 있습니다. 동작 여부 실측 권장.
+설정 기준은 [설정 가이드](docs/SETUP_GUIDE.md)와 [VDI 설정 가이드](docs/VDI_SETUP.md)를 참고하세요.
 
 ### 검증된 환경
 
@@ -164,7 +148,9 @@ Jump Desktop, AnyDesk, RealVNC, TeamViewer 등은 키 forwarding 방식이 다�
 |---|---|
 | Omnissa Horizon Client | `com.omnissa.horizon.client.mac` |
 
-> 그 외 VMware Fusion, Parallels Desktop, Microsoft RDP, VirtualBox도 코드에서 자동 감지하지만 아직 테스트되지 않았습니다.
+2026-10-28 v1.8.5 설치 후 사용자가 Mac 입력창과 Horizon 메모장에서 내장 오른쪽 Command와 K380의 한/영 전환 키를 번갈아 각각 3회 시험했고, 기존 왼쪽 Ctrl/Command 단축키도 정상이라고 확인했습니다. 이는 해당 구성의 실사용 확인이며 장시간 안정성, 모든 키보드 모델 또는 다른 원격 클라이언트의 동작을 보장하지 않습니다.
+
+> 그 외 VMware Fusion, Parallels Desktop, Microsoft RDP, VirtualBox도 코드에서 자동 감지하지만 아직 테스트되지 않았습니다. Windows App의 별도 개선 후보도 이번 v1.8.5 검증에 포함되지 않습니다.
 
 ---
 
@@ -185,7 +171,8 @@ Horizon 등 VDI 클라이언트가 이를 윈도우의 `Right Alt`로 변환하�
 ### 시스템 요구사항
 
 - macOS 14.0 (Sonoma) 이상
-- Apple Silicon 또는 Intel Mac
+- v1.8.5 배포 DMG/ZIP: Apple Silicon (arm64)
+- Intel용 빌드·실행은 이번 릴리스에서 검증하지 않았습니다.
 
 ### 사용 기술
 
