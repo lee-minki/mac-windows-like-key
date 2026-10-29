@@ -51,8 +51,8 @@ enum SetupCheckService {
         if isSymbolicHotKeyEnabled(162) {
             issues.append(SetupIssue(
                 kind: .capsLockSwitch,
-                title: "Caps Lock 이 한/영 전환으로 설정됨",
-                detail: "macOS 설정상 Caps Lock 이 입력 소스 전환으로 동작해 대소문자 토글이 안 됩니다. 시스템 설정 → 키보드 → 입력 소스 → ‘모든 입력 소스’ 에서 ‘Caps Lock 키로 ABC 입력 소스 전환’ 을 끄세요. (한/영 전환은 Right Command 가 담당합니다.)",
+                title: "Caps Lock이 한/영 전환으로 설정됨",
+                detail: "macOS 설정상 Caps Lock이 입력 소스 전환으로 동작해 대소문자 토글이 안 됩니다. 시스템 설정 → 키보드 → 입력 소스 → ‘모든 입력 소스’에서 ‘Caps Lock 키로 ABC 입력 소스 전환’을 끄세요. (한/영 전환은 Right Command가 담당합니다.)",
                 actionTitle: "키보드 설정 열기",
                 severity: .warning
             ))
@@ -62,7 +62,7 @@ enum SetupCheckService {
             issues.append(SetupIssue(
                 kind: .inputSourceShortcut,
                 title: "‘이전 입력 소스 선택’ 단축키 꺼짐",
-                detail: "WinMac Key 는 Right Command 한/영 전환을 ⌃Space(‘이전 입력 소스 선택’) 단축키로 합성합니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스 에서 이 항목을 켜 주세요.",
+                detail: "WinMac Key는 Right Command 한/영 전환을 ⌃Space(‘이전 입력 소스 선택’) 단축키로 합성합니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 이 항목을 켜 주세요.",
                 actionTitle: "키보드 설정 열기",
                 severity: .warning
             ))
@@ -131,7 +131,7 @@ struct SetupCheckView: View {
             }
             Text(issues.isEmpty
                  ? "필요한 권한과 macOS 설정이 모두 준비됐습니다."
-                 : "WinMac Key 가 제대로 동작하려면 아래 항목을 정리해 주세요.")
+                 : "WinMac Key가 제대로 동작하려면 아래 항목을 정리해 주세요.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -242,16 +242,16 @@ struct FirstRunView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     Image(systemName: "command.square.fill").font(.largeTitle).foregroundStyle(.green)
-                    Text("WinMac Key 에 오신 걸 환영합니다").font(.title2).bold()
+                    Text("WinMac Key에 오신 걸 환영합니다").font(.title2).bold()
                 }
-                Text("Windows 키보드 습관을 Mac 에서 그대로 — Right Command 로 한/영 전환, VDI·터미널 자동 대응.")
+                Text("Windows 키보드 습관을 Mac에서 그대로 — Right Command로 한/영 전환, VDI·터미널 자동 대응.")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                introRow("command", "Right Command 로 한/영 전환 (modifier 오염 없는 F16 HID 방식)")
+                introRow("command", "Right Command로 한/영 전환 (modifier 오염 없는 F16 HID 방식)")
                 introRow("display", "Windows VDI(Omnissa Horizon)·터미널·Mac 원격을 자동 감지해 전환 방식을 바꿈")
-                introRow("keyboard", "키보드별 프로필 + 자동 전환")
+                introRow("keyboard", "키보드별 프로필 동시 적용")
             }
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor))
@@ -259,7 +259,7 @@ struct FirstRunView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("라이선스").font(.headline)
-                Text("WinMac Key 는 MIT 라이선스로 제공됩니다. 계속하면 라이선스 및 이용 안내에 동의하는 것으로 간주됩니다.")
+                Text("WinMac Key는 MIT 라이선스로 제공됩니다. 계속하면 라이선스 및 이용 안내에 동의하는 것으로 간주됩니다.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if let url = URL(string: "https://github.com/lee-minki/mac-windows-like-key/blob/main/LICENSE") {
                     Link("MIT License 전문 보기", destination: url).font(.caption)
@@ -325,7 +325,7 @@ enum ApplicationMover {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "응용 프로그램 폴더로 이동할까요?"
-        alert.informativeText = "WinMac Key 가 응용 프로그램 폴더 밖에서 실행되고 있습니다. /Applications 로 옮기면 권한·자동 시작·업데이트가 안정적으로 동작합니다."
+        alert.informativeText = "WinMac Key가 응용 프로그램 폴더 밖에서 실행되고 있습니다. /Applications로 옮기면 권한·자동 시작·업데이트가 안정적으로 동작합니다."
         alert.addButton(withTitle: "응용 프로그램으로 이동")
         alert.addButton(withTitle: "나중에")
         guard alert.runModal() == .alertFirstButtonReturn else { return }

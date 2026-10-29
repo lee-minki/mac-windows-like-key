@@ -22,6 +22,7 @@ COMMON_SOURCES=(
   WinMacKey/Services/HIDRemapper.swift
   WinMacKey/Services/LogService.swift
   WinMacKey/Services/KeyInterceptor.swift
+  WinMacKey/Services/InputDiagnostics.swift
   WinMacKey/Services/ContextManager.swift
   WinMacKey/Services/KeyboardDeviceManager.swift
 )
@@ -119,7 +120,7 @@ swiftc \
 build/tests/buffered_replay_smoke
 
 # ── KeyboardLayout invariant smoke (v1.8.0 NEW) ───────────────────────────────
-# 위자드 v2 의 핵심 단위 — 4가지 layout (mac4key/mac3key/win3key/win4key) + custom
+# 위자드 v2 의 핵심 단위 — 5가지 layout (mac4key/portableMac4key/mac3key/win3key/win4key) + custom
 # 의 physicalKeys/capLabels/vdiDefaults 일관성 + SavedKeyboardProfile Codable 호환
 swiftc \
   "${COMMON_SOURCES[@]}" \
@@ -128,6 +129,52 @@ swiftc \
   "${COMMON_FRAMEWORKS[@]}"
 
 build/tests/keyboard_layout_smoke
+
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/device_scoped_mapping_smoke.swift \
+  -o build/tests/device_scoped_mapping_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/device_scoped_mapping_smoke
+
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/profile_store_binding_smoke.swift \
+  -o build/tests/profile_store_binding_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/profile_store_binding_smoke
+
+swiftc \
+  WinMacKey/Services/StartupPolicy.swift \
+  tests/startup_policy_smoke.swift \
+  -o build/tests/startup_policy_smoke \
+  -framework AppKit
+
+build/tests/startup_policy_smoke
+
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/hid_verification_smoke.swift \
+  -o build/tests/hid_verification_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/hid_verification_smoke
+
+swiftc \
+  WinMacKey/Services/InputDiagnostics.swift \
+  tests/input_diagnostics_smoke.swift \
+  -o build/tests/input_diagnostics_smoke
+
+build/tests/input_diagnostics_smoke
+
+swiftc \
+  WinMacKey/Services/UpdateInstaller.swift \
+  tests/update_installer_smoke.swift \
+  -o build/tests/update_installer_smoke
+
+build/tests/update_installer_smoke
 
 # ── Script-level guardrails ───────────────────────────────────────────────────
 bash scripts/check-version-consistency.sh

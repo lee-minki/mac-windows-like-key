@@ -6,6 +6,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — v1.8.6
+
+### Fixed
+- **동일 키보드의 새 프로필 저장**: 생성·편집·재바인딩 시 같은 장치 범위의 이전 바인딩을 함께 해제하여 새 프로필이 실제 적용되도록 합니다. 이전 프로필의 이름과 키 배치는 보존하며, 기존 저장 데이터를 읽는 것만으로 바인딩을 바꾸지 않습니다.
+- **포터블 키보드 편집 보존**: 확인 화면과 저장 결과가 같은 Mac 추천값을 사용하고, 사용자가 선택한 ‘키캡 그대로’ 설정이 다시 편집할 때 추천값으로 바뀌지 않도록 합니다.
+- **장치 프로필과 전체 프로필 분리**: 특정 키보드 프로필 저장이 다른 키보드의 전체 적용 프로필을 해제하거나 이전 장치 프로필을 전체 프로필로 바꾸지 않도록 합니다.
+
+### Note
+- 개발 버전은 **1.8.6 / build 29**입니다. 게시된 v1.8.5 태그·배포 자산과 현재 설치본은 변경하지 않습니다.
+- 장치별 동시 적용과 Horizon의 `F16 → Right Alt` 경로는 유지합니다. 프로필 저장 회귀 검증과 기존 1.8.5 실기 결과는 구분합니다.
+
+---
+
+## [1.8.5] — 2026-10-27
+
+### Added
+- **업데이트 시작 확인·실패 복구**: 기존 프로세스 종료 후 앱을 교체하고, 새 프로세스의 초기화 응답을 확인한 뒤 이전 앱 백업을 정리합니다. 실행 실패·응답 시간 초과 시 안전한 종료 확인 후 이전 앱을 복원합니다.
+- **HID 읽기 검증·조건부 복원**: 글로벌·장치별 매핑의 적용 결과를 읽어 비교합니다. 관련 없는 매핑과 다른 도구가 나중에 바꾼 항목은 보존하고 앱이 소유한 항목만 복원합니다.
+- **무반응 진단 구분**: Doctor에 입력 모니터링, 실제 이벤트 탭 상태, 최근 입력/F16 관측, 보안 입력, 마지막 HID 검증 결과를 표시합니다. 과거 권한 허용 이력만으로 서명 문제를 단정하지 않습니다.
+
+### Fixed
+- **업데이트 후 일반 재실행**: 이전 업데이트의 시작 확인 정보를 새 일반 실행에 넘기지 않아, 재실행 후 입력 엔진이 시작 대기 상태에 남는 문제를 방지합니다.
+
+### Note
+- Mac/VDI 목표 배열, Right Command → F16, Horizon의 F16 → Right Alt 전달 계약을 유지합니다. 키 입력 관측은 시간만 수집하며 입력 문자를 추가 기록하지 않습니다.
+- Info.plist **1.8.5/28**, `MARKETING_VERSION 1.8.5`, `CURRENT_PROJECT_VERSION 28`로 기존 로컬 1.8.4/27과 구분합니다.
+- 이전 1.8.4 개발 후보의 장치별 프로필 및 터미널 입력 개선을 포함합니다.
+
+---
+
+## [1.8.4] — Superseded by v1.8.5
+
+### Added
+- **장치별 동시 매핑 레이어**: 내장 키보드와 바인딩된 외장 키보드가 각자의 `hidutil --matching` 범위에서 동시에 active 상태를 유지합니다. 키 입력 순간 프로필을 바꾸지 않아 두 키보드를 번갈아 사용해도 첫 키부터 올바른 배열로 동작합니다.
+- **장치 레이어 회귀 검사**: global F16 레이어, 내장 키보드, Keys-To-Go 2 `046D:B38C`가 Mac/VDI 컨텍스트에서 올바른 순서로 동시에 적용되는지 smoke test를 추가했습니다.
+
+### Changed
+- **Horizon VDI 계약 확정**: 내장 키보드와 Keys-To-Go 2 모두 VDI에서는 각 프로필의 `Ctrl · Win · Win · Alt` 목표 배열을 사용합니다. Horizon에서 활성화할 클라이언트 매핑은 `F16 → Right Alt (AltGr)` 하나입니다.
+- **프로필 UI 의미 정리**: 장치 바인딩 프로필은 `장치별 적용`으로 표시하고, 최근 입력 장치만 `마지막 입력`으로 표시합니다. 장치에 바인딩되지 않은 프로필만 `전체 적용`으로 선택합니다.
+
+### Fixed
+- **CI 빌드 번호 역행 방지**: GitHub Actions 실행 번호가 프로젝트의 현재 build보다 작아도 `CFBundleVersion`을 낮추지 않습니다. 기존 설치본보다 오래된 빌드로 인식되는 DMG 생성을 차단합니다.
+- **Codex·터미널 전환 직후 첫 글자 유실**: Codex desktop을 터미널 계열 컨텍스트로 분류하고, 직접 입력소스 전환 직후 짧은 settle window에서 일반 문자만 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과시켜 Ghostty/SSH 단축키와 escape sequence 안전성을 유지합니다.
+- **`저장하고 적용` 무반응**: 클린 설치 직후 마지막 입력 키보드가 아직 없으면 버튼이 활성화된 채 저장 함수가 조용히 중단되던 문제를 수정했습니다. 연결된 키보드가 하나면 그 장치에 즉시 바인딩하고, 여러 대면 대상 키보드 입력 전까지 버튼을 비활성화합니다.
+- **내장·외장 프로필 오염**: 단일 `activeMappingProfileId`의 global 매핑이 모든 키보드에 적용되어 내장 키보드와 Keys-To-Go 2 배열이 서로 덮어쓰던 문제를 수정했습니다.
+- **VDI 전환 불일치**: Horizon 진입·이탈 때 내장 키보드만 별도 override하고 외장은 마지막 active 프로필에 의존하던 경로를 제거하고, 모든 bound profile의 `localDesiredKeys`/`vdiDesiredKeys`를 함께 재적용합니다.
+- **장치 재연결 누락**: 엔진 실행 중 키보드가 연결되면 장치 레이어를 즉시 다시 적용합니다.
+
+### Note
+- Info.plist 1.8.3/26 → **1.8.4/27**, `MARKETING_VERSION 1.8.4`, `CURRENT_PROJECT_VERSION 27`.
+- Caps Lock은 계속 시스템/클라이언트 소유이며 이번 변경에서 처리하지 않습니다.
+
+---
+
+## [1.8.3] — Superseded by v1.8.4
+
+### Added
+- **포터블 Mac 4키 배열**: Logitech Keys-To-Go 2처럼 스페이스 왼쪽이 `Ctrl · Fn · Opt · Cmd`인 키보드를 프로필 형태로 추가했습니다. 추천 Mac 배열은 `Cmd · Fn · Opt · Ctrl`, VDI 배열은 기존 규칙을 유지한 `Ctrl · Win · Win · Alt`입니다.
+
+### Changed
+- **업데이트 확인 기본 활성화**: `자동 업데이트 확인`을 한 번도 정하지 않은 사용자는 기본적으로 새 릴리스를 확인합니다. 사용자가 직접 끈 값은 그대로 보존합니다.
+- **표준 설치본 우선 실행**: `/Applications/WinMacKey.app`이 있으면 빌드 폴더·다운로드 폴더의 복사본은 입력 엔진을 시작하지 않고 표준 설치본을 엽니다.
+
+### Fixed
+- **동일 버전 앱 중복 실행 차단**: 실행 잠금으로 두 번째 WinMac Key 프로세스가 HID 매핑과 이벤트 탭을 동시에 제어하지 못하게 했습니다. 종료하는 보조 프로세스는 활성 프로세스의 HID 매핑을 지우지 않습니다.
+
+### Note
+- Info.plist 1.8.2/25 → **1.8.3/26**, `MARKETING_VERSION 1.8.3`, `CURRENT_PROJECT_VERSION 26`.
+- Right Command → F16 릴레이 모델과 Horizon의 `F16 → Right Alt` 외부 매핑은 변경하지 않았습니다.
+
+---
+
+## [1.8.2] — Superseded by v1.8.3
+
+**보안·신뢰성 하드닝 패치 (묶음 A).** 코드 검수에서 도출된 저위험 항목만 선별 적용 — 엔진/트리거(`bufferedReplayWindow`) 경로는 일절 건드리지 않아 P9·P10·P13 회귀 표면 0. 입력 매끄러움(비동기 replay)·`@MainActor` 격리 등 엔진 관련 항목은 별도 하네스 게이트 트랙으로 분리(미포함).
+
+### Security
+- **CI 스크립트 인젝션 차단** (`.github/workflows/release.yml`). `workflow_dispatch` 의 `version` 입력을 `run:` 셸에 직접 인터폴레이션하던 것을 `env:` 경유로 변경 (CWE-94). `Get version`/`Update version in project`/`Create DMG`/`Notarize DMG` 4개 스텝 적용.
+- **무서명 자동 설치 거부** (`WinMacKey/Services/UpdateService.swift`). 릴리스 빌드에서 업데이트 서명 public key 가 누락된 경우 다운로드 자산을 무검증 설치하지 않고 즉시 실패. 개발(DEBUG) 빌드만 폴백 허용. (현재 빌드는 키가 임베드돼 있어 동작 변화 없음 — 미래 misconfig 안전망.)
+
+### Fixed
+- **앱 재시작 셸 인젝션 위험 제거** (`WinMacKey/WinMacKeyApp.swift`, `relaunch()`). `sh -c` 스크립트 본문에 앱 경로를 끼워 넣던 것을 위치 인자(`$0`)로 전달하도록 변경 — 따옴표/공백/특수문자가 포함된 설치 경로에서도 안전하게 재시작. `UpdateService.relaunchApp` 의 인자 배열 방식과 일관.
+- **전체 초기화 누락 키 보강 + 일원화** (`WinMacKey/Services/ResetService.swift`, `WinMacKey/Services/DoctorService.swift`). 리셋 키 목록이 두 곳에 하드코딩 중복돼 있어 `CustomRemoteMacApps`·`hasCompletedFirstRunOnboarding`·`WinMacKey.AccessibilityWasEverGranted` 3개 키가 초기화되지 않던 문제 수정. 단일 정의 `AppManagedDefaultsKeys.all` 로 통합해 향후 drift 방지.
+
+### Note
+- Info.plist 1.8.1/24 → **1.8.2/25**, `MARKETING_VERSION 1.8.2`, `CURRENT_PROJECT_VERSION 25`.
+- 엔진/트리거 경로 무변경 — 기존 스모크 13종 그대로 유효, 신규 회귀 표면 없음.
+- 미포함(별도 트랙): 비동기 replay·`@MainActor` 격리 등 엔진 관련 하드닝은 `bufferedReplayWindow` 핵심 메커니즘이라 plan doc + replay 순서/간격 스모크 + P9 종결 후 진입 권장.
+
+---
+
 ## [1.8.1] — 2026-06-02
 
 **v1.8.0 Release Blocker 핫픽스 — 사용자 보고 4건 일괄 fix.** v1.8.0 은 GitHub Pre-release 로 demote, v1.7.0 이 일시 Latest 였다가 본 릴리스로 다시 Latest 승격.

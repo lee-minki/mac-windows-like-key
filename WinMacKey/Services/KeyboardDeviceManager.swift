@@ -27,6 +27,32 @@ struct KeyboardDeviceIdentifier: Codable, Equatable, Hashable, Identifiable {
 
     /// SwiftUI Identifiable 용 — VID:PID 가 stable unique id (P2 first-seen sheet 등에서 사용).
     var id: String { matchingKey }
+
+    var hidutilMatchingJSON: String? {
+        let matching: [String: Any]
+        if isInternal {
+            matching = ["Product": productName]
+        } else {
+            matching = ["VendorID": vendorId, "ProductID": productId]
+        }
+
+        guard JSONSerialization.isValidJSONObject(matching),
+              let data = try? JSONSerialization.data(withJSONObject: matching),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return json
+    }
+}
+
+enum KeyboardBindingResolver {
+    static func resolve(
+        lastActive: KeyboardDeviceIdentifier?,
+        connected: [KeyboardDeviceIdentifier]
+    ) -> KeyboardDeviceIdentifier? {
+        if let lastActive { return lastActive }
+        return connected.count == 1 ? connected[0] : nil
+    }
 }
 
 /// IOHIDManager 기반 키보드 디바이스 열거/모니터링 서비스

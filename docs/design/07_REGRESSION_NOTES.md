@@ -8,7 +8,7 @@ Use it before changing trigger detection, transport selection, event suppression
 
 ---
 
-## 2. Ghostty / Claude Code Terminal Regression
+## 2. Ghostty / Codex / Claude Code Terminal Regression
 
 ### Symptom
 
@@ -57,15 +57,16 @@ The regression was resolved in stages:
 1. restoring the boring-key trigger model (`Right Command -> F16`) removed raw F16 text such as `[57379u`
 2. removing bare Command tap handling removed search UI and live Command shortcut leakage such as `Cmd+N` and `Cmd+D`
 3. Ghostty still showed a transient `pasting text` overlay and slight stutter while typing
-4. that remaining issue was addressed by keeping the F16 suppress trigger while switching terminal-like apps via direct input-source selection instead of `Control+Space + buffered replay`
+4. that remaining issue was addressed by keeping the F16 suppress trigger while switching terminal-like apps via direct input-source selection instead of the general `Control+Space + buffered replay` path
 5. user-observed result after this change: the `pasting text` overlay disappeared
+6. Codex desktop later showed a stale text-context symptom where Korean input worked only after focus was moved away and back; this is handled as a terminal-like app plus a short terminal settle replay window
 
 Current recorded state:
 
 - `[57379u]` no longer appears
 - Command shortcut leakage is no longer observed
 - `pasting text` overlay no longer appears
-- runtime validation should still continue for typing smoothness and broader terminal coverage
+- runtime validation should still continue for typing smoothness in Ghostty, Codex desktop, and broader terminal coverage
 
 ---
 

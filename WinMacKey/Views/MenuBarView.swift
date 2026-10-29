@@ -126,14 +126,14 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 8) {
             let isStale = appState.permissionService.isStaleGrantDetected
 
-            Label(isStale ? "권한 등록이 무효화되었습니다" : "권한이 필요합니다",
+            Label(isStale ? "현재 앱의 권한을 확인해주세요" : "권한이 필요합니다",
                   systemImage: isStale ? "exclamationmark.shield.fill" : "exclamationmark.triangle.fill")
                 .font(.subheadline)
                 .foregroundStyle(.orange)
 
             if !appState.hasAccessibilityPermission {
                 Text(isStale
-                     ? "이전 버전의 권한 등록(csreq)이 남아 동작하지 않을 수 있습니다. 아래 명령으로 초기화 후 다시 허용해주세요."
+                     ? "이전에 허용되었지만 현재 권한 확인은 거부 상태입니다. 먼저 시스템 설정에서 앱 경로와 허용 상태를 확인하세요. 원인은 이 확인만으로 알 수 없으며, 권한 초기화는 필요할 때만 선택하세요."
                      : "손쉬운 사용 권한을 허용해주세요")
                     .font(.caption)
                     .foregroundStyle(.secondary)

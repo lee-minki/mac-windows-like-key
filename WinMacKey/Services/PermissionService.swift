@@ -7,9 +7,12 @@ import ApplicationServices
 class PermissionService: ObservableObject {
     @Published var isAccessibilityGranted: Bool = false
     @Published var isInputMonitoringGranted: Bool = false
-    /// 이전에는 권한이 부여되었으나 현재는 거부 상태 — 보통 코드 서명 csreq 변경으로
-    /// TCC 데이터베이스의 등록 항목이 무효화되었을 때 발생.
+    /// 이전 허용 기록과 현재 거부 상태만 나타냅니다. 권한 해제와 서명 변경 등을 구분하지 못합니다.
     @Published var isStaleGrantDetected: Bool = false
+
+    static var accessibilityWasPreviouslyGranted: Bool {
+        UserDefaults.standard.bool(forKey: "WinMacKey.AccessibilityWasEverGranted")
+    }
 
     private let wasEverGrantedKey = "WinMacKey.AccessibilityWasEverGranted"
 
@@ -149,7 +152,7 @@ class PermissionService: ObservableObject {
             \(tccutilResetCommand)
 
             이 명령은 WinMac Key 의 손쉬운 사용 권한 등록을 제거합니다.
-            실행 후 앱을 다시 실행하면 권한 요청 다이얼로그가 나타납니다.
+            실행 후 앱을 다시 실행하고 손쉬운 사용 권한을 다시 허용해야 합니다.
 
             계속하시려면 '실행'을 누르세요.
             """

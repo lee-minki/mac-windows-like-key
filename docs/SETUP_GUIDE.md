@@ -5,9 +5,12 @@
 한영전환 방식이 다음처럼 분리되었습니다.
 - 로컬 macOS: `Control+Space 시스템 단축키 주입`
 - Windows VDI: `F16 릴레이 키 주입`
-- Mac → Mac 원격 / 화면 공유: 로컬 맥북의 입력소스만 토글 → 변환된 문자가 원격 화면에 forward (원격 Mac 에는 설치 불필요, v1.3.5+)
+- Mac → Mac 원격 / 화면 공유: 별도 검증 전. 입력 전달 방식과 원격 Mac의 설치 필요 여부를 단정하지 않습니다.
 
 ### 개선된 점
+- **업데이트·복구 진단 강화 (v1.8.5)**: 업데이트는 기존 앱 종료 후 교체하고 새 프로세스의 시작 확인까지 백업을 유지합니다. HID 매핑은 적용 후 실제 값을 읽어 확인하며, Doctor에서 권한·이벤트 탭·입력 관측·매핑 검증 결과를 구분합니다.
+- **(v1.8.4) 내장·외장 키보드 동시 적용**: 연결된 키보드마다 자기 프로필을 VID:PID 범위로 항상 적용한다. 키 입력 순간 프로필을 바꾸지 않으므로 내장 키보드와 Keys-To-Go 2를 번갈아 사용해도 첫 키부터 각자의 배열로 동작한다. Horizon 포커스에서는 각 프로필의 Windows VDI 배열을 함께 적용한다.
+- **(v1.8.3) 중복 실행 차단 + 포터블 4키 지원**: Applications 설치본을 우선해 개발 빌드와 동시에 입력 엔진이 켜지는 일을 막고, `Ctrl · Fn · Opt · Cmd` 키캡 배열을 정식 지원한다.
 - **(v1.6.0) 프로필 위자드 — 키코드 기반 직접 매핑 표**: 캡처 없이 표에서 "각 키를 무엇으로 쓸지" 직접 고른다. macOS 가 모든 키보드를 표준 modifier 키코드(Ctrl/Opt/Cmd/Fn)로 정규화하므로 어떤 키보드든 누를 필요 없다 — Mac/Win 듀얼모드 키보드(로지텍 등)에서도 동일하게 동작. "한/영 전환만"은 1클릭으로 즉시 완료, "키 배치도 바꾸기"는 4행×2열 표 + Mac/Windows 키캡 토글 + "Windows 감각" 1클릭 프리셋. (이전: 물리 키 캡처 + Step 1~5)
 - **F16 HID remap 아키텍처**: `hidutil`로 Right Command를 F16으로 HID 레벨 변환 — modifier flag 오염 원천 차단
 - VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
@@ -15,11 +18,13 @@
 - 메뉴바 아이콘이 macOS 네이티브 입력소스 표시기로 동기화
 - Windows VDI(Omnissa Horizon 등)에서 F16 패스스루 → Right Alt 변환으로 동작
 - Karabiner DriverKit 완전 불필요
-- IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 자동 전환
+- IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 동시 적용
 
 ---
 
 ## STEP 0: 최초 실행 (서명·공증 완료)
+
+v1.8.5 배포 DMG/ZIP은 macOS 14.0 이상 Apple Silicon (arm64)용입니다. Intel용 빌드·실행은 이번 릴리스에서 검증하지 않았습니다.
 
 v1.3.8 이후 빌드는 **Apple Developer ID 서명 + 공증(Notarization)** 을 거쳐 배포됩니다.
 
@@ -105,10 +110,34 @@ xcodebuild -project WinMacKey.xcodeproj -scheme WinMacKey -configuration Debug -
 ### 실행
 
 ```bash
-open build/DerivedData/Build/Products/Debug/WinMacKey.app
+WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/WinMacKey.app/Contents/MacOS/WinMacKey
 ```
 
 또는 Xcode에서 `Cmd+R`
+
+> `/Applications/WinMacKey.app`이 설치된 상태에서는 다른 위치의 복사본이 입력 엔진을 시작하지 않습니다. 위 환경 변수는 개발 검증 전용이며 로그인 항목에는 개발 빌드를 등록하지 마세요.
+
+### Keys-To-Go 2 포터블 배열
+
+1. 키보드에서 `Fn + O`를 3초간 눌러 macOS 모드로 맞춥니다.
+2. 설정의 키보드 프로필에서 **새 프로필 만들기**를 누릅니다.
+3. **포터블 Mac 4키 (Ctrl · Fn · Opt · Cmd)**와 **키 배치 바꾸기**를 선택합니다.
+4. Mac 추천값 `Cmd · Fn · Opt · Ctrl`, VDI 자동값 `Ctrl · Win · Win · Alt`를 확인합니다.
+5. Keys-To-Go 2에서 아무 키나 한 번 누른 뒤 **이 키보드에만**으로 저장합니다.
+6. 저장 후에는 내장 키보드와 Keys-To-Go 2 프로필이 동시에 유지됩니다. 키보드를 번갈아 눌러도 프로필을 다시 선택할 필요가 없습니다.
+
+내장 키보드만 연결된 상태에서는 **이 키보드에만**이 내장 키보드를 자동 선택하므로 별도 키 입력 없이 바로 저장할 수 있습니다. 여러 키보드가 연결돼 대상이 모호할 때만 저장할 키보드에서 키를 한 번 누릅니다.
+
+### v1.8.6 개발 변경: 프로필 저장·편집
+
+아래는 개발 브랜치의 변경이며 배포·설치된 v1.8.5에는 아직 포함되지 않습니다.
+
+- 같은 VID:PID에 새 프로필을 저장하거나 다시 바인딩하면 장치 연결이 그 프로필로 이전됩니다. 장치 이름이 달라도 VID:PID가 같으면 같은 대상으로 처리합니다. 이전 프로필의 이름과 Mac/VDI 배열은 남고 장치 연결만 해제됩니다.
+- 기존에 중복 저장된 프로필은 읽기만 할 때 자동 수정하지 않습니다. 현재 먼저 적용되던 프로필을 유지하다가 사용자가 해당 장치 프로필을 명시적으로 저장하면 중복 바인딩을 정리합니다.
+- 장치에 바인딩한 프로필을 저장해도 다른 키보드에 사용할 전체 기본 프로필은 유지됩니다. 이전 버전이 장치 프로필 ID를 전체 선택값으로 저장한 경우에는 바인딩 이전 과정에서도 기존의 실효 기본값을 유지합니다.
+- 확인 화면과 저장은 같은 추천값을 사용합니다. 포터블 키보드에서 `바꾸지 않음`으로 지정한 Ctrl/Command도 편집 후 저장할 때 그대로 보존합니다. Mac과 VDI 목표 배열은 각각 유지됩니다.
+
+잘못 적용되면 먼저 엔진을 끄세요. 앱이 설정한 값이 그대로 남아 있는 항목만 적용 전 값으로 복원하며, 다른 도구가 이후 바꾼 항목은 보존합니다. 읽기·쓰기 실패로 복원이 확인되지 않으면 Doctor의 HID 결과를 확인한 뒤 아래 수동 초기화를 검토하세요.
 
 ### 엔진 활성화
 
@@ -123,7 +152,8 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 1. 메뉴바 `wm/WM` 클릭 → **설정...**
 2. **General → Startup** 카드에서 **로그인 시 자동 실행** ON
 3. 같은 카드에서 **앱 실행 후 엔진 자동 시작** ON
-4. 상태가 `승인 필요`로 나오면 **로그인 항목 설정 열기**를 눌러 시스템 설정에서 WinMac Key를 허용
+4. **새 버전 자동 확인**은 기본 ON이며 필요하면 같은 카드에서 끌 수 있습니다.
+5. 상태가 `승인 필요`로 나오면 **로그인 항목 설정 열기**를 눌러 시스템 설정에서 WinMac Key를 허용
 
 주의:
 - `로그인 시 자동 실행`은 macOS 로그인 항목에 앱을 등록합니다.
@@ -150,12 +180,13 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 [Mac 로컬 포커스]
   Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → macOS 입력소스 전환
   Caps Lock → 시스템 기본 동작 유지
-  내장 키보드: Fn→Cmd, Cmd→Ctrl, Ctrl→Fn (Mac 프로필)
+  내장 키보드: Cmd · Fn · Opt · Ctrl (내장 장치 프로필)
+  Keys-To-Go 2: Cmd · Fn · Opt · Ctrl (046D:B38C 장치 프로필)
 
 [VDI 앱 포커스] (자동 전환)
   Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon이 F16 → Right Alt 변환
   Caps Lock → 시스템 기본 동작 유지 (앱이 소유하지 않음)
-  내장 키보드: Fn→Ctrl, Ctrl→Fn (VDI 프로필 - 자동 적용)
+  내장 키보드 + Keys-To-Go 2: 각 장치 프로필의 Ctrl · Win · Win · Alt 배열 동시 적용
 
 [원격 Mac / 화면 공유]
   Right Cmd → 별도 검증 필요
@@ -183,21 +214,26 @@ open build/DerivedData/Build/Products/Debug/WinMacKey.app
 
 ---
 
-## 내장 키보드 자동 매핑 전환
+## v1.8.5 실사용 확인 범위
 
-VDI 앱에 포커스가 가면 **내장 키보드의 Fn 매핑이 자동으로 변경**됩니다.
-외장 키보드는 저장된 프로필이 있다면 같은 시점에 `Mac 로컬` 목표와 `VDI` 목표 사이를 자동 전환합니다.
+2026-10-28 v1.8.5 설치 후 사용자가 Mac 입력창과 Horizon 메모장에서 내장 오른쪽 Command와 K380의 한/영 전환 키를 번갈아 각각 3회 시험했고, 기존 왼쪽 Ctrl/Command 단축키도 정상이라고 확인했습니다. 자동 테스트나 로그만으로 추정한 결과가 아닌 사용자 확인입니다.
 
-| 모드 | 물리 Fn | 물리 Ctrl | 물리 Cmd |
-|------|---------|----------|---------|
-| Mac 로컬 | → Cmd | → Fn | → Ctrl |
-| VDI 모드 | → Ctrl | → Fn | (글로벌 매핑) |
+이 결과를 모든 로지텍 모델이나 장시간 안정성으로 확대하지 않습니다. Keys-To-Go 2의 설정 예시는 아래에 별도로 설명하며, K380 시험 결과와 구분합니다. 이전의 일시적인 전환 실패 원인도 이 확인만으로 확정하지 않습니다.
 
-- VDI 앱을 열면 자동으로 VDI 매핑 적용
-- VDI 앱에서 나오면 자동으로 Mac 매핑 복귀
-- 외장 USB 키보드는 프로필을 만들지 않았다면 기본 배치로 동작하고, 프로필을 만들었다면 저장된 VDI 배치로 함께 전환됩니다
-- 내장 키보드도 Profiles 탭에서 "Assign current keyboard"로 등록하면 항상 해당 프로필이 우선 적용됩니다
-- 외장 키보드를 Profiles 탭에서 "Assign current keyboard"로 등록하면, 키보드를 꽂는 순간 해당 프로필이 자동 적용됩니다
+원격 Mac / Apple Screen Sharing, 다른 원격 클라이언트, Windows App의 별도 개선 후보는 이번 확인에 포함되지 않습니다. 원격 Mac에서는 로컬 입력소스 표시만 보지 말고 원격 화면의 실제 입력 결과를 확인해야 합니다. 입력 전달 방식, 원격 입력소스의 영향, 양쪽 Mac의 앱 설치 필요 여부는 별도 검증 항목입니다.
+
+## 내장·외장 키보드 매핑 전환
+
+내장 키보드와 바인딩된 외장 키보드는 각각의 장치 범위에서 동시에 매핑됩니다. Horizon 포커스 진입·이탈 때 각 프로필의 `Mac 로컬` / `VDI` 목표가 함께 전환됩니다. 마지막으로 사용한 키보드는 표시용이며 다른 키보드의 배열을 덮어쓰지 않습니다.
+
+현재 구성의 스페이스 왼쪽 네 키는 물리적으로 왼쪽부터 다음과 같습니다.
+
+| 키보드 | 원래 키캡 순서 | Mac 로컬 목표 | Windows VDI 목표 |
+|---|---|---|---|
+| 맥북 내장 | Fn · Ctrl · Opt · Cmd | Cmd · Fn · Opt · Ctrl | Ctrl · Win · Win · Alt |
+| Keys-To-Go 2 | Ctrl · Fn · Opt · Cmd | Cmd · Fn · Opt · Ctrl | Ctrl · Win · Win · Alt |
+
+저장된 사용자 프로필의 목표값이 우선합니다. 이번 안정성 개선은 목표 배열과 Right Command → F16 전달 방식을 바꾸지 않습니다.
 
 ### VDI 앱 상태
 
@@ -216,15 +252,20 @@ VDI 앱에 포커스가 가면 **내장 키보드의 Fn 매핑이 자동으로 �
 
 ## 시스템 안전성
 
-### hidutil 매핑은 안전합니다
+### 매핑 적용 확인과 복원
 
 - 재부팅하면 모든 매핑이 자동으로 초기화됩니다
-- WinMac Key 앱 종료 시 모든 매핑을 자동 해제합니다 (글로벌 + 디바이스별)
-- 앱이 비정상 종료되어도 재부팅하면 원상복구됩니다
+- 글로벌·장치별 매핑을 쓰기 전 현재 값을 읽고, 쓰기 후 다시 읽어 기대한 값과 비교합니다. 명령 종료 코드가 0이어도 읽은 값이 다르면 검증 실패입니다.
+- 하나의 키보드가 여러 HID 서비스로 보일 수 있어 IOKit의 `UserKeyMapping` 속성을 서비스별로 확인·적용합니다. `hidutil`과 같은 HID 계층이며 새 드라이버는 추가하지 않습니다. 기본 프로필과 장치별 프로필의 목표값은 그대로 사용합니다.
+- 다른 도구의 관련 없는 매핑을 보존합니다. 엔진 OFF·정상 종료 시 앱이 소유한 항목만 조건부 복원합니다. 다른 도구가 같은 키를 바꾼 경우 그 값을 덮어쓰지 않습니다.
+- 읽기에 실패하면 빈 매핑으로 간주하지 않습니다. 복원을 확인하지 못한 상태는 진단에 남습니다.
+- 강제 종료나 전원 장애에서는 정상 종료 복원을 보장하지 않습니다. 문제가 남으면 아래 수동 초기화 또는 재부팅으로 복구합니다.
 
 ### 수동 초기화 (비상시)
 
 앱이 크래시하거나 매핑이 꼬였을 때:
+
+먼저 엔진을 끄거나 앱을 정상 종료하세요. 아래 명령은 **지정 범위의 다른 도구 매핑도 삭제**하므로 조건부 복원 실패 후에만 사용합니다. 외장 키보드에는 해당 VID/PID 범위를 별도로 지정해야 합니다.
 
 ```bash
 # 모든 HID 매핑 즉시 해제
@@ -232,6 +273,9 @@ hidutil property --set '{"UserKeyMapping":[]}'
 
 # 내장 키보드 매핑도 해제
 hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' --set '{"UserKeyMapping":[]}'
+
+# Keys-To-Go 2 (046D:B38C) 매핑 해제
+hidutil property --matching '{"VendorID":1133,"ProductID":45964}' --set '{"UserKeyMapping":[]}'
 ```
 
 ### 현재 매핑 상태 확인
@@ -262,18 +306,23 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 
 ### "Right Command를 눌러도 전환이 안 돼요"
 
-1. 엔진이 켜져 있는지 확인 (메뉴바 `WM`)
-2. 손쉬운 사용 권한 확인
-3. **macOS 입력소스 전환 단축키가 Control+Space인지 확인** (STEP 1)
-4. Event Viewer → Right Cmd 이벤트가 잡히는지 확인
+메뉴바 → **Doctor**에서 진단을 실행하세요. 다음 상태를 따로 확인합니다.
 
-### "Ghostty / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
+1. **손쉬운 사용 / 입력 모니터링**: 현재 OS가 보고한 권한입니다. 과거 허용 이력이 있어도 지금 미허용인 이유를 서명 문제로 단정하지 않습니다. 필요한 권한만 시스템 설정에서 직접 확인하세요. TCC 초기화는 기존 확인 절차를 거친 경우에만 실행됩니다.
+2. **엔진 / 이벤트 탭**: 엔진 ON과 이벤트 탭의 존재·유효성·활성 상태는 별개입니다.
+3. **입력 관측 / F16 관측**: 일반 키와 Right Command를 누른 뒤 다시 진단하면 최근 관측 시간을 볼 수 있습니다. 앱 자체 합성 이벤트는 제외하며 입력한 문자는 기록하지 않습니다. 입력 관측이 없거나 오래됐다는 사실만으로 고장이라고 판정하지 않습니다.
+4. **보안 입력(Secure Input)**: 켜져 있으면 이벤트 관측에 영향을 줄 수 있습니다. 비밀번호 입력을 마친 뒤 재확인하세요. 이 상태만으로 원인을 확정하거나 앱이 보안 입력을 해제하지 않습니다.
+5. **HID 매핑 검증**: 마지막 적용·복원에서 읽어 확인한 결과입니다. 나중에 다른 도구가 변경했는지 계속 감시한다는 뜻은 아닙니다.
 
-1. 최신 경로는 Ghostty 같은 terminal context에서 `F16 suppress + direct input-source switch`를 사용합니다.
+로컬 Mac에서는 **입력소스 전환 단축키가 Control+Space인지** 확인하세요(STEP 1). VDI는 아래의 Horizon 설정을 확인합니다. F16이 관측되었다고 원격 Windows 전환까지 성공한 것은 아닙니다.
+
+### "Ghostty / Codex / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
+
+1. 최신 경로는 Ghostty/Codex 같은 terminal context에서 `F16 suppress + direct input-source switch + short terminal settle replay`를 사용합니다.
 2. raw sequence뿐 아니라 검색 UI, `Cmd+N`, `Cmd+D` 같은 Command shortcut 누출이 없는지 먼저 확인하세요.
 3. 현재까지는 `pasting text` 오버레이가 사라진 단계까지 확인되었습니다. 남은 확인 포인트는 미세한 끊김이 계속 있는지입니다.
 4. 앱을 업데이트한 뒤 WinMac Key 엔진을 한 번 껐다가 다시 켭니다.
-5. Ghostty가 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
+5. Ghostty 또는 Codex desktop이 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
 
 ### "VDI에서 한영전환이 안 돼요"
 

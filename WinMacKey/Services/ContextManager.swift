@@ -44,6 +44,7 @@ class ContextManager: ObservableObject {
         "com.apple.Terminal",
         "com.googlecode.iterm2",
         "com.anthropic.claudefordesktop",
+        "com.openai.codex",
         "com.mitchellh.ghostty",
         "ai.warp.Warp-Stable",
         "dev.warp.Warp-Stable",

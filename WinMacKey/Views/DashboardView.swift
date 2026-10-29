@@ -189,6 +189,24 @@ struct DashboardView: View {
                                 .toggleStyle(.switch)
                         }
 
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("새 버전 자동 확인")
+                                    .font(.subheadline)
+                                Text("실행할 때 GitHub의 최신 정식 릴리스를 확인합니다. 설치 전에는 다시 확인합니다.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { appState.updateService.autoCheckEnabled },
+                                set: { appState.updateService.autoCheckEnabled = $0 }
+                            ))
+                            .toggleStyle(.switch)
+                        }
+
                         if appState.launchAtLoginService.requiresApproval {
                             Button("로그인 항목 설정 열기") {
                                 appState.launchAtLoginService.openLoginItemsSettings()
@@ -337,15 +355,7 @@ struct DashboardView: View {
                 profileName: target.name,
                 existingBindingOnSameDevice: nil, // 동적으로 view 가 검사
                 onConfirm: { identifier in
-                    // 다른 프로필이 동일 디바이스 바인딩 중이면 해당 바인딩 제거 (이전).
-                    for existing in appState.profileStore.profiles where existing.id != target.id {
-                        if existing.deviceIdentifier == identifier {
-                            var demoted = existing
-                            demoted.deviceIdentifier = nil
-                            appState.profileStore.update(demoted)
-                        }
-                    }
-                    // 새 바인딩 적용.
+                    // Store transfers any existing VID:PID binding atomically.
                     var updated = target
                     updated.deviceIdentifier = identifier
                     appState.profileStore.update(updated)
@@ -359,7 +369,12 @@ struct DashboardView: View {
     }
 
     private func savedProfileRow(_ profile: SavedKeyboardProfile) -> some View {
-        let isActive = appState.activeMappingProfileId == profile.id.uuidString
+        let isDeviceScoped = profile.deviceIdentifier != nil
+        let isGlobalActive = !isDeviceScoped && appState.activeMappingProfileId == profile.id.uuidString
+        let isLastUsedDevice = profile.deviceIdentifier.map {
+            $0.vendorId == appState.lastActiveKeyboard?.vendorId
+                && $0.productId == appState.lastActiveKeyboard?.productId
+        } ?? false
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -373,8 +388,15 @@ struct DashboardView: View {
                     .background(.gray.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
-                if isActive {
-                    Text("Active")
+                if isDeviceScoped {
+                    Text(isLastUsedDevice ? "마지막 입력" : "장치별 적용")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background((isLastUsedDevice ? Color.green : Color.purple).opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else if isGlobalActive {
+                    Text("전체 적용 중")
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -384,12 +406,12 @@ struct DashboardView: View {
 
                 Spacer()
 
-                Button(isActive ? "Active" : "Apply") {
+                Button(isDeviceScoped ? "자동 적용" : (isGlobalActive ? "적용 중" : "전체 적용")) {
                     appState.applyProfile(profile)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(isActive)
+                .disabled(isDeviceScoped || isGlobalActive)
 
                 Button {
                     appState.deleteProfileSafely(profile)

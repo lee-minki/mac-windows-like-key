@@ -51,9 +51,10 @@ struct DoctorView: View {
             • 엔진 정지 (CGEventTap 해제)
             • 모든 설정 초기화
             • 이벤트 로그 삭제
-            • 가상 HID 헬퍼 종료
+            • 앱 소유 HID 매핑 복원 시도
             
-            모든 키 매핑이 즉시 중지되고 macOS 기본 동작으로 돌아갑니다.
+            다른 앱이 설정하거나 이후 변경한 매핑은 보존합니다.
+            복원 실패 여부는 완료 후 HID 매핑 검증 항목에서 확인하세요.
             """)
         }
     }
@@ -106,7 +107,7 @@ struct DoctorView: View {
                     .background(.orange)
                     .clipShape(Capsule())
             } else {
-                Label("정상", systemImage: "checkmark.circle.fill")
+                Label("오류·경고 없음", systemImage: "checkmark.circle.fill")
                     .font(.caption.bold())
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
@@ -195,6 +196,9 @@ struct DoctorView: View {
         case .ok:
             return Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
+        case .information:
+            return Image(systemName: "info.circle.fill")
+                .foregroundStyle(.blue)
         case .warning:
             return Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
@@ -207,6 +211,7 @@ struct DoctorView: View {
     private func checkRowBackground(_ status: DoctorService.DoctorCheck.Status) -> Color {
         switch status {
         case .ok: return .clear
+        case .information: return .clear
         case .warning: return .orange.opacity(0.05)
         case .error: return .red.opacity(0.05)
         }
@@ -215,6 +220,7 @@ struct DoctorView: View {
     private func fixButtonLabel(_ action: DoctorService.DoctorCheck.FixAction) -> String {
         switch action {
         case .openAccessibility: return "설정 열기"
+        case .openInputMonitoring: return "설정 열기"
         case .stopEngine: return "중지"
         case .restartEngine: return "재시작"
         case .resetAll: return "초기화"
@@ -235,7 +241,7 @@ struct DoctorView: View {
                 Label("긴급 복구", systemImage: "arrow.counterclockwise.circle.fill")
             }
             .buttonStyle(.bordered)
-            .help("엔진 정지, 설정 초기화, 모든 키 매핑 해제")
+            .help("엔진 정지, 설정 초기화, 앱 소유 키 매핑 복원 시도")
             
             Spacer()
             
