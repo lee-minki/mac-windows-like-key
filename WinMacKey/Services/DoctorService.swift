@@ -349,7 +349,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .inputSource,
                 title: "Mac 시스템 전환키 · 다음 입력 소스 선택",
-                detail: configured ? "macOS 단축키 설정에서 F17 단독 등록을 확인했습니다." : "F17 단독 등록을 확인할 수 없습니다. " + NativeInputSourceShortcut.setup,
+                detail: configured ? "저장된 macOS 단축키 설정에서 F17 단독 등록을 확인했습니다." : "F17 단독 등록을 확인할 수 없습니다. " + NativeInputSourceShortcut.setup,
                 status: configured ? .ok : .warning,
                 fixAction: configured ? nil : .openSystemSettings
             ))

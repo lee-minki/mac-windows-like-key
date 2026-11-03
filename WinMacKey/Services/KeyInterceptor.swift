@@ -63,6 +63,8 @@ class KeyInterceptor: ObservableObject {
     private var bufferedReplayWindow: BufferedReplayWindow = .none
     private var bufferedReplayStartedAt: UInt64 = 0
     private var bufferedBundleId: String?
+    private let frontmostBundleId: () -> String?
+    private let postBufferedEvent: (CGEvent) -> Void
 
     /// 트리거 키 릴리즈 후 버퍼링된 키 이벤트 (VDI 릴레이 쿨다운 / 입력소스 commit 윈도우 동안 보관)
     private var bufferedKeyEvents: [CGEvent] = []
@@ -161,7 +163,12 @@ class KeyInterceptor: ObservableObject {
         // Int64(kVK_CapsLock): .maskAlphaShift
     ]
     
-    init() {
+    init(
+        frontmostBundleId: @escaping () -> String? = { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
+        postBufferedEvent: @escaping (CGEvent) -> Void = { $0.post(tap: .cgSessionEventTap) }
+    ) {
+        self.frontmostBundleId = frontmostBundleId
+        self.postBufferedEvent = postBufferedEvent
         KeyInterceptor.shared = self
         // Lifecycle invariant: init에서는 HID 시스템 상태를 절대 건드리지 않음.
         // keyMappings는 내부 메모리에만 계산해 두고, 실제 hidutil 적용은
@@ -461,13 +468,7 @@ class KeyInterceptor: ObservableObject {
 
     func finishBufferedReplayForRouteChange() {
         assert(Thread.isMainThread)
-        guard bufferedReplayWindow != .none else { return }
-        if let bundle = bufferedBundleId, bundle == cachedBundleId,
-           bundle == NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
-            flushBufferedKeyEvents(reason: "trigger-route-changed")
-        } else {
-            cancelPendingBufferedReplay(dropBufferedEvents: true)
-        }
+        flushBufferedKeyEvents(reason: "trigger-route-changed")
     }
     
     // MARK: - EventTap Reactivation
@@ -599,8 +600,12 @@ class KeyInterceptor: ObservableObject {
         logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
 
         if shouldBufferMappedEvent(finalEvent, mappedKeyCode: mappedKeyCode) {
-            bufferKeyEvent(finalEvent)
-            return nil
+            if replayDestinationIsFrontmost(bufferedBundleId) {
+                bufferKeyEvent(finalEvent)
+                return nil
+            }
+            // Focus can change before NSWorkspace delivers its activation notification.
+            cancelPendingBufferedReplay(dropBufferedEvents: true)
         }
 
         if bufferedReplayWindow == .terminalInputSourceSettle {
@@ -721,6 +726,11 @@ class KeyInterceptor: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: workItem)
     }
 
+    private func replayDestinationIsFrontmost(_ bundleId: String?) -> Bool {
+        guard let bundleId, !bundleId.isEmpty, bundleId == cachedBundleId else { return false }
+        return frontmostBundleId() == bundleId
+    }
+
     private func flushBufferedKeyEvents(reason: String) {
         assert(Thread.isMainThread, "flushBufferedKeyEvents must run on main thread (buffered replay contract)")
         bufferedFlushWorkItem?.cancel()
@@ -728,6 +738,7 @@ class KeyInterceptor: ObservableObject {
 
         let activeWindow = bufferedReplayWindow
         guard activeWindow != .none else { return }
+        let destination = bufferedBundleId
         bufferedReplayWindow = .none
         bufferedReplayStartedAt = 0
         bufferedBundleId = nil
@@ -737,8 +748,9 @@ class KeyInterceptor: ObservableObject {
         bufferedKeyEvents.removeAll()
 
         for (i, event) in events.enumerated() {
+            guard replayDestinationIsFrontmost(destination) else { return }
             event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
-            event.post(tap: .cgSessionEventTap)
+            postBufferedEvent(event)
             // v1.6.2: 0.5ms → 5ms (P13 fix · Microsoft Word for Mac 등 느린 IME 가 burst replay 의
             // 일부 키를 drop 하던 증상 — "한 글자씩 씹힘" — 해소. 5ms 면 5키 replay 가 20ms 로 인지 불가.
             // 더 늦추면 인지 가능 영역 진입.)
