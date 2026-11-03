@@ -36,7 +36,7 @@
 
 ## ✨ Features
 
-- **⌨️ Right Command 전환**: 기본 방식은 오른쪽 ⌘를 `F16`으로 변환합니다. 개발본의 로컬 옵션은 `F17`을 macOS 입력 소스 단축키로 사용합니다.
+- **⌨️ Right Command 전환**: 기본 방식은 오른쪽 ⌘를 `F16`으로 변환합니다. v1.8.6부터 제공되는 로컬 옵션은 `F17`을 macOS 입력 소스 단축키로 사용합니다.
 - **🖥️ Native VDI Support**: Horizon에서는 `F16`을 클라이언트에 전달합니다.
 - **🔌 Simultaneous Per-Device Profiles**: 내장·외장 키보드 프로필을 VID:PID별로 동시에 적용해 번갈아 입력해도 첫 키부터 정확
 - **🛡️ VDI Ghost Key Prevention**: F16 HID remap으로 modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
@@ -92,7 +92,7 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 - **"이전 입력 소스 선택"** 이 켜져 있어야 합니다
 - 단축키는 반드시 `Control + Space` 여야 합니다
 
-이 개발본에는 **Mac에서 입력 소스를 직접 전환하는 선택 옵션**도 있습니다. 오른쪽 ⌘를 macOS의 ‘다음 입력 소스 선택’ 키(`F17`)로 쓰면, 일반 입력칸에서 전환할 때 WinMac Key가 키를 먼저 감지할 필요가 없습니다. 사용하는 방법과 원래 설정으로 돌아가는 방법은 [설정 가이드](docs/SETUP_GUIDE.md#native-local-ime)를 참고하세요.
+v1.8.6부터는 **Mac에서 입력 소스를 직접 전환하는 선택 옵션**도 있습니다. 오른쪽 ⌘를 macOS의 ‘다음 입력 소스 선택’ 키(`F17`)로 쓰면, 일반 입력칸에서 전환할 때 WinMac Key가 키를 먼저 감지할 필요가 없습니다. 사용하는 방법과 원래 설정으로 돌아가는 방법은 [설정 가이드](docs/SETUP_GUIDE.md#native-local-ime)를 참고하세요.
 
 ### 3. 엔진 활성화
 

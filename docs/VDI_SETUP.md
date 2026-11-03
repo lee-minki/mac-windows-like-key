@@ -21,7 +21,7 @@ WinMac Key는 VDI (가상 데스크톱) 환경에서도 Windows와 동일한 감
 | --- | --- |
 | Omnissa Horizon | Mac의 F16을 클라이언트가 오른쪽 Alt로 변환합니다. 원격 메모장, 바탕화면 아이콘의 F2, 탐색기에서 같은 폴더의 F2를 따로 시험합니다. |
 | Horizon 안의 `mstsc.exe` | Mac에서 식별되는 앱은 계속 Horizon입니다. 바깥 VDI와 안쪽 RDP 세션의 메모장에서 각각 시험합니다. |
-| Mac의 Microsoft Windows App | 이 개발본은 직접 RDP 연결에서도 F16을 클라이언트로 전달합니다. 원격 Windows가 한/영 전환으로 처리하는지는 별도로 확인해야 합니다. |
+| Mac의 Microsoft Windows App | v1.8.6은 직접 RDP 연결에서도 F16을 클라이언트로 전달합니다. 원격 Windows가 한/영 전환으로 처리하는지는 별도로 확인해야 합니다. |
 | VMware Fusion (사용 시) | Windows 게스트에서 F16이 어떻게 처리되는지 시험합니다. Horizon 키 매핑은 Horizon 클라이언트의 설정입니다. |
 | Apple 화면 공유 | Mac에서 F16을 받아 로컬 입력 소스를 전환합니다. 원격 Mac의 같은 입력칸에 한글과 영어가 실제로 입력되는지 확인합니다. |
 
@@ -45,7 +45,7 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 
 ### 1. Mac 로컬 설정
 
-- 개발본의 [Mac에서 직접 전환하는 옵션](SETUP_GUIDE.md#native-local-ime)을 쓰더라도 Horizon에 지정할 키는 **F16 → Right Alt**입니다. 로컬의 F17은 Horizon 키 매핑에 추가하지 않습니다. 원격 Windows 전환은 원격 입력칸에 실제 한글과 영문이 들어가는지로 확인하세요.
+- [Mac에서 직접 전환하는 옵션](SETUP_GUIDE.md#native-local-ime)을 쓰더라도 Horizon에 지정할 키는 **F16 → Right Alt**입니다. 로컬의 F17은 Horizon 키 매핑에 추가하지 않습니다. 원격 Windows 전환은 원격 입력칸에 실제 한글과 영문이 들어가는지로 확인하세요.
 
 - 로컬 macOS에서 Control+Space를 쓰려면
   `시스템 설정` > `키보드` > `키보드 단축키...` > `입력 소스`에서
