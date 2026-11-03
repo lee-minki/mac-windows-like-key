@@ -36,6 +36,7 @@ required = {
     'savedKeyboardProfiles',
     'languagePairSource1',
     'languagePairSource2',
+    'nativeLocalInputSourceKey',
     'startEngineOnAppLaunch',
     'hasCompletedFirstRunOnboarding',
     'WinMacKey.AccessibilityWasEverGranted',

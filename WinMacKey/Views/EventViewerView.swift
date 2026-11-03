@@ -32,6 +32,14 @@ struct EventViewerView: View {
         VStack(spacing: 0) {
             // 툴바
             toolbar
+
+            if appState.nativeLocalInputSourceKey {
+                Text("등록된 Mac 시스템 전환키(F17)는 macOS가 처리합니다. Event Viewer에는 실제 전환 결과가 표시되지 않습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+            }
             
             Divider()
             

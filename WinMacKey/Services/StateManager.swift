@@ -30,6 +30,13 @@ class StateManager: ObservableObject {
     /// 입력 소스 변경이 이미 확인되어 commitWindow가 완료된 경우 true
     /// 폴링과 DistributedNotification의 이중 호출을 방지합니다.
     private var commitWindowCompleted = false
+
+    /// A queued Control+Space retry belongs to the route that originally requested it.
+    func cancelPendingInputSourceToggle() {
+        inputSourcePollTask?.cancel()
+        inputSourcePollTask = nil
+        commitWindowCompleted = true
+    }
     
     init() {
         refreshCurrentSource()

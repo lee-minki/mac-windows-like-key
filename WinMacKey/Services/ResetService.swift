@@ -77,6 +77,7 @@ enum AppManagedDefaultsKeys {
         "savedKeyboardProfiles",
         "languagePairSource1",
         "languagePairSource2",
+        "nativeLocalInputSourceKey",
         "startEngineOnAppLaunch",
         "hasCompletedFirstRunOnboarding", // v1.8.2: 초기화 후 첫 실행 온보딩 재노출
         "WinMacKey.AccessibilityWasEverGranted" // v1.8.2: stale-grant 판정 상태도 초기화

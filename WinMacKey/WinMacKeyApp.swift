@@ -124,7 +124,11 @@ struct WinMacKeyApp: App {
 // MARK: - App State
 @MainActor
 class AppState: ObservableObject {
-    @Published var isEngineRunning: Bool = false
+    @Published var isEngineRunning: Bool = false {
+        didSet {
+            if oldValue && !isEngineRunning { stateManager.cancelPendingInputSourceToggle() }
+        }
+    }
     @Published var currentLatencyMs: Double = 0.0
     @Published var currentAppBundleId: String = ""
     @Published var currentProfileId: String?
@@ -139,6 +143,11 @@ class AppState: ObservableObject {
     }
     @AppStorage("languagePairSource2") var languagePairSource2: String = "" {
         didSet { stateManager.configurePair(source1: languagePairSource1, source2: languagePairSource2) }
+    }
+    @AppStorage("nativeLocalInputSourceKey") var nativeLocalInputSourceKey: Bool = false {
+        didSet {
+            if oldValue != nativeLocalInputSourceKey { refreshActiveProfileForCurrentContext() }
+        }
     }
     
     // 키보드 매핑 프로파일 ID
@@ -211,6 +220,7 @@ class AppState: ObservableObject {
     private var activationObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     private var defaultMappingProfileId: String?
+    private var imeTriggerBundleId: String?
     private var startupReadiness = StartupReadiness(isManagedUpdate: UpdateInstaller.isManagedLaunch)
     var canStartInputEngine: Bool { startupReadiness.canStartEngine }
     
@@ -279,7 +289,7 @@ class AppState: ObservableObject {
                 } else {
                     // 로컬 Mac / Mac 원격 (Screen Sharing 등) / 그 외:
                     // F16 suppress 후 로컬 macOS 에 Control+Space 합성 → 로컬 입력소스 토글.
-                    // Mac 원격의 경우 Screen Sharing 이 변환된 character 를 forward 하므로 충분.
+                    // 원격 Mac에서의 입력 결과는 클라이언트별로 별도 확인한다.
                     // (참고: isRemoteMacMode 는 진단·로깅용으로 유지되지만 동작 분기에는 미사용)
                     self?.keyInterceptor.beginInputSourceCommitWindow()
                     self?.stateManager.handleTrigger(isVdiMode: false)
@@ -299,9 +309,7 @@ class AppState: ObservableObject {
         // 호환용 lifecycle hook. 실제 원본 값은 각 HID 서비스에 쓰기 직전에 보존합니다.
         HIDRemapper.shared.captureSystemSnapshotIfNeeded()
 
-        updateIMETriggerRemap()
         keyInterceptor.activeProfileID = activeMappingProfileId
-        refreshActiveProfileForCurrentContext()
 
         keyInterceptor.cachedBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         contextManager.onAppChanged = { [weak self] bundleId, appName in
@@ -329,7 +337,7 @@ class AppState: ObservableObject {
                 self.keyInterceptor.cancelTerminalInputSourceSettleWindow()
             }
             if wasRemoteMac != isNowRemoteMac {
-                LogService.shared.info("Remote Mac mode: \(isNowRemoteMac ? "enabled — F16 will pass through to remote Mac" : "disabled") (\(appName))", category: "RemoteMac")
+                LogService.shared.info("Remote Mac mode: \(isNowRemoteMac ? "enabled — F16 uses the local input source" : "disabled") (\(appName))", category: "RemoteMac")
             }
 
             if wasVdi != isNowVdi {
@@ -367,6 +375,8 @@ class AppState: ObservableObject {
         checkForUpdatesOnLaunch()
         setupPermissionObserver()
         contextManager.startMonitoring()
+        // startMonitoring normally refreshes through onAppChanged. Handle a launch without a frontmost app too.
+        if HIDRemapper.shared.imeTriggerMapping == nil { refreshActiveProfileForCurrentContext() }
         // IOHIDManager 는 입력 모니터링 권한이 있을 때만 연다 — 없으면 첫 실행 환영 *전*에
         // 권한 프롬프트가 떠 순서가 깨지므로. 권한 부여는 설정 점검 패널의 명시 버튼에서만.
         beginKeyboardMonitoringIfPermitted()
@@ -542,6 +552,7 @@ class AppState: ObservableObject {
 
     func refreshActiveProfileForCurrentContext() {
         keyInterceptor.activeProfileID = activeMappingProfileId
+        updateIMETriggerRemap()
 
         let context: KeyboardUsageContext = isVdiMode ? .vdi : .localMac
         let globalMappings = currentGlobalMappings(for: context)
@@ -588,15 +599,24 @@ class AppState: ObservableObject {
 
     // MARK: - IME Trigger HID Remap
 
-    /// F16은 VDI에서 패스스루되어 Horizon이 Right Alt로 직접 변환합니다.
-    /// HIDRemapper에 imeTriggerMapping을 등록하면 다음 applyMappings 호출 시 자동 포함됩니다.
+    /// Keep the event tap and the per-device HID layer on the same route for every profile reapply.
     private func updateIMETriggerRemap() {
-        let physicalKeyCode = Int64(kVK_RightCommand)
-        HIDRemapper.shared.imeTriggerMapping = (src: physicalKeyCode, dst: Int64(kVK_F16))
-        LogService.shared.info(
-            "IME trigger remap: rightCmd (0x\(String(physicalKeyCode, radix: 16))) → F16",
-            category: "HID"
+        let bundleId = keyInterceptor.cachedBundleId
+        keyInterceptor.nativeLocalInputSourceKey = KeyInterceptor.shouldEnableNativeLocalKey(
+            requested: nativeLocalInputSourceKey,
+            frontmostBundleId: bundleId,
+            shortcutConfigured: nativeLocalInputSourceKey && NativeInputSourceShortcut.isConfigured
         )
+        let target = keyInterceptor.inputSourceHIDKeyCode
+        let previous = HIDRemapper.shared.imeTriggerMapping?.dst
+        if previous != nil && (target != previous || imeTriggerBundleId != bundleId) {
+            stateManager.cancelPendingInputSourceToggle()
+            keyInterceptor.finishBufferedReplayForRouteChange()
+        }
+        imeTriggerBundleId = bundleId
+        guard target != previous else { return }
+        HIDRemapper.shared.imeTriggerMapping = (src: Int64(kVK_RightCommand), dst: target)
+        LogService.shared.info("IME trigger remap: rightCmd → \(target == Int64(kVK_F17) ? "F17 (macOS)" : "F16")", category: "HID")
     }
 
     func toggleEngine() {
@@ -697,10 +717,10 @@ class AppState: ObservableObject {
     /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.
     func resetAll() {
         LogService.shared.warning("Reset all triggered", category: "App")
+        isEngineRunning = false
         resetService.resetAll(keyInterceptor: keyInterceptor, keyboardDeviceManager: keyboardDeviceManager) { [weak self] in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.isEngineRunning = false
                 self.currentLatencyMs = 0.0
                 self.stateManager.switchCount = 0
                 self.stateManager.refreshCurrentSource()

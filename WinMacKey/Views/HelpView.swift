@@ -80,7 +80,7 @@ struct HelpView: View {
                     number: 3,
                     title: "입력 소스 단축키 확인",
                     description: """
-                    WinMac Key는 Right Command 입력을 내부적으로 \
+                    기본 모드에서는 Right Command 입력을 \
                     "이전 입력 소스 선택" 단축키(⌃Space)로 합성합니다. \
                     이 항목이 켜져 있고 Control+Space로 설정되어 있어야 합니다.
                     """,
@@ -90,12 +90,12 @@ struct HelpView: View {
                         "\"이전 입력 소스 선택\" 의 체크박스가 켜져 있는지 확인합니다.",
                         "단축키가 \"Control + Space\" 인지 확인합니다.",
                         "다른 키로 되어 있다면 더블클릭 후 \"Control + Space\" 로 변경합니다.",
-                        "\"입력 메뉴에서 다음 소스 선택\" 은 필요 시 비활성화해도 됩니다.",
+                        "Mac 앱에서 시스템 전환키를 쓰려면 WinMac Key 설정 → General에서 F17 옵션을 켜고 등록 안내를 따르세요.",
                         "\"완료\" 를 클릭합니다."
                     ],
                     warning: """
                     이 항목이 꺼져 있거나 다른 키로 바뀌어 있으면 \
-                    WinMac Key의 한/영 전환이 동작하지 않습니다.
+                    기본 모드의 Control+Space 전환이 동작하지 않습니다.
                     """
                 )
                 
@@ -162,7 +162,7 @@ struct HelpView: View {
                         mappingRow("Omnissa Horizon", "Right Alt (AltGr)", "F16을 Right Alt (AltGr)로 매핑", .orange)
                     }
                     
-                    Text("※ 로컬 macOS는 Control+Space를 사용합니다. Windows VDI에서는 Right Command가 F16 릴레이를 사용합니다. Caps Lock은 앱이 직접 처리하지 않습니다.")
+                    Text("Mac 앱의 기본 모드는 Control+Space를 사용합니다. General에서 시스템 전환키(F17)를 선택할 수 있습니다. Windows VDI에서는 Right Command가 F16 릴레이를 사용합니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -319,7 +319,7 @@ struct HelpView: View {
                     number: 3,
                     title: "macOS 입력 소스 단축키 확인",
                     description: """
-                    WinMac Key의 로컬 macOS/원격 Mac 경로는 "이전 입력 소스 선택" 단축키를 \
+                    기본 Mac 전환과 Mac 화면 공유는 "이전 입력 소스 선택" 단축키를 \
                     Control+Space로 합성합니다. 비활성화하지 말고, 올바른 키로 맞춰 두어야 합니다.
                     """,
                     steps: [
@@ -327,11 +327,11 @@ struct HelpView: View {
                         "좌측 목록에서 \"입력 소스\" 를 선택합니다.",
                         "\"이전 입력 소스 선택\" 체크박스가 켜져 있는지 확인합니다.",
                         "단축키가 \"Control + Space\" 인지 확인하고, 다르면 변경합니다.",
-                        "\"입력 메뉴에서 다음 소스 선택\" 은 필요 시 비활성화합니다.",
+                        "Mac 시스템 전환키(F17)를 쓴다면 ‘입력 메뉴에서 다음 소스 선택’을 켜고 F17을 등록하세요.",
                         "\"완료\" 를 클릭합니다."
                     ],
                     warning: """
-                    이 항목을 끄면 로컬 macOS/원격 Mac 환경에서 WinMac Key 전환이 동작하지 않습니다.
+                    ‘이전 입력 소스 선택’을 끄면 기본 모드와 Mac 화면 공유에서 Control+Space 전환을 쓸 수 없습니다.
                     """
                 )
                 
@@ -478,7 +478,7 @@ struct HelpView: View {
                     question: "로컬 Mac에서 첫 글자가 영어로 들어가요. 예: xㅓ미널",
                     answer: """
                     입력소스 전환이 실제로 확인되기 전에 첫 글자가 풀리면 이런 현상이 납니다.\n\n\
-                    최신 버전은 `Control+Space` 전환 후 입력소스 변경을 검증하고, 짧은 최소 홀드 시간을 둔 뒤 버퍼를 풉니다.\n\n\
+                    기본 모드는 `Control+Space` 전환 후 입력소스 변경을 검증하고, 짧은 최소 홀드 시간을 둔 뒤 버퍼를 풉니다. Mac 시스템 전환키(F17)를 켰다면 설정 → General에서 F17 등록 상태를 확인하세요.\n\n\
                     그래도 재현되면 다음을 같이 확인하세요.\n\
                     1. 시스템 설정에서 \"이전 입력 소스 선택\"이 정확히 `Control + Space`인지\n\
                     2. Caps Lock 한영전환, Karabiner, Hammerspoon 같은 중복 전환 도구가 꺼져 있는지\n\

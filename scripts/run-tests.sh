@@ -89,6 +89,14 @@ swiftc \
 
 build/tests/trigger_branching_smoke
 
+swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/native_input_source_smoke.swift \
+  -o build/tests/native_input_source_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/native_input_source_smoke
+
 # ── KeyboardDeviceManager capture mode smoke (v1.3.6 NEW) ─────────────────────
 # Press-to-bind UX 의 핵심 — startCapture / cancelCapture / supersede invariant
 swiftc \

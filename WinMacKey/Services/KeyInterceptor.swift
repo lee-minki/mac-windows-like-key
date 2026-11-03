@@ -47,7 +47,7 @@ class KeyInterceptor: ObservableObject {
     /// false이면 flagsChanged를 즉시 패스스루하여 Caps Lock 등 시스템 동작 간섭을 방지합니다.
     private(set) var needsFlagsChangedProcessing: Bool = false
 
-    private var triggerKeyPressed = false
+    private var triggerKeyDownPassesThrough: Bool?
 
     // MARK: - Buffered Replay State (Main-Thread-Only Contract · v1.7.0)
     //
@@ -62,6 +62,9 @@ class KeyInterceptor: ObservableObject {
     // 향후 `@MainActor` 격리로 컴파일러 enforce 하는 것은 별도 Swift 6 마이그레이션 PR (audit B).
     private var bufferedReplayWindow: BufferedReplayWindow = .none
     private var bufferedReplayStartedAt: UInt64 = 0
+    private var bufferedBundleId: String?
+    private let frontmostBundleId: () -> String?
+    private let postBufferedEvent: (CGEvent) -> Void
 
     /// 트리거 키 릴리즈 후 버퍼링된 키 이벤트 (VDI 릴레이 쿨다운 / 입력소스 commit 윈도우 동안 보관)
     private var bufferedKeyEvents: [CGEvent] = []
@@ -95,6 +98,19 @@ class KeyInterceptor: ObservableObject {
     // 한영 전환 트리거 키 (HID remap 후 CGEventTap에 도달하는 키: F16)
     // VDI에서는 F16이 패스스루되어 Horizon이 Right Alt로 직접 변환
     var triggerKeyCode: Int64 = Int64(kVK_F16)
+    /// Effective opt-in for the current app. Only System Settings should receive an unassigned F17.
+    static func shouldEnableNativeLocalKey(requested: Bool, frontmostBundleId: String?, shortcutConfigured: Bool) -> Bool {
+        guard requested, let bundleId = frontmostBundleId, !bundleId.isEmpty else { return false }
+        return shortcutConfigured || bundleId == "com.apple.systempreferences"
+    }
+
+    var nativeLocalInputSourceKey = false
+    private var usesNativeLocalInputSourceKey: Bool {
+        nativeLocalInputSourceKey && !isVdiAppFocused && !isRemoteMacAppFocused
+    }
+    var inputSourceHIDKeyCode: Int64 {
+        usesNativeLocalInputSourceKey ? Int64(kVK_F17) : triggerKeyCode
+    }
 
     // VDI 앱 포커스 여부 (ContextManager가 자동 갱신)
     var isVdiAppFocused: Bool = false
@@ -114,8 +130,7 @@ class KeyInterceptor: ObservableObject {
     var isIMESensitiveAppFocused: Bool = false
 
     // Mac 원격접속 앱 포커스 여부 (Screen Sharing, ARD, Jump Desktop 등).
-    // true 면 F16 패스스루 — 원격 Mac 의 WinMacKey 가 자체적으로 한영전환 처리.
-    // 로컬에서는 입력소스 합성 안 함 (로컬 입력소스 변경 부작용 방지).
+    // Remote Mac clients keep the managed F16 local input source toggle.
     var isRemoteMacAppFocused: Bool = false
     
     // 이벤트 로그 최대 개수
@@ -148,7 +163,12 @@ class KeyInterceptor: ObservableObject {
         // Int64(kVK_CapsLock): .maskAlphaShift
     ]
     
-    init() {
+    init(
+        frontmostBundleId: @escaping () -> String? = { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
+        postBufferedEvent: @escaping (CGEvent) -> Void = { $0.post(tap: .cgSessionEventTap) }
+    ) {
+        self.frontmostBundleId = frontmostBundleId
+        self.postBufferedEvent = postBufferedEvent
         KeyInterceptor.shared = self
         // Lifecycle invariant: init에서는 HID 시스템 상태를 절대 건드리지 않음.
         // keyMappings는 내부 메모리에만 계산해 두고, 실제 hidutil 적용은
@@ -376,6 +396,7 @@ class KeyInterceptor: ObservableObject {
         eventTap = nil
         runLoopSource = nil
         isRunning = false
+        triggerKeyDownPassesThrough = nil
         cancelPendingBufferedReplay(dropBufferedEvents: true)
 
         if clearHIDMappings {
@@ -389,7 +410,7 @@ class KeyInterceptor: ObservableObject {
 
     func beginInputSourceCommitWindow() {
         assert(Thread.isMainThread, "beginInputSourceCommitWindow must run on main thread (buffered replay contract)")
-        guard !isVdiAppFocused else { return }
+        guard !isVdiAppFocused, !usesNativeLocalInputSourceKey else { return }
         // P10 fix (v1.6.1): 터미널은 toggleDirectly() 가 직접 TIS 토글하므로 commit window 불필요.
         // 220ms 동안 ESC/Backspace/paste 가 buffer 됐다가 replay 되면 SSH escape sequence 와 충돌해 화면 깨짐.
         // (참고: 정상 분기는 WinMacKeyApp.onInputSourceToggle 에서 isTerminalMode 일 때 handleTerminalTrigger 로 보내지만,
@@ -407,7 +428,7 @@ class KeyInterceptor: ObservableObject {
 
     func beginTerminalInputSourceSettleWindow() {
         assert(Thread.isMainThread, "beginTerminalInputSourceSettleWindow must run on main thread (buffered replay contract)")
-        guard isTerminalAppFocused, !isVdiAppFocused else { return }
+        guard isTerminalAppFocused, !isVdiAppFocused, !usesNativeLocalInputSourceKey else { return }
         startBufferedReplayWindow(
             .terminalInputSourceSettle,
             timeout: terminalInputSourceSettleTimeout,
@@ -443,6 +464,11 @@ class KeyInterceptor: ObservableObject {
         assert(Thread.isMainThread, "failInputSourceCommitWindow must run on main thread (buffered replay contract)")
         guard bufferedReplayWindow == .inputSourceCommit else { return }
         scheduleBufferedReplayFlush(after: 0.100, reason: "verification-failed-grace")
+    }
+
+    func finishBufferedReplayForRouteChange() {
+        assert(Thread.isMainThread)
+        flushBufferedKeyEvents(reason: "trigger-route-changed")
     }
     
     // MARK: - EventTap Reactivation
@@ -487,61 +513,65 @@ class KeyInterceptor: ObservableObject {
         guard let interceptor = shared else {
             return Unmanaged.passUnretained(event)
         }
+        return interceptor.handleKeyboardEvent(type: type, event: event, startTime: startTime)
+    }
 
+    func handleKeyboardEvent(type: CGEventType, event: CGEvent, startTime: DispatchTime = .now()) -> Unmanaged<CGEvent>? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        interceptor.diagnosticObservation.record(
+        diagnosticObservation.record(
             isKeyboardEvent: type == .keyDown || type == .keyUp || type == .flagsChanged,
             isOwnSyntheticEvent: false, // The synthetic marker guard above already excluded our events.
-            isTriggerPress: keyCode == interceptor.triggerKeyCode && type == .keyDown,
+            isTriggerPress: keyCode == inputSourceHIDKeyCode && type == .keyDown,
             isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
             uptime: startTime.uptimeNanoseconds
         )
 
-        // 트리거 키(F16)는 매핑/버퍼링과 무관한 별도 경로
-        if keyCode == interceptor.triggerKeyCode && (type == .keyDown || type == .keyUp) {
-            return interceptor.handleTriggerKey(event: event, type: type, startTime: startTime, keyCode: keyCode)
+        // macOS owns F17 in native mode, including repeats and key-up.
+        if usesNativeLocalInputSourceKey && keyCode == Int64(kVK_F17) {
+            return Unmanaged.passUnretained(event)
+        }
+        if keyCode == triggerKeyCode && (type == .keyDown || type == .keyUp) {
+            return handleTriggerKey(event: event, type: type, startTime: startTime, keyCode: keyCode)
         }
 
-        return interceptor.handleMappedKey(event: event, type: type, startTime: startTime, keyCode: keyCode)
+        return handleMappedKey(event: event, type: type, startTime: startTime, keyCode: keyCode)
     }
 
     // MARK: - Event Handling Pipeline (split from handleEvent)
 
     /// F16 트리거 키 처리.
-    /// 두 가지 분기:
+    ///   - 로컬 네이티브 모드: 물리 F16을 그대로 통과. F17은 OS에서 처리.
     ///   - VDI 모드: 패스스루 → Horizon 이 F16 → Right Alt 변환 (Windows VDI 처리)
     ///   - 그 외 (로컬 Mac · Mac 원격접속 · Terminal 등):
     ///     F16 suppress → AppState 의 onInputSourceToggle 콜백에서 로컬 macOS 의
-    ///     입력소스 전환. Mac 원격 (Screen Sharing) 의 경우 character forwarding 모델이라
-    ///     로컬 입력소스 토글만으로 원격 화면에 올바른 문자가 들어감.
+    ///     입력소스 전환을 요청한다. 원격 입력 결과는 클라이언트에서 확인한다.
     private func handleTriggerKey(
         event: CGEvent,
         type: CGEventType,
         startTime: DispatchTime,
         keyCode: Int64
     ) -> Unmanaged<CGEvent>? {
+        let passThrough = usesNativeLocalInputSourceKey || isVdiAppFocused
         if type == .keyDown {
             let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            if !isRepeat && !triggerKeyPressed {
-                triggerKeyPressed = true
-                logger.info("⚡️ Trigger key (F16) detected (VDI=\(self.isVdiAppFocused), Remote=\(self.isRemoteMacAppFocused))")
-                onInputSourceToggle?()
+            // Secure Event Input can hide the previous key-up. A new hardware press is not autorepeat.
+            if !isRepeat {
+                triggerKeyDownPassesThrough = passThrough
+                if !usesNativeLocalInputSourceKey {
+                    logger.info("⚡️ Trigger key (F16) detected (VDI=\(self.isVdiAppFocused), Remote=\(self.isRemoteMacAppFocused))")
+                    onInputSourceToggle?()
+                }
             }
-        } else {
-            // keyUp
-            triggerKeyPressed = false
+        }
+        // Deliver both halves consistently even if focus switched between down and up.
+        let shouldPassThrough = triggerKeyDownPassesThrough ?? passThrough
+        if type == .keyUp {
+            triggerKeyDownPassesThrough = nil
         }
 
         logEvent(event, startTime: startTime, originalKey: keyCode, mappedKey: keyCode)
 
-        if isVdiAppFocused {
-            // VDI: F16 패스스루
-            return Unmanaged.passUnretained(event)
-        } else {
-            // 로컬 Mac / Mac 원격 / 그 외: F16 suppress
-            // (Mac 원격 — Screen Sharing 이 character 단위로 forward 하므로 로컬 토글이면 충분)
-            return nil
-        }
+        return shouldPassThrough ? Unmanaged.passUnretained(event) : nil
     }
 
     /// 일반 키 매핑 + 버퍼링 + 검증 콜백 디스패치.
@@ -570,8 +600,12 @@ class KeyInterceptor: ObservableObject {
         logEvent(finalEvent, startTime: startTime, originalKey: keyCode, mappedKey: mappedKeyCode)
 
         if shouldBufferMappedEvent(finalEvent, mappedKeyCode: mappedKeyCode) {
-            bufferKeyEvent(finalEvent)
-            return nil
+            if replayDestinationIsFrontmost(bufferedBundleId) {
+                bufferKeyEvent(finalEvent)
+                return nil
+            }
+            // Focus can change before NSWorkspace delivers its activation notification.
+            cancelPendingBufferedReplay(dropBufferedEvents: true)
         }
 
         if bufferedReplayWindow == .terminalInputSourceSettle {
@@ -676,6 +710,7 @@ class KeyInterceptor: ObservableObject {
         }
         cancelPendingBufferedReplay(dropBufferedEvents: true)
         bufferedReplayWindow = window
+        bufferedBundleId = cachedBundleId
         bufferedReplayStartedAt = DispatchTime.now().uptimeNanoseconds
         scheduleBufferedReplayFlush(after: timeout, reason: timeoutReason)
     }
@@ -691,6 +726,11 @@ class KeyInterceptor: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: workItem)
     }
 
+    private func replayDestinationIsFrontmost(_ bundleId: String?) -> Bool {
+        guard let bundleId, !bundleId.isEmpty, bundleId == cachedBundleId else { return false }
+        return frontmostBundleId() == bundleId
+    }
+
     private func flushBufferedKeyEvents(reason: String) {
         assert(Thread.isMainThread, "flushBufferedKeyEvents must run on main thread (buffered replay contract)")
         bufferedFlushWorkItem?.cancel()
@@ -698,16 +738,19 @@ class KeyInterceptor: ObservableObject {
 
         let activeWindow = bufferedReplayWindow
         guard activeWindow != .none else { return }
+        let destination = bufferedBundleId
         bufferedReplayWindow = .none
         bufferedReplayStartedAt = 0
+        bufferedBundleId = nil
 
         guard !bufferedKeyEvents.isEmpty else { return }
         let events = bufferedKeyEvents
         bufferedKeyEvents.removeAll()
 
         for (i, event) in events.enumerated() {
+            guard replayDestinationIsFrontmost(destination) else { return }
             event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
-            event.post(tap: .cgSessionEventTap)
+            postBufferedEvent(event)
             // v1.6.2: 0.5ms → 5ms (P13 fix · Microsoft Word for Mac 등 느린 IME 가 burst replay 의
             // 일부 키를 drop 하던 증상 — "한 글자씩 씹힘" — 해소. 5ms 면 5키 replay 가 20ms 로 인지 불가.
             // 더 늦추면 인지 가능 영역 진입.)
@@ -725,6 +768,7 @@ class KeyInterceptor: ObservableObject {
         bufferedFlushWorkItem = nil
         bufferedReplayWindow = .none
         bufferedReplayStartedAt = 0
+        bufferedBundleId = nil
         if dropBufferedEvents {
             bufferedKeyEvents.removeAll()
         }

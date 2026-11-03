@@ -6,6 +6,7 @@ struct DashboardView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openWindow) var openWindow
     @State private var selectedTab = 0
+    @State private var nativeShortcutConfigured = false
     @AppStorage("eventViewerAlwaysOnTop") private var eventViewerAlwaysOnTop: Bool = false
 
     /// 키보드 바인딩 capture sheet 가 띄워질 대상 프로필.
@@ -13,7 +14,10 @@ struct DashboardView: View {
     @State private var bindingTargetProfile: SavedKeyboardProfile?
 
     private var triggerShortcutDescription: String {
-        "Right Command → Ctrl+Space (Mac) / F16 (VDI)"
+        if appState.nativeLocalInputSourceKey {
+            return nativeShortcutConfigured ? "Right Command → F17 (Mac) / F16 (VDI)" : "Mac F17 설정 대기 / VDI F16"
+        }
+        return "Right Command → Ctrl+Space (Mac) / F16 (VDI)"
     }
     
     var body: some View {
@@ -69,8 +73,13 @@ struct DashboardView: View {
                                 .font(.system(.body, design: .monospaced))
                         }
 
+                        Toggle("Mac 앱에서 시스템 전환키(F17) 사용", isOn: $appState.nativeLocalInputSourceKey)
+                        if appState.nativeLocalInputSourceKey {
+                            nativeShortcutSetup
+                        }
+
                         HStack {
-                            Text("전환 횟수")
+                            Text(appState.nativeLocalInputSourceKey ? "앱 처리 전환 횟수 (F17 제외)" : "전환 횟수")
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Text("\(appState.stateManager.switchCount)")
@@ -276,6 +285,35 @@ struct DashboardView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text("엔진이 정지되고 모든 프로필이 기본값으로 복원됩니다. 이 작업은 되돌릴 수 없습니다.")
+        }
+    }
+
+    private var nativeShortcutSetup: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label(nativeShortcutConfigured ? "macOS 단축키에서 F17 등록 확인" : "macOS 단축키에서 F17 등록을 확인하세요",
+                  systemImage: nativeShortcutConfigured ? "checkmark.circle" : "exclamationmark.triangle")
+                .foregroundStyle(nativeShortcutConfigured ? Color.green : Color.orange)
+            Text("WinMac Key 엔진을 켠 뒤 설정하세요. F17 등록 전에는 일반 앱에서 기존 전환 방식을 사용합니다. 등록하면 macOS가 활성화된 입력 소스를 순서대로 전환합니다.")
+            Text(NativeInputSourceShortcut.setup)
+            HStack {
+                Button("키보드 설정 열기") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                Button("다시 확인") {
+                    nativeShortcutConfigured = NativeInputSourceShortcut.isConfigured
+                    appState.refreshActiveProfileForCurrentContext()
+                }
+            }
+            Text("되돌리려면 이 옵션을 끄고 ‘입력 메뉴에서 다음 소스 선택’의 단축키와 체크 상태를 원래대로 복원하세요.")
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { nativeShortcutConfigured = NativeInputSourceShortcut.isConfigured }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            nativeShortcutConfigured = NativeInputSourceShortcut.isConfigured
         }
     }
     

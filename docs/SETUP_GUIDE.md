@@ -3,9 +3,10 @@
 ## 변경 요약
 
 한영전환 방식이 다음처럼 분리되었습니다.
-- 로컬 macOS: `Control+Space 시스템 단축키 주입`
-- Windows VDI: `F16 릴레이 키 주입`
-- Mac → Mac 원격 / 화면 공유: 별도 검증 전. 입력 전달 방식과 원격 Mac의 설치 필요 여부를 단정하지 않습니다.
+- 기본 설정에서 로컬 일반 앱은 `Control+Space`를 보내고, 터미널류는 입력 소스를 직접 선택합니다.
+- v1.8.6부터 로컬 전환을 macOS에 맡길 수 있습니다. [오른쪽 ⌘로 F17 설정하기](#native-local-ime)
+- Omnissa Horizon에는 `F16`을 전달합니다. Horizon 클라이언트에 `F16 → Right Alt`를 설정합니다.
+- Apple 화면 공유에서는 `Control+Space`로 로컬 Mac의 입력 소스 전환을 요청합니다. 원격 Mac에 실제로 입력되는 문자는 미검증입니다.
 
 ### 개선된 점
 - **업데이트·복구 진단 강화 (v1.8.5)**: 업데이트는 기존 앱 종료 후 교체하고 새 프로세스의 시작 확인까지 백업을 유지합니다. HID 매핑은 적용 후 실제 값을 읽어 확인하며, Doctor에서 권한·이벤트 탭·입력 관측·매핑 검증 결과를 구분합니다.
@@ -16,7 +17,7 @@
 - VDI에서 한/영+Shift+P 시 Win+P 팔업 문제 해결
 - 빠른 영문 대문자 입력 시 Windows 키 조합 오발 해결
 - 메뉴바 아이콘이 macOS 네이티브 입력소스 표시기로 동기화
-- Windows VDI(Omnissa Horizon 등)에서 F16 패스스루 → Right Alt 변환으로 동작
+- Omnissa Horizon 클라이언트에서 F16을 Right Alt로 매핑 가능
 - Karabiner DriverKit 완전 불필요
 - IOKit 기반 외장 키보드 자동 감지 및 디바이스별 프로필 동시 적용
 
@@ -48,12 +49,12 @@ v1.3.8 이후 빌드는 **Apple Developer ID 서명 + 공증(Notarization)** 을
 
 ## STEP 1: macOS 입력소스 전환 단축키 설정
 
-**이것이 가장 중요합니다. 이 설정이 없으면 한영전환이 동작하지 않습니다.**
+아래는 기본 방식의 설정입니다. macOS가 전환 키를 직접 처리하도록 설정하려면 [로컬 전환 옵션](#native-local-ime)을 따르세요.
 
 WinMac Key는 Right Command를 누르면 현재 컨텍스트에 따라 다음 중 하나를 전송합니다.
 - 로컬 macOS: `Control+Space`
 - Windows VDI: `F16`
-- 원격 Mac / 화면 공유: 별도 검증 전까지 로컬 macOS와 동일 동작을 보장하지 않습니다.
+- Apple 화면 공유에서는 `Control+Space`로 로컬 전환을 요청합니다. 원격 Mac의 같은 입력칸에서 오른쪽 ⌘를 누를 때마다 한글과 영어를 번갈아 입력해 확인하세요.
 
 ### 설정 방법
 
@@ -79,8 +80,23 @@ WinMac Key는 Right Command를 누르면 현재 컨텍스트에 따라 다음 �
 설정 후, **텍스트 편집기**에서 `Control + Space`를 직접 눌러보세요.
 메뉴바의 입력소스 아이콘이 EN ↔ 한 으로 바뀌면 정상입니다.
 
-> 주의: "다음 입력 소스 선택" (^Option+Space)이 아니라
-> **"이전 입력 소스 선택"** (^Space)을 설정해야 합니다.
+> 기본 경로는 **이전 입력 소스 선택**을 사용합니다. 아래 F17 옵션은 별도 항목인 **입력 메뉴에서 다음 소스 선택**을 사용합니다.
+
+<a id="native-local-ime"></a>
+
+### 같은 Mac 입력칸에서 오른쪽 ⌘가 반복해서 먹지 않을 때 (v1.8.6+)
+
+다른 앱이 macOS의 보안 키보드 입력을 유지하면, 일반 입력칸에서도 WinMac Key가 전환 키를 받지 못할 수 있습니다. 이 옵션은 로컬에서 오른쪽 ⌘를 `F17`로 보내 macOS 자체의 **다음 입력 소스 선택** 기능을 사용합니다. 특정 입력칸에서 한글 사용을 허용할지는 여전히 macOS와 해당 앱이 결정합니다.
+
+원격 창을 벗어나는 순간 이미 F16으로 변환된 키는 로컬 앱에서 일반 F16으로 전달될 수 있습니다. 이때 첫 누름이 전환되지 않으면 키를 뗀 뒤 로컬 입력칸에서 한 번 더 눌러 보세요.
+
+1. WinMac Key 엔진을 켜고 **WinMac Key 설정 → General → Input Source → Mac 앱에서 시스템 전환키(F17) 사용**을 켭니다. 기본값은 꺼짐입니다. 시스템 단축키를 등록하기 전에는 일반 앱과 터미널에서 기본 전환 방식이 계속 동작합니다.
+2. **시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스**를 엽니다. **입력 메뉴에서 다음 소스 선택** 항목의 기존 값과 체크 상태를 기억해 두세요. 이 항목을 켜고 단축키를 편집하면서 **오른쪽 ⌘만 한 번** 누릅니다. 값이 `F17`이면 저장하세요. 입력되는 값이 다르면 원래 값으로 돌리고 앱의 옵션을 끄세요. **이전 입력 소스 선택**의 `Control+Space`는 그대로 둡니다.
+3. 텍스트 편집기나 문제가 났던 앱의 **같은 일반 입력칸**에서 오른쪽 ⌘를 짧게 누르고 바로 타이핑합니다. 한글과 영문이 번갈아 입력되는지 확인합니다. macOS는 입력 메뉴 순서대로 전환하므로 입력 소스가 세 개 이상이면 다른 언어도 순서에 포함됩니다.
+
+v1.8.6 통합 전 F17 시험 빌드에서는 보안 입력이 켜진 상태로 Codex에 `가x나`, `깃허브git깃허브`가 정상 입력되었습니다. 그보다 앞서 한 번 나타난 자모 분리와 통합본의 재시험 항목은 따로 기록했습니다. [실기 시험 기록](MANUAL_TEST_PLAN.md#native-local-trial)
+
+**복구**하려면 앱의 로컬 옵션을 끄고 시스템의 ‘다음 소스 선택’ 단축키와 체크 상태를 2단계에서 확인한 값으로 되돌리세요. 엔진을 끄거나 정상 종료하면 WinMac Key가 소유한 HID 매핑은 기존 복원 절차를 따릅니다. Horizon의 설정은 그대로 사용합니다.
 
 ---
 
@@ -178,18 +194,19 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 
 ```
 [Mac 로컬 포커스]
-  Right Cmd → hidutil HID remap → F16 → suppress → Control+Space 합성 → macOS 입력소스 전환
+  기본 설정: Right Cmd → F16 → 일반 앱에서 Control+Space 합성, 터미널류에서 입력 소스 직접 선택
+  로컬 옵션 ON + F17 등록: Right Cmd → F17 → macOS가 다음 입력 소스 선택
   Caps Lock → 시스템 기본 동작 유지
   내장 키보드: Cmd · Fn · Opt · Ctrl (내장 장치 프로필)
   Keys-To-Go 2: Cmd · Fn · Opt · Ctrl (046D:B38C 장치 프로필)
 
-[VDI 앱 포커스] (자동 전환)
-  Right Cmd → hidutil HID remap → F16 → 패스스루 → Horizon이 F16 → Right Alt 변환
+[Omnissa Horizon 포커스]
+  Right Cmd → hidutil HID remap → F16 → Horizon의 키 매핑(F16 → Right Alt)
   Caps Lock → 시스템 기본 동작 유지 (앱이 소유하지 않음)
   내장 키보드 + Keys-To-Go 2: 각 장치 프로필의 Ctrl · Win · Win · Alt 배열 동시 적용
 
 [원격 Mac / 화면 공유]
-  Right Cmd → 별도 검증 필요
+  Right Cmd → 로컬 Mac에 Control+Space 전송 → 원격 입력 결과는 별도 확인
   Caps Lock → 시스템 기본 동작 유지
 ```
 
@@ -233,20 +250,20 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 | 맥북 내장 | Fn · Ctrl · Opt · Cmd | Cmd · Fn · Opt · Ctrl | Ctrl · Win · Win · Alt |
 | Keys-To-Go 2 | Ctrl · Fn · Opt · Cmd | Cmd · Fn · Opt · Ctrl | Ctrl · Win · Win · Alt |
 
-저장된 사용자 프로필의 목표값이 우선합니다. 이번 안정성 개선은 목표 배열과 Right Command → F16 전달 방식을 바꾸지 않습니다.
+저장된 사용자 프로필이 각 장치의 보조 키 배열을 결정합니다. 오른쪽 Command는 로컬에서 등록된 F17 옵션을 사용할 수 있고, Horizon에서는 F16 릴레이를 사용합니다.
 
 ### VDI 앱 상태
 
 | 구분 | 앱 | Bundle ID |
 |---|---|---|
-| 검증됨 | Omnissa Horizon Client | `com.omnissa.horizon.client.mac` |
+| 이전 버전에서 검증 | Omnissa Horizon Client | `com.omnissa.horizon.client.mac` |
 | 자동 감지 / 미검증 | Omnissa Horizon Protocol | `com.omnissa.horizon.protocol` |
 | 자동 감지 / 미검증 | VMware Horizon (Legacy) | `com.vmware.horizon` |
 | 자동 감지 / 미검증 | VMware Fusion | `com.vmware.fusion` |
 | 자동 감지 / 미검증 | Parallels Desktop | `com.parallels.desktop.console` |
 | 자동 감지 / 미검증 | Microsoft RDP | `com.microsoft.rdc.macos` |
 
-> 자동 감지는 앱 포커스 분기만 의미합니다. 실제 VDI 한/영 전환은 각 클라이언트의 `F16 → Right Alt` 매핑과 별도 검증이 필요합니다.
+> `F16 → Right Alt`는 Horizon 클라이언트 설정입니다. Mac의 Windows App으로 직접 RDP에 연결할 때는 원격 Windows 입력칸에서 전환을 확인하세요. Horizon 안의 `mstsc.exe`는 바깥 VDI와 안쪽 RDP를 각각 확인합니다. [원격 환경별 확인 절차](VDI_SETUP.md)
 
 ---
 
@@ -310,21 +327,21 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 
 1. **손쉬운 사용 / 입력 모니터링**: 현재 OS가 보고한 권한입니다. 과거 허용 이력이 있어도 지금 미허용인 이유를 서명 문제로 단정하지 않습니다. 필요한 권한만 시스템 설정에서 직접 확인하세요. TCC 초기화는 기존 확인 절차를 거친 경우에만 실행됩니다.
 2. **엔진 / 이벤트 탭**: 엔진 ON과 이벤트 탭의 존재·유효성·활성 상태는 별개입니다.
-3. **입력 관측 / F16 관측**: 일반 키와 Right Command를 누른 뒤 다시 진단하면 최근 관측 시간을 볼 수 있습니다. 앱 자체 합성 이벤트는 제외하며 입력한 문자는 기록하지 않습니다. 입력 관측이 없거나 오래됐다는 사실만으로 고장이라고 판정하지 않습니다.
+3. **입력 관측**. 기본 경로에서는 일반 키와 F16의 최근 관측 시간을 확인합니다. 로컬 F17 경로는 macOS가 전환을 처리하므로 Doctor에서 단축키 등록 상태를 보고, 같은 입력칸에서 한글과 영문을 실제로 입력해 확인합니다.
 4. **보안 입력(Secure Input)**: 켜져 있으면 이벤트 관측에 영향을 줄 수 있습니다. 비밀번호 입력을 마친 뒤 재확인하세요. 이 상태만으로 원인을 확정하거나 앱이 보안 입력을 해제하지 않습니다.
 5. **HID 매핑 검증**: 마지막 적용·복원에서 읽어 확인한 결과입니다. 나중에 다른 도구가 변경했는지 계속 감시한다는 뜻은 아닙니다.
 
-로컬 Mac에서는 **입력소스 전환 단축키가 Control+Space인지** 확인하세요(STEP 1). VDI는 아래의 Horizon 설정을 확인합니다. F16이 관측되었다고 원격 Windows 전환까지 성공한 것은 아닙니다.
+로컬 기본 경로라면 STEP 1의 `Control+Space`를, 로컬 옵션을 켰다면 [다음 소스 선택의 F17 등록](#native-local-ime)을 확인하세요. Horizon에서는 STEP 5의 클라이언트 매핑을 확인하고 원격 Windows 입력칸에서 한글과 영문을 직접 입력하세요.
 
 ### "Ghostty / Codex / Claude Code에서 `[57379u]` 같은 문자열이 입력돼요"
 
-1. 최신 경로는 Ghostty/Codex 같은 terminal context에서 `F16 suppress + direct input-source switch + short terminal settle replay`를 사용합니다.
+1. 기본 설정에서 Ghostty/Codex는 F16을 받아 입력 소스를 직접 전환한 뒤 첫 문자 입력을 잠시 보류합니다. 로컬 F17 옵션을 설정했다면 macOS가 직접 전환을 처리합니다.
 2. raw sequence뿐 아니라 검색 UI, `Cmd+N`, `Cmd+D` 같은 Command shortcut 누출이 없는지 먼저 확인하세요.
 3. 현재까지는 `pasting text` 오버레이가 사라진 단계까지 확인되었습니다. 남은 확인 포인트는 미세한 끊김이 계속 있는지입니다.
 4. 앱을 업데이트한 뒤 WinMac Key 엔진을 한 번 껐다가 다시 켭니다.
 5. Ghostty 또는 Codex desktop이 현재 포커스 앱인지, 그리고 다른 리매퍼가 `Right Command` 또는 `F16`을 함께 처리하지 않는지 확인하세요.
 
-### "VDI에서 한영전환이 안 돼요"
+### "Horizon에서 한영전환이 안 돼요"
 
 1. Omnissa Horizon 키 매핑 설정 확인 (STEP 5)
 2. F16 → Right Alt 매핑이 있는지 확인
