@@ -231,6 +231,7 @@ class HIDRemapper {
         0x38: 0x7000000E1, 0x3C: 0x7000000E5,
         0x39: 0x700000039,
         0x6A: 0x70000006B, // F16: active local trigger / VDI relay
+        0x40: 0x70000006C, // F17: optional macOS input-source shortcut
         0x4F: 0x70000006D, 0x50: 0x70000006E, // Historical F18/F19 profile compatibility
         0x3F: 0xFF00000003
     ]
@@ -239,7 +240,7 @@ class HIDRemapper {
         0x7000000E2: "Option", 0x7000000E6: "Right Option",
         0x7000000E3: "Command", 0x7000000E7: "Right Command",
         0x7000000E1: "Shift", 0x7000000E5: "Right Shift",
-        0x700000039: "Caps Lock", 0x70000006B: "F16",
+        0x700000039: "Caps Lock", 0x70000006B: "F16", 0x70000006C: "F17",
         0x70000006D: "F18", 0x70000006E: "F19", 0xFF00000003: "Fn/Globe"
     ]
     static let internalKeyboardMatchJSON = "{\"Product\":\"Apple Internal Keyboard / Trackpad\"}"

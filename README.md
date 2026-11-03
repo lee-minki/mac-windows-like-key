@@ -27,17 +27,17 @@
 
 > **TL;DR (English):** A native macOS menu-bar utility for people who use Windows-style keyboards or VDI on a Mac.
 > It remaps **Right Command → Korean/English IME toggle** via a HID-level `hidutil` remap (no modifier-flag pollution),
-> keeps **per-device keyboard profiles active simultaneously** (built-in and external) through IOKit, and enables **Korean/English
-> switching inside Omnissa Horizon VDI — without any virtual keyboard driver or system
-> extension.** Mac-to-Mac / Apple Screen Sharing remains unverified; see the [setup guide](docs/SETUP_GUIDE.md).
+> keeps **per-device keyboard profiles active simultaneously** (built-in and external) through IOKit, and passes F16 to
+> **Omnissa Horizon** without a virtual keyboard driver or system extension. Apple Screen Sharing remains unverified.
+> See the [setup guide](docs/SETUP_GUIDE.md).
 > Official v1.8.5 downloads are signed, Apple-notarized builds for Apple Silicon.
 
 ---
 
 ## ✨ Features
 
-- **⌨️ Right Command 전환**: `hidutil` HID remap으로 Right Command를 F16으로 변환, modifier flag 오염 원천 차단
-- **🖥️ Native VDI Support**: VDI에서는 F16 릴레이로 한/영 전환을 전달하고, 로컬 Mac에서는 `Control+Space`를 합성
+- **⌨️ Right Command 전환**: 기본 방식은 오른쪽 ⌘를 `F16`으로 변환합니다. 개발본의 로컬 옵션은 `F17`을 macOS 입력 소스 단축키로 사용합니다.
+- **🖥️ Native VDI Support**: Horizon에서는 `F16`을 클라이언트에 전달합니다.
 - **🔌 Simultaneous Per-Device Profiles**: 내장·외장 키보드 프로필을 VID:PID별로 동시에 적용해 번갈아 입력해도 첫 키부터 정확
 - **🛡️ VDI Ghost Key Prevention**: F16 HID remap으로 modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
 - **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
@@ -92,6 +92,8 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 - **"이전 입력 소스 선택"** 이 켜져 있어야 합니다
 - 단축키는 반드시 `Control + Space` 여야 합니다
 
+이 개발본에는 **Mac에서 입력 소스를 직접 전환하는 선택 옵션**도 있습니다. 오른쪽 ⌘를 macOS의 ‘다음 입력 소스 선택’ 키(`F17`)로 쓰면, 일반 입력칸에서 전환할 때 WinMac Key가 키를 먼저 감지할 필요가 없습니다. 사용하는 방법과 원래 설정으로 돌아가는 방법은 [설정 가이드](docs/SETUP_GUIDE.md#native-local-ime)를 참고하세요.
+
 ### 3. 엔진 활성화
 
 메뉴바에서 WinMac Key 아이콘 클릭 → 엔진 활성화 (`WM`)
@@ -119,30 +121,27 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 ### 6. 권장 추가 설정
 
 - `Caps Lock 키로 ABC 입력 소스 전환`은 로컬 macOS에서 순수 Caps Lock을 쓰려면 꺼두는 것을 권장합니다
-- Windows VDI를 사용한다면 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요
+- Omnissa Horizon을 사용한다면 Horizon 클라이언트에서 `F16 → Right Alt` 매핑을 추가하세요.
 - 재부팅 후 바로 쓰려면 `설정 → General → Startup`에서 `로그인 시 자동 실행`과 `앱 실행 후 엔진 자동 시작`을 함께 켜세요
-- Ghostty, Terminal.app, iTerm2, Codex desktop 같은 터미널류 앱은 F16을 로컬에서 숨기고 입력소스를 직접 전환한 뒤, 첫 일반 문자만 짧게 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과합니다. `[57379u` raw sequence, `Cmd+N` shortcut 누출, 전환 직후 첫 글자의 로마자 입력이 보이면 terminal regression으로 기록해 확인하세요.
+- 기본 F16 방식에서는 Ghostty, Terminal.app, iTerm2, Codex desktop 같은 터미널류 앱이 F16을 로컬에서 숨기고 입력소스를 직접 전환한 뒤, 첫 일반 문자만 짧게 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과합니다. `[57379u` raw sequence, `Cmd+N` shortcut 누출, 전환 직후 첫 글자의 로마자 입력이 보이면 terminal regression으로 기록해 확인하세요.
 - 새 릴리스 확인은 기본으로 켜져 있으며, 설치는 사용자 확인 후 `/Applications/WinMacKey.app`을 제자리 교체합니다. GitHub의 Draft/Pre-release는 자동 업데이트 대상이 아닙니다.
 
 ---
 
 ## 💎 VDI 지원
 
-별도 가상 키보드 드라이버 없이 동작합니다. WinMac Key는 `hidutil`로 Right Command를 F16으로 HID 레벨 remap하여:
-- 로컬 macOS에서는 F16을 suppress하고 `Control+Space` 합성
-- Windows VDI 앱 포커스에서는 F16을 **패스스루** — Horizon이 Right Alt로 직접 변환
+Omnissa Horizon에 포커스하면 WinMac Key는 로컬 F17 옵션 사용 여부와 관계없이 오른쪽 ⌘에서 나온 F16을 클라이언트로 전달합니다. Horizon에서 `F16 → Right Alt` 매핑을 켠 뒤 원격 Windows 입력칸에서 한글과 영문이 번갈아 입력되는지 확인하세요.
 
-을 상황에 맞게 처리합니다.
+### 🖥️ Apple 화면 공유 (Mac → Mac, 실기 검증 대기)
 
-### 🖥️ Mac → Mac 원격접속 (검증 대기)
+WinMac Key는 화면 공유 창에 포커스하면 오른쪽 ⌘를 눌렀을 때 `Control+Space`로 **로컬 Mac의 입력 소스 전환을 요청**합니다. 원격 Mac에 실제로 입력되는 문자는 아직 검증하지 않았습니다.
 
-Apple Screen Sharing을 포함한 원격 Mac / 화면 공유의 한/영 전환은 **별도 검증 전**입니다. 로컬 macOS와 동일한 동작을 보장하지 않습니다.
+1. 화면 공유에 연결해 원격 Mac의 텍스트 편집기에서 입력칸을 선택하세요.
+2. 오른쪽 ⌘를 한 번 누르고 한글을 입력한 뒤, 한 번 더 눌러 영어를 입력하세요. 로컬 메뉴바 표시와 원격 입력칸에 나온 문자를 각각 확인하세요.
 
-로컬 입력소스 표시만으로 원격 한/영 전환 성공을 판단하지 말고, 원격 화면의 실제 입력 결과를 확인하세요. 입력 전달 방식, 원격 입력소스의 영향, 원격 Mac의 WinMac Key 설치 필요 여부도 확인이 필요합니다. Jump Desktop, AnyDesk, RealVNC, TeamViewer 등 다른 클라이언트에도 같은 검증 기준을 적용합니다.
+원격 Mac의 입력 소스나 WinMac Key 설치 여부가 결과에 미치는 영향은 확인되지 않았습니다. Jump Desktop, AnyDesk, RealVNC, TeamViewer의 한영 전환도 각 클라이언트에서 별도로 확인해야 합니다. [원격 환경별 시험과 설정](docs/VDI_SETUP.md)
 
-설정 기준은 [설정 가이드](docs/SETUP_GUIDE.md)와 [VDI 설정 가이드](docs/VDI_SETUP.md)를 참고하세요.
-
-### 검증된 환경
+### v1.8.5에서 검증한 환경
 
 | 앱 | Bundle ID |
 |---|---|
@@ -156,11 +155,7 @@ Apple Screen Sharing을 포함한 원격 Mac / 화면 공유의 한/영 전환�
 
 ## 🖥️ VMware / VDI 하이브리드 한영 전환
 
-VMware Horizon 등 가상화 앱에서 한/영 전환이 안 되는 문제를 기본적으로 해결합니다.
-**가상 키보드 드라이버 등 별도의 시스템 확장프로그램이 전혀 필요 없는 완전한 네이티브 방식**을 사용합니다.
-
-WinMac Key가 Windows VDI 앱에 포커스된 것을 자동 감지하면 F16을 패스스루하여
-Horizon 등 VDI 클라이언트가 이를 윈도우의 `Right Alt`로 변환하도록 구성할 수 있습니다.
+Mac의 Microsoft Windows App으로 직접 RDP에 연결하면 그 클라이언트가 받은 F16을 원격 Windows에서 어떻게 처리하는지 확인해야 합니다. Horizon 안에서 `mstsc.exe`를 실행하는 경우에는 바깥 VDI와 안쪽 RDP 입력칸을 각각 시험하세요.
 
 **→ [VDI 매핑 및 설정 가이드](docs/VDI_SETUP.md)**
 

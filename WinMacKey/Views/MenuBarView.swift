@@ -6,9 +6,13 @@ struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.openWindow) var openWindow
     @Environment(\.openSettings) private var openSettings
+    @State private var nativeShortcutConfigured = false
 
     private var triggerShortcutDescription: String {
-        "Right Command → Control+Space (Mac) / F16 (VDI)"
+        if appState.nativeLocalInputSourceKey {
+            return nativeShortcutConfigured ? "Right Command → F17 (Mac) / F16 (VDI)" : "Mac F17 설정 대기 / VDI F16"
+        }
+        return "Right Command → Control+Space (Mac) / F16 (VDI)"
     }
     
     var body: some View {
@@ -53,6 +57,7 @@ struct MenuBarView: View {
         // (mdfind background queue 라 비용 작음). 이제 매 popover open 마다 갱신 →
         // 중복이 사라지면 경고도 자동으로 사라진다.
         .onAppear {
+            nativeShortcutConfigured = NativeInputSourceShortcut.isConfigured
             appState.checkForDuplicateInstallations()
         }
         // P2 / M3 — 미등록 외장 키보드 first-seen prompt.
@@ -108,7 +113,7 @@ struct MenuBarView: View {
 
             Spacer()
 
-            if appState.isEngineRunning {
+            if appState.isEngineRunning && !appState.nativeLocalInputSourceKey {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("\(appState.stateManager.switchCount)")
                         .font(.system(.body, design: .monospaced))

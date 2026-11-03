@@ -1,4 +1,5 @@
 import Foundation
+import Carbon.HIToolbox
 
 final class FakeHIDBackend: HIDMappingBackend {
     var maps: [String: [UInt64: UInt64]] = [:]
@@ -56,6 +57,7 @@ struct HIDVerificationSmoke {
         restoreFailureRetry()
         externalChanges()
         scopeIsolationAndLayout()
+        nativeLocalRelayAndRestoration()
         reconnect()
         print("hid_verification_smoke: PASS (\(scenarios) scenarios; injected backend only, no system HID writes)")
     }
@@ -206,6 +208,34 @@ struct HIDVerificationSmoke {
         require(backend.maps == baseline, "distinct originals of same-selector services restored separately")
         pass("global/device plan, multiple services, unchanged F16 and VDI layout, distinct baseline restoration")
     }
+    static func nativeLocalRelayAndRestoration() {
+        let f17: UInt64 = 0x70000006C
+        let backend = FakeHIDBackend()
+        let keyboard = KeyboardDeviceIdentifier(vendorId: 1133, productId: 45964, productName: "Keys-To-Go 2")
+        backend.resolved["global"] = ["internal", "external"]
+        backend.resolved[keyboard.hidutilMatchingJSON!] = ["external"]
+        let baseline = ["internal": [foreign: control], "external": [rightCommand: option, command: option]]
+        backend.maps = baseline
+        let remapper = make(backend)
+        let interceptor = KeyInterceptor()
+        interceptor.nativeLocalInputSourceKey = true
+
+        for (inVDI, expectedUsage) in [(false, f17), (true, f16), (false, f17)] {
+            interceptor.isVdiAppFocused = inVDI
+            remapper.imeTriggerMapping = (src: Int64(kVK_RightCommand), dst: interceptor.inputSourceHIDKeyCode)
+            remapper.reapplyMappingLayersSync(globalMappings: [:], deviceMappings: [(keyboard, [0x37: 0x3B])])
+            require(backend.maps["internal"] == [foreign: control, rightCommand: expectedUsage],
+                    "unbound keyboard must keep unrelated keys and receive the selected trigger")
+            require(backend.maps["external"] == [command: control, rightCommand: expectedUsage],
+                    "bound keyboard must keep its profile while changing the trigger")
+            require(remapper.diagnosticSnapshot.status == .verified, "trigger transition must verify every service")
+        }
+        remapper.restorePreExistingMappingsAndClearInternal()
+        remapper.releaseOwnership()
+        require(backend.maps == baseline, "engine off must restore each keyboard's original mappings")
+        pass("Right Command changes between F17 and F16 across services and restores preexisting mappings")
+    }
+
     static func reconnect() {
         let backend = FakeHIDBackend()
         backend.resolved["global"] = ["service:old"]

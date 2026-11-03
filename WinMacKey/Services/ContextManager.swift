@@ -27,8 +27,7 @@ class ContextManager: ObservableObject {
     ]
 
     // 알려진 Mac 원격접속 앱 Bundle ID 목록 (Mac → Mac)
-    // 이 앱이 포커스면 F16 트리거를 패스스루 — 원격 Mac 의 WinMacKey 가 처리.
-    // 즉 양쪽 Mac 모두 WinMacKey 설치 + 동일 self-signed cert 필요.
+    // Mac 원격접속 앱은 로컬 F16 전환 경로를 사용한다.
     private let remoteMacApps: Set<String> = [
         "com.apple.ScreenSharing",      // macOS 기본 화면 공유 / VNC
         "com.apple.RemoteDesktop",      // Apple Remote Desktop (ARD)

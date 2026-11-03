@@ -74,7 +74,7 @@ class DoctorService: ObservableObject {
             checkHammerspoonConflict()
 
             checkInputSources()
-            checkInputSourceShortcuts()
+            checkInputSourceShortcuts(nativeLocal: appState.nativeLocalInputSourceKey)
             checkCapsLockSetting()
 
             lastRunDate = Date()
@@ -189,8 +189,17 @@ class DoctorService: ObservableObject {
                       fixAction: finding.severity == .error || finding.severity == .warning ? .restartEngine : nil)
         appendFinding(InputDiagnostics.secureInput(enabled: IsSecureEventInputEnabled()),
                       category: .system, title: "Secure Input")
-        appendFinding(InputDiagnostics.observedInput(snapshot, now: DispatchTime.now().uptimeNanoseconds),
-                      category: .engine, title: "최근 입력 / F16 관찰")
+        if snapshot.isRunning && appState.keyInterceptor.inputSourceHIDKeyCode == Int64(kVK_F17) {
+            let detail = NativeInputSourceShortcut.isConfigured
+                ? "Mac의 F17 전환은 macOS가 처리합니다. 같은 앱의 일반 입력칸에서 오른쪽 Command를 누른 뒤 한글과 영문이 번갈아 입력되는지 확인하세요."
+                : "시스템 설정에서 F17 단축키를 등록하는 중입니다. 등록을 마친 뒤 일반 앱에서 확인하세요."
+            checks.append(DoctorCheck(category: .engine, title: "Mac 시스템 전환키 관찰",
+                                      detail: detail,
+                                      status: .information, fixAction: nil))
+        } else {
+            appendFinding(InputDiagnostics.observedInput(snapshot, now: DispatchTime.now().uptimeNanoseconds),
+                          category: .engine, title: "최근 입력 / F16 관찰")
+        }
     }
 
     private func checkHIDMappingHealth() {
@@ -334,8 +343,20 @@ class DoctorService: ObservableObject {
         }
     }
     
-    private func checkInputSourceShortcuts() {
+    private func checkInputSourceShortcuts(nativeLocal: Bool) {
+        if nativeLocal {
+            let configured = NativeInputSourceShortcut.isConfigured
+            checks.append(DoctorCheck(
+                category: .inputSource,
+                title: "Mac 시스템 전환키 · 다음 입력 소스 선택",
+                detail: configured ? "macOS 단축키 설정에서 F17 단독 등록을 확인했습니다." : "F17 단독 등록을 확인할 수 없습니다. " + NativeInputSourceShortcut.setup,
+                status: configured ? .ok : .warning,
+                fixAction: configured ? nil : .openSystemSettings
+            ))
+        }
+
         // SymbolicHotKeys 60 = "이전 입력 소스 선택"
+        let route = nativeLocal ? "Mac 화면 공유" : "기본 Mac 전환 및 Mac 화면 공유"
         let expectedKeyCode = 49        // Space
         let expectedModifiers = 262144 // Control
 
@@ -343,7 +364,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .inputSource,
                 title: "이전 입력 소스 단축키",
-                detail: "macOS 로컬/원격 Mac용 입력 소스 단축키 상태를 읽지 못했습니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 '이전 입력 소스 선택'이 Control+Space인지 직접 확인하세요.",
+                detail: "\(route)에 쓰는 단축키 상태를 읽지 못했습니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 '이전 입력 소스 선택'이 Control+Space인지 확인하세요.",
                 status: .warning,
                 fixAction: .openSystemSettings
             ))
@@ -354,7 +375,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .inputSource,
                 title: "이전 입력 소스 단축키",
-                detail: "WinMac Key의 로컬 macOS/원격 Mac 경로는 '이전 입력 소스 선택' 단축키를 Control+Space로 합성합니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 이 항목을 켜고 Control+Space로 설정하세요.",
+                detail: "\(route)에서 사용하는 단축키입니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 이 항목을 켜고 Control+Space로 설정하세요.",
                 status: .error,
                 fixAction: .openSystemSettings
             ))
@@ -365,7 +386,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .inputSource,
                 title: "이전 입력 소스 단축키",
-                detail: "로컬 macOS/원격 Mac 경로용 Control+Space 설정이 올바릅니다.",
+                detail: "\(route)에 쓰는 Control+Space 설정을 확인했습니다.",
                 status: .ok,
                 fixAction: nil
             ))
@@ -374,7 +395,7 @@ class DoctorService: ObservableObject {
             checks.append(DoctorCheck(
                 category: .inputSource,
                 title: "이전 입력 소스 단축키",
-                detail: "현재 단축키가 \(currentShortcut)로 설정되어 있습니다. 로컬 macOS/원격 Mac에서 WinMac Key가 동작하려면 '이전 입력 소스 선택'을 Control+Space로 바꿔야 합니다.",
+                detail: "현재 단축키는 \(currentShortcut)입니다. \(route)에 사용하려면 ‘이전 입력 소스 선택’을 Control+Space로 바꾸세요.",
                 status: .error,
                 fixAction: .openSystemSettings
             ))

@@ -13,6 +13,18 @@ WinMac Key는 VDI (가상 데스크톱) 환경에서도 Windows와 동일한 감
 
 이는 해당 구성의 확인입니다. Windows 10, 다른 키보드 모델·클라이언트, 장시간 안정성을 이번 시험으로 검증한 것은 아닙니다. 원격 Mac / Apple Screen Sharing과 Windows App의 별도 개선 후보도 포함되지 않습니다. 자세한 범위는 [설정 가이드](SETUP_GUIDE.md#v185-실사용-확인-범위)를 참고하세요.
 
+## 원격 환경에서 오른쪽 Command 확인
+
+목표는 어느 원격 입력칸에서든 **오른쪽 Command를 한 번씩 눌러 그 자리에서 한글과 영어를 양방향으로 입력**하는 것입니다. 다른 창에 다녀온 직후에도 첫 누름부터 전환되어야 합니다. 이 개발본의 아래 실기 항목들은 미검증입니다. [원격 세션별 시험 절차](MANUAL_TEST_PLAN.md#remote-input-test)
+
+| 환경 | 확인할 경로 |
+| --- | --- |
+| Omnissa Horizon | Mac의 F16을 클라이언트가 오른쪽 Alt로 변환합니다. 원격 메모장, 바탕화면 아이콘의 F2, 탐색기에서 같은 폴더의 F2를 따로 시험합니다. |
+| Horizon 안의 `mstsc.exe` | Mac에서 식별되는 앱은 계속 Horizon입니다. 바깥 VDI와 안쪽 RDP 세션의 메모장에서 각각 시험합니다. |
+| Mac의 Microsoft Windows App | 이 개발본은 직접 RDP 연결에서도 F16을 클라이언트로 전달합니다. 원격 Windows가 한/영 전환으로 처리하는지는 별도로 확인해야 합니다. |
+| VMware Fusion (사용 시) | Windows 게스트에서 F16이 어떻게 처리되는지 시험합니다. Horizon 키 매핑은 Horizon 클라이언트의 설정입니다. |
+| Apple 화면 공유 | Mac에서 F16을 받아 로컬 입력 소스를 전환합니다. 원격 Mac의 같은 입력칸에 한글과 영어가 실제로 입력되는지 확인합니다. |
+
 ---
 
 ## ⚙️ 동작 원리 (하이브리드 전환)
@@ -22,7 +34,7 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 1. `hidutil`이 **Right Command**를 **F16**으로 HID 레벨에서 변환 (modifier flag 없음)
 2. F16 이벤트가 **Omnissa Horizon Client**에 그대로 전달 (패스스루)
 3. VDI 내장 매핑을 통해 윈도우의 **Right Alt** (한/영 전환)로 변환되어 전달됨
-4. 윈도우 OS에서 자연스럽게 한영 전환이 동작함
+4. 원격 Windows의 같은 입력칸에서 한글과 영문이 번갈아 입력되는지 확인합니다.
 5. Caps Lock은 WinMac Key가 직접 처리하지 않으며, 시스템/클라이언트 기본 동작에 맡깁니다.
 
 ---
@@ -32,6 +44,8 @@ WinMac Key는 VDI 앱이 켜져 있는지 자동으로 감지하여 가장 안�
 별도의 앱이나 드라이버 설치 없이, VDI 클라이언트 자체 설정만 맞춰주면 끝납니다.
 
 ### 1. Mac 로컬 설정
+
+- 개발본의 [Mac에서 직접 전환하는 옵션](SETUP_GUIDE.md#native-local-ime)을 쓰더라도 Horizon에 지정할 키는 **F16 → Right Alt**입니다. 로컬의 F17은 Horizon 키 매핑에 추가하지 않습니다. 원격 Windows 전환은 원격 입력칸에 실제 한글과 영문이 들어가는지로 확인하세요.
 
 - 로컬 macOS에서 Control+Space를 쓰려면
   `시스템 설정` > `키보드` > `키보드 단축키...` > `입력 소스`에서

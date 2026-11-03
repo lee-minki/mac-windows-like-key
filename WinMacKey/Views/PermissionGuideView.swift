@@ -58,11 +58,22 @@ enum SetupCheckService {
             ))
         }
 
+        let nativeLocal = UserDefaults.standard.bool(forKey: "nativeLocalInputSourceKey")
+        if nativeLocal && !NativeInputSourceShortcut.isConfigured {
+            issues.append(SetupIssue(
+                kind: .inputSourceShortcut,
+                title: "Mac 시스템 전환키(F17) 설정 필요",
+                detail: NativeInputSourceShortcut.setup,
+                actionTitle: "키보드 설정 열기",
+                severity: .warning
+            ))
+        }
         if isSymbolicHotKeyExplicitlyDisabled(60) {
+            let route = nativeLocal ? "Mac 화면 공유" : "기본 Mac 전환 및 Mac 화면 공유"
             issues.append(SetupIssue(
                 kind: .inputSourceShortcut,
                 title: "‘이전 입력 소스 선택’ 단축키 꺼짐",
-                detail: "WinMac Key는 Right Command 한/영 전환을 ⌃Space(‘이전 입력 소스 선택’) 단축키로 합성합니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 이 항목을 켜 주세요.",
+                detail: "\(route)에 쓰는 단축키입니다. 시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 이 항목을 켜고 Control+Space로 설정하세요.",
                 actionTitle: "키보드 설정 열기",
                 severity: .warning
             ))
@@ -249,7 +260,7 @@ struct FirstRunView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                introRow("command", "Right Command로 한/영 전환 (modifier 오염 없는 F16 HID 방식)")
+                introRow("command", "오른쪽 Command로 Mac 한/영 전환 · Windows VDI에서는 F16 릴레이")
                 introRow("display", "Windows VDI(Omnissa Horizon)·터미널·Mac 원격을 자동 감지해 전환 방식을 바꿈")
                 introRow("keyboard", "키보드별 프로필 동시 적용")
             }

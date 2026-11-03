@@ -1,4 +1,26 @@
 import Foundation
+import Carbon.HIToolbox
+import CoreGraphics
+
+/// macOS Keyboard Shortcuts > Input Sources > Select next source in Input menu.
+enum NativeInputSourceShortcut {
+    static var isConfigured: Bool {
+        let shortcuts = UserDefaults.standard.persistentDomain(forName: "com.apple.symbolichotkeys")?["AppleSymbolicHotKeys"] as? [String: Any]
+        return isConfigured(shortcuts?["61"] as? [String: Any])
+    }
+
+    static func isConfigured(_ entry: [String: Any]?) -> Bool {
+        guard entry?["enabled"] as? Bool == true,
+              let value = entry?["value"] as? [String: Any],
+              let parameters = value["parameters"] as? [Int],
+              parameters.count == 3 else { return false }
+        // macOS may store the function-key flag for a bare F17 shortcut.
+        let modifiers = parameters[2]
+        return parameters[1] == kVK_F17 && (modifiers == 0 || modifiers == Int(CGEventFlags.maskSecondaryFn.rawValue))
+    }
+
+    static let setup = "시스템 설정 → 키보드 → 키보드 단축키 → 입력 소스에서 ‘입력 메뉴에서 다음 소스 선택’의 기존 설정을 기록한 뒤 항목을 켜세요. 단축키를 더블 클릭하고 실제 오른쪽 Command만 눌러 F17을 등록하세요. ‘이전 입력 소스 선택’의 Control+Space는 그대로 두세요."
+}
 
 /// Read-only diagnostic policy; no permission requests, key contents, or input mutations.
 enum InputDiagnostics {
@@ -53,7 +75,7 @@ enum InputDiagnostics {
         guard snapshot.isEnabled else {
             return Finding(severity: .warning, detail: "이벤트 탭은 유효하지만 현재 비활성 상태입니다. 자동 복구 후 다시 진단하고, 계속되면 엔진을 다시 시작하세요.")
         }
-        return Finding(severity: .ok, detail: "이벤트 탭이 유효하고 활성 상태입니다. 실제 입력 수신과 F16 감지는 아래 항목에서 별도로 확인합니다.")
+        return Finding(severity: .ok, detail: "이벤트 탭이 유효하고 활성 상태입니다. 입력 관찰 결과는 아래에서 별도로 확인할 수 있습니다.")
     }
 
     static func secureInput(enabled: Bool) -> Finding {
