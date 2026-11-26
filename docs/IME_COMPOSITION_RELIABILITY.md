@@ -98,6 +98,8 @@ git diff --check
 - 다운로드 ZIP에서 추출한 앱과 DMG 내부 앱의 엄격한 코드 서명, 앱 공증 티켓, Gatekeeper 실행 허용을 확인했다. DMG 공증 티켓도 검증했다. 앱은 Developer ID 서명이며 DMG 컨테이너 자체의 별도 코드 서명 여부는 위 검사 결과와 구분한다.
 - 기존 앱·설정·Application Support 및 HID 읽기 스냅샷을 백업하고, 기존 앱을 정상 종료한 뒤 다운로드본을 `/Applications/WinMacKey.app`에 설치했다.
 - **14:00:32–33 KST: 1.8.6/build 29 단일 실행, Accessibility=true, 입력 엔진·CGEventTap 시작 및 연결 키보드 감지 확인.** 기존 정식판과 같은 designated requirement를 유지하며 개인정보 권한을 변경하지 않았다.
+- 태그 push로 생성된 GitHub Actions run `45758335364`는 단계 실행 전 `cancelled`로 끝났다. CI 성공으로 기록하지 않으며, 위 자동 테스트·빌드 결과는 로컬 실행 결과다.
+- 배포 후 임시 복구 키체인을 제거하고 원래 키체인 검색 목록을 재확인했다. 읽기 전용 Time Machine 백업도 정상 분리했으며 원본 인증서·키는 변경하지 않았다.
 - 설치 전후 preferences에서 바뀐 키는 `LastUpdateCheck`뿐이다. 키보드 프로필·전환 설정은 동일하다. 기존 1.8.5 앱과 설정 백업은 로컬에 보존했다.
 - 실행 파일 SHA-256: `142451da6bf6e3cd678ec8288a909a8934622705cec416bb15c936e84e789b17`.
 
