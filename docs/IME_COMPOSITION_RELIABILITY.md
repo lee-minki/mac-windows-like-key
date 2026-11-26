@@ -91,9 +91,21 @@ git diff --check
 
 추가 확인에서 기존 공증 프로필의 API 요청이 정상화됐다. 앱 제출 `e6b3f798-95c8-4f99-a414-8cdd6538fee6`는 `Accepted`이며 앱 staple·검증을 통과했다. 계정 또는 약관을 대신 변경하지 않았다. DMG 제출 `8888eaa9-3baa-4fac-bd90-3d1fa69b24e8`도 `Accepted`이며 staple·검증을 통과했다. ZIP·DMG는 기존 Ed25519 공개키로 최종 서명을 검증했고 SHA-256 목록을 만들었다. DMG 컨테이너에는 별도 Developer ID 코드 서명이 없어 `spctl --type open --context context:primary-signature`는 `no usable signature`를 반환하므로 이 검사를 통과로 기록하지 않는다. 컨테이너는 Apple 공증 티켓과 Ed25519 자산 서명을 가지며, 내부 앱의 Developer ID 서명·Gatekeeper 실행 허용을 별도로 검증한다. GitHub 다운로드본 검증·설치 결과는 완료 후 같은 기록과 #6에 이어 기록한다.
 
+## 정식 배포·다운로드 검증·설치 — 2026-11-26 14:00 KST
+
+- 정식 [v1.8.6 릴리스](https://github.com/lee-minki/mac-windows-like-key/releases/tag/v1.8.6)를 Latest로 게시했다. 코드 커밋은 `57daa017fcb5afe9cf5c5e79b36eb2c47ed076c9`이다. 빌드 전 기록과 비교해 Swift·프로젝트·Info.plist를 포함한 앱 입력 파일 48개가 동일하며, 최종 문서 갱신은 앱 번들에 포함되지 않는다.
+- 게시 자산 5개의 GitHub SHA-256을 로컬 최종본과 대조했다. GitHub에서 다시 다운로드한 ZIP·DMG와 두 `.sig`는 `SHA256SUMS.txt`와 일치하며, 기존 공개키로 두 Ed25519 서명을 검증했다.
+- 다운로드 ZIP에서 추출한 앱과 DMG 내부 앱의 엄격한 코드 서명, 앱 공증 티켓, Gatekeeper 실행 허용을 확인했다. DMG 공증 티켓도 검증했다. 앱은 Developer ID 서명이며 DMG 컨테이너 자체의 별도 코드 서명 여부는 위 검사 결과와 구분한다.
+- 기존 앱·설정·Application Support 및 HID 읽기 스냅샷을 백업하고, 기존 앱을 정상 종료한 뒤 다운로드본을 `/Applications/WinMacKey.app`에 설치했다.
+- **14:00:32–33 KST: 1.8.6/build 29 단일 실행, Accessibility=true, 입력 엔진·CGEventTap 시작 및 연결 키보드 감지 확인.** 기존 정식판과 같은 designated requirement를 유지하며 개인정보 권한을 변경하지 않았다.
+- 설치 전후 preferences에서 바뀐 키는 `LastUpdateCheck`뿐이다. 키보드 프로필·전환 설정은 동일하다. 기존 1.8.5 앱과 설정 백업은 로컬에 보존했다.
+- 실행 파일 SHA-256: `142451da6bf6e3cd678ec8288a909a8934622705cec416bb15c936e84e789b17`.
+
+서명·공증·설치 및 엔진 시작은 확인됐지만, **조합 누락·언어 표시 불일치 개선 여부와 실제 Horizon 키 수신은 아직 사용자 실사용 확인 전**이다. 이슈 #6은 열어 둔다. 실패 시각, 앱(로컬/VDI/리디렉션 구분), 키보드, 실제 출력 결과를 같은 이슈에 이어 기록한다. 상시 로그 업로드나 일반 문자 수집을 추가하지 않았다.
+
 ## 실기 확인과 복구
 
-다음 실기 항목은 **모두 미확인**이다. 입력 엔진이 동작하는 후보 설치 후 별도로 검증해야 한다.
+다음 실기 항목은 **모두 미확인**이다. 정식 1.8.6 설치·엔진 시작을 확인했으며, 사용자가 실제 키보드로 별도 검증해야 한다.
 
 | 경로 | 필요한 확인 |
 |---|---|

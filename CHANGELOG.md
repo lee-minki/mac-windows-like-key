@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — v1.8.6
+## [1.8.6] — 2026-11-26
 
 ### Fixed
 - **이전 전환의 지연 재시도 취소**: 새 전환, 입력 언어 페어 변경, 앱 포커스 이동, 엔진 정지·복구·초기화 때 이전 입력 소스 검증을 취소합니다. 취소된 작업이 뒤늦게 깨어나 단축키·직접 전환을 실행하거나 새 요청의 완료 처리를 덮어쓰지 않도록 검증 세대를 확인합니다. [#6](https://github.com/lee-minki/mac-windows-like-key/issues/6)
