@@ -2,6 +2,8 @@
 
 추적 이슈: [GitHub #6](https://github.com/lee-minki/mac-windows-like-key/issues/6). 상태는 **원인·실기 해결 여부 미확정**이다. 이 문서는 같은 이슈의 로컬 진단, 변경, 검증 기록을 연결한다.
 
+정식 1.8.6 설치 후 보고된 **VDI Control 키의 Windows 키 동작**은 [이슈 #7](https://github.com/lee-minki/mac-windows-like-key/issues/7), [VDI Control 검증 기록](VDI_CONTROL_RELIABILITY.md)에서 별도로 추적한다. 외장 키보드의 저장 목표와 HID 실제값 불일치를 확인하고 임시 복구했으며, 이 결과로 로컬 한글 조합 문제의 원인이나 해결을 판단하지 않는다.
+
 브랜치는 `codex/ime-composition-reliability`, 기준 commit은 `0658385cdc72060a192a24349a2a00cceec75c32`이며 변경 버전은 1.8.6/build 29이다. 사용자 요청에 따라 기존 정식판의 서명 재료를 복구하여 같은 Developer ID로 빌드했다. 아래 시각별 기록은 ad-hoc 시험·복구, 정식 공증·배포, 설치 결과를 구분한다. 실제 타이핑 개선은 별도 사용자 확인 전까지 미확인이다.
 
 ## 확인한 증상과 증거

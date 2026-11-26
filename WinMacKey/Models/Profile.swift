@@ -284,11 +284,16 @@ struct SavedKeyboardProfile: Codable, Identifiable, Equatable, Hashable {
 
     func mappings(for context: KeyboardUsageContext) -> [Int64: Int64] {
         let desiredKeys = desiredKeys(for: context)
+        let otherDesiredKeys = context == .localMac ? vdiDesiredKeys : localDesiredKeys
         var result: [Int64: Int64] = [:]
         for (index, physKey) in physicalKeys.enumerated() {
             guard index < desiredKeys.count else { break }
             let desiredKey = desiredKeys[index]
-            if physKey != desiredKey {
+            // Own a slot in both contexts if either context remaps it. An identity
+            // target must override a stale baseline when returning to that context.
+            // Slots left unchanged in both contexts remain outside our ownership.
+            let remappedInOtherContext = index < otherDesiredKeys.count && otherDesiredKeys[index] != physKey
+            if physKey != desiredKey || remappedInOtherContext {
                 result[physKey] = desiredKey
             }
         }

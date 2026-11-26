@@ -90,6 +90,14 @@ WinMac Key는 `hidutil` HID 레벨 remap을 사용하여 트리거 키(Right Com
 
 ## ❓ 문제 해결 (Troubleshooting)
 
+### Q. 외장 Ctrl을 누르면 Windows 시작 메뉴가 열리고 Ctrl 단축키가 동작하지 않습니다
+
+먼저 해당 **키보드 프로필의 VDI 목표**와 **그 장치에 실제 적용된 HID 값**을 비교합니다. 저장된 `Ctrl → Ctrl`과 실제 `Ctrl → Command`가 다르면, 기존 매핑이 남는 문제일 수 있습니다. 전체 매핑을 지우거나 Horizon 기본값을 복원하지 마세요.
+
+1.8.6에서 확인한 사례는 `Mac: Ctrl → Command / VDI: Ctrl → Ctrl` 프로필이 동일 키 목표를 생략해 이전 값이 남는 경우입니다. **v1.8.7에서는** 두 컨텍스트 중 한쪽에서 재배치하는 키의 동일 키 목표도 적용합니다. 양쪽 모두 그대로 두는 키와 `한/영 전환만` 프로필은 기존처럼 건드리지 않습니다. 기존 프로필과 `F16 → Right Alt` 설정을 다시 만들 필요는 없습니다. 임시 복구와 수정 앱의 설치·실사용 검증 범위는 [이슈 #7](https://github.com/lee-minki/mac-windows-like-key/issues/7), [검증 기록](VDI_CONTROL_RELIABILITY.md)을 참고하세요.
+
+내장 4키 프로필의 `Fn · Ctrl · Opt · Cmd → Ctrl · Win · Win · Alt`에서는 물리 Control이 Windows 키인 것이 저장된 배열입니다. 외장 키보드의 적용 불일치와 구분해야 합니다. 이모지 창이 함께 보이는 증상도 원인을 별도로 확인합니다.
+
 ### Q. 전환할 때마다 윈도우 시작 메뉴가 같이 열립니다
 
 A. 매핑이 `Win` 키나 꼬인 `Alt` 로 넘어간 경우입니다. Horizon 키 매핑 설정에서 `F16 → Right Alt`가 정확히 잡혀 있는지 확인하세요.
@@ -122,4 +130,4 @@ v1.8.5에서는 Doctor가 손쉬운 사용·입력 모니터링, 실제 이벤�
 
 A. 입력 지연이나 한글 조합 누락이 발생하지 않는다고 보장할 수는 없습니다. 로컬 일반 앱은 주로 `Control+Space` 합성을 사용하지만, Ghostty·Codex 등 터미널 계열은 `TISSelectInputSource`로 직접 전환하고 직후 일반 키를 짧게 보류·재생합니다. 입력 소스 선택 성공은 실제 입력창의 조합 성공을 증명하지 않습니다.
 
-Horizon은 별도의 `F16 → Right Alt` 경로입니다. Mac의 ‘한’ 표시, Windows의 `가/A`, 실제 입력 결과를 구분해 확인하세요. 로컬 조합 오류와 VDI 일반 키 지연을 같은 원인으로 단정하지 않습니다. 11/26 로컬 재현과 1.8.6 개발 후보의 지연 재시도 취소는 [이슈 #6](https://github.com/lee-minki/mac-windows-like-key/issues/6), [진단·검증 기록](IME_COMPOSITION_RELIABILITY.md), [설정 가이드](SETUP_GUIDE.md#문제-해결)에서 추적합니다. 실기 해결 여부는 아직 미확인입니다.
+Horizon은 별도의 `F16 → Right Alt` 경로입니다. Mac의 ‘한’ 표시, Windows의 `가/A`, 실제 입력 결과를 구분해 확인하세요. 로컬 조합 오류와 VDI 일반 키 지연을 같은 원인으로 단정하지 않습니다. 11/26 로컬 재현과 v1.8.6에서 도입한 지연 재시도 취소는 [이슈 #6](https://github.com/lee-minki/mac-windows-like-key/issues/6), [진단·검증 기록](IME_COMPOSITION_RELIABILITY.md), [설정 가이드](SETUP_GUIDE.md#문제-해결)에서 추적합니다. v1.8.7의 Ctrl 매핑 수정이 이 한글 조합 증상도 해결했다고 판단하지 않습니다. 실기 해결 여부는 아직 미확인입니다.

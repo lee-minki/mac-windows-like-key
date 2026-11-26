@@ -30,7 +30,8 @@
 > keeps **per-device keyboard profiles active simultaneously** (built-in and external) through IOKit, and enables **Korean/English
 > switching inside Omnissa Horizon VDI — without any virtual keyboard driver or system
 > extension.** Mac-to-Mac / Apple Screen Sharing remains unverified; see the [setup guide](docs/SETUP_GUIDE.md).
-> Official v1.8.6 downloads are signed, Apple-notarized builds for Apple Silicon.
+> v1.8.7 restores explicit identity targets for profile-owned keys when switching between Mac and VDI contexts.
+> Release packages target Apple Silicon; see the [VDI verification record](docs/VDI_CONTROL_RELIABILITY.md) for validation scope.
 
 ---
 
@@ -39,6 +40,7 @@
 - **⌨️ Right Command 전환**: `hidutil` HID remap으로 Right Command를 F16으로 변환, modifier flag 오염 원천 차단
 - **🖥️ Native VDI Support**: VDI에서는 F16 릴레이로 한/영 전환을 전달하고, 로컬 Mac에서는 `Control+Space`를 합성
 - **🔌 Simultaneous Per-Device Profiles**: 내장·외장 키보드 프로필을 VID:PID별로 동시에 적용해 번갈아 입력해도 첫 키부터 정확
+- **🔄 컨텍스트 전환 시 키 복원 (v1.8.7)**: 프로필에서 재배치하는 키는 다른 컨텍스트의 `Ctrl → Ctrl` 목표도 적용해 이전 매핑이 남지 않도록 합니다. 양쪽 모두 그대로인 키와 `한/영 전환만` 프로필은 기존 매핑을 유지합니다. [이슈 #7](https://github.com/lee-minki/mac-windows-like-key/issues/7)
 - **🛡️ VDI Ghost Key Prevention**: F16 HID remap으로 modifier flag 오염 원천 차단 (Win+P, Alt+key 등 방지)
 - **📝 IME Commit Guard**: 입력소스 변경 확인 + 최소 홀드로 첫 글자 영어 입력과 전환 누락 완화
 - **📊 Event Viewer**: 실시간 키 입력 모니터링과 지연 시간 확인
@@ -171,7 +173,7 @@ Horizon 등 VDI 클라이언트가 이를 윈도우의 `Right Alt`로 변환하�
 ### 시스템 요구사항
 
 - macOS 14.0 (Sonoma) 이상
-- v1.8.6 배포 DMG/ZIP: Apple Silicon (arm64)
+- v1.8.7 DMG/ZIP 지원 대상: Apple Silicon (arm64)
 - Intel용 빌드·실행은 이번 릴리스에서 검증하지 않았습니다.
 
 ### 사용 기술

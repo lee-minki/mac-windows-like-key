@@ -163,6 +163,14 @@ swiftc \
 build/tests/hid_verification_smoke
 
 swiftc \
+  "${COMMON_SOURCES[@]}" \
+  tests/profile_identity_mapping_smoke.swift \
+  -o build/tests/profile_identity_mapping_smoke \
+  "${COMMON_FRAMEWORKS[@]}"
+
+build/tests/profile_identity_mapping_smoke
+
+swiftc \
   WinMacKey/Services/InputDiagnostics.swift \
   tests/input_diagnostics_smoke.swift \
   -o build/tests/input_diagnostics_smoke

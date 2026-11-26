@@ -325,7 +325,9 @@ class HIDRemapper {
 
     private func desiredMappings(_ mappings: [Int64: Int64]) -> [UInt64: UInt64] {
         var desired: [UInt64: UInt64] = [:]
-        for (source, destination) in mappings where source != destination {
+        // Identity entries explicitly restore a profile-owned slot in this context.
+        // Omitting them would inherit a pre-existing remap instead of its target.
+        for (source, destination) in mappings {
             if let sourceUsage = Self.keycodeToHIDUsage[source], let destinationUsage = Self.keycodeToHIDUsage[destination] {
                 desired[sourceUsage] = destinationUsage
             }

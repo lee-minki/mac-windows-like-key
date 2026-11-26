@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — v1.8.7
+
+### Fixed
+- **VDI의 Ctrl 동일 키 목표 적용**: Mac/VDI 중 한쪽에서 재배치하는 키는 다른 쪽의 `Ctrl → Ctrl` 같은 동일 키 목표도 적용해 이전 HID 매핑이 남지 않도록 합니다. 양쪽 모두 그대로 두는 키와 `한/영 전환만` 프로필은 건드리지 않으며, 엔진 정지 시 원래 값 복원과 이후 외부 변경 보존을 유지합니다. [#7](https://github.com/lee-minki/mac-windows-like-key/issues/7)
+
+### Note
+- 버전은 **1.8.7 / build 30**이며 배포 준비 중입니다. 실행 중 외장 Ctrl 매핑의 임시 복구는 사용자 확인을 받았으며, 수정 앱 설치·장기 안정성 및 이모지 증상의 원인은 별도 검증 전입니다. [검증·복구 기록](docs/VDI_CONTROL_RELIABILITY.md)
+
+---
+
 ## [1.8.6] — 2026-11-26
 
 ### Fixed

@@ -24,7 +24,7 @@
 
 ## STEP 0: 최초 실행 (서명·공증 완료)
 
-v1.8.6 배포 DMG/ZIP은 macOS 14.0 이상 Apple Silicon (arm64)용입니다. Intel용 빌드·실행은 이번 릴리스에서 검증하지 않았습니다.
+v1.8.7 DMG/ZIP의 지원 대상은 macOS 14.0 이상 Apple Silicon (arm64)입니다. Intel용 빌드·실행은 이번 릴리스에서 검증하지 않았습니다.
 
 v1.3.8 이후 빌드는 **Apple Developer ID 서명 + 공증(Notarization)** 을 거쳐 배포됩니다.
 
@@ -127,6 +127,12 @@ WINMACKEY_ALLOW_NONSTANDARD_INSTANCE=1 build/DerivedData/Build/Products/Debug/Wi
 6. 저장 후에는 내장 키보드와 Keys-To-Go 2 프로필이 동시에 유지됩니다. 키보드를 번갈아 눌러도 프로필을 다시 선택할 필요가 없습니다.
 
 내장 키보드만 연결된 상태에서는 **이 키보드에만**이 내장 키보드를 자동 선택하므로 별도 키 입력 없이 바로 저장할 수 있습니다. 여러 키보드가 연결돼 대상이 모호할 때만 저장할 키보드에서 키를 한 번 누릅니다.
+
+### v1.8.7 변경: Mac/VDI 전환 시 키 복원
+
+1.8.6 실사용에서 외장 키보드의 VDI `Ctrl → Ctrl` 목표와 실제 `Ctrl → Command` 값이 다른 사례를 확인했습니다. v1.8.7은 Mac/VDI 중 한쪽에서 재배치하는 키를 양쪽 컨텍스트에서 관리해, `Ctrl → Ctrl` 같은 동일 키 목표도 적용합니다. 양쪽 모두 그대로 두는 키와 `한/영 전환만` 프로필은 기존 외부 매핑을 유지합니다.
+
+저장된 키 배치와 Horizon의 `F16 → Right Alt` 설정을 다시 만들 필요는 없습니다. 문제가 생기면 먼저 엔진을 끄고 Doctor의 복원 결과를 확인하세요. 기존 값 복원과 이후 외부 변경 보존은 유지합니다. 임시 복구의 사용자 확인, 수정 버전 설치·실사용 결과, 이모지 증상은 [VDI 문제 해결](VDI_SETUP.md#문제-해결-troubleshooting), [이슈 #7](https://github.com/lee-minki/mac-windows-like-key/issues/7), [검증·복구 기록](VDI_CONTROL_RELIABILITY.md)에서 구분해 추적합니다.
 
 ### v1.8.6 변경: 프로필 저장·편집
 
