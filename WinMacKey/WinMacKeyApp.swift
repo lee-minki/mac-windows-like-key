@@ -270,6 +270,7 @@ class AppState: ObservableObject {
                 if isVdiMode {
                     // VDI: F16이 패스스루되어 Horizon이 직접 처리.
                     // 로컬 합성 안 함 (로컬 입력소스 부작용 방지).
+                    self?.stateManager.cancelPendingInputSourceVerification()
                     self?.keyInterceptor.beginVdiRelayCooldownWindow()
                     self?.stateManager.switchCount += 1
                 } else if isTerminalMode {
@@ -306,6 +307,9 @@ class AppState: ObservableObject {
         keyInterceptor.cachedBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         contextManager.onAppChanged = { [weak self] bundleId, appName in
             guard let self = self else { return }
+            // A delayed retry belongs to the app that requested it, even when both
+            // the old and new apps use the same local/terminal context category.
+            self.stateManager.cancelPendingInputSourceVerification()
             self.keyInterceptor.cachedBundleId = bundleId.isEmpty ? nil : bundleId
 
             let wasVdi = self.isVdiMode
@@ -607,6 +611,7 @@ class AppState: ObservableObject {
             //   2. restorePreExistingMappingsAndClearInternal — snapshot 복원 + internal keyboard cleanup
             //   3. releaseOwnership — 게이트 닫기
             // HIGH 1·2 fix: 단순 clear 가 아니라 사전 상태 복원 + VDI internal mapping 도 정리.
+            stateManager.cancelPendingInputSourceVerification()
             keyInterceptor.stop(clearHIDMappings: false)
             HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
             HIDRemapper.shared.releaseOwnership()
@@ -697,6 +702,7 @@ class AppState: ObservableObject {
     /// 모든 설정을 초기화하고 기본 상태로 되돌립니다.
     func resetAll() {
         LogService.shared.warning("Reset all triggered", category: "App")
+        stateManager.cancelPendingInputSourceVerification()
         resetService.resetAll(keyInterceptor: keyInterceptor, keyboardDeviceManager: keyboardDeviceManager) { [weak self] in
             DispatchQueue.main.async {
                 guard let self = self else { return }

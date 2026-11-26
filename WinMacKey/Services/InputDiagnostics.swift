@@ -62,6 +62,14 @@ enum InputDiagnostics {
             : "현재 Secure Input은 비활성 상태입니다.")
     }
 
+    /// TIS selection is an observation, not an acknowledgement from the focused text client.
+    static func selectedInputSource(name: String?, id: String?) -> Finding {
+        let sourceName = name.flatMap { $0.isEmpty ? nil : $0 } ?? "이름 확인 불가"
+        let sourceID = id.flatMap { $0.isEmpty ? nil : $0 } ?? "ID 확인 불가"
+        return Finding(severity: .information,
+                       detail: "진단 시 선택된 Mac 입력 소스: \(sourceName) (\(sourceID)). 이 정보는 선택 상태만 나타냅니다. 앱 입력창의 한글 조합·실제 출력과 VDI 내부 입력 언어는 확인하지 않았습니다. '한' 표시만으로 한글 입력 성공을 판정하지 않습니다.")
+    }
+
     static func observedInput(_ snapshot: TapSnapshot, now: UInt64) -> Finding {
         guard snapshot.isRunning else {
             return Finding(severity: .information, detail: "엔진을 켠 뒤 일반 키와 한/영 전환 키를 눌러 수신을 확인하세요.")

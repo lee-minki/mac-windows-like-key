@@ -147,6 +147,7 @@ section h2 .emoji{font-size:28px}
 <div class="content">
 
 <div class="info-box">설정·권한·복구 절차의 기준 문서는 <a href="SETUP_GUIDE.md">설정 가이드</a>와 <a href="VDI_SETUP.md">VDI 가이드</a>입니다. v1.8.5의 업데이트 복구·HID 읽기 검증·Doctor 진단 개선은 해당 문서를 따르세요. 기존 Mac/VDI 배열과 Horizon의 F16 → Right Alt 매핑은 유지합니다.</div>
+<div class="info-box">‘한’ 표시와 실제 한글 조합 성공은 별도입니다. 11/26 조합 누락·영문 출력 문제와 1.8.6의 검증 상태는 <a href="https://github.com/lee-minki/mac-windows-like-key/issues/6">이슈 #6</a> 및 <a href="IME_COMPOSITION_RELIABILITY.md">진단·검증 기록</a>을 따르세요. 1.8.6이 실제 증상을 해결했는지는 미확인입니다.</div>
 
 <!-- INTRO -->
 <section id="intro">
@@ -166,7 +167,7 @@ section h2 .emoji{font-size:28px}
       <tr><td style="color:var(--text2)">CPU 사용률</td><td><span class="badge b-green">&lt; 0.5%</span></td></tr>
       <tr><td style="color:var(--text2)">메모리</td><td><span class="badge b-green">&lt; 20MB</span></td></tr>
       <tr><td style="color:var(--text2)">지원 OS</td><td>macOS 14.0 (Sonoma) 이상</td></tr>
-      <tr><td style="color:var(--text2)">아키텍처</td><td>v1.8.5 배포본: Apple Silicon (arm64)</td></tr>
+      <tr><td style="color:var(--text2)">아키텍처</td><td>v1.8.6 배포본: Apple Silicon (arm64)</td></tr>
     </table>
   </div>
 </section>
@@ -501,7 +502,7 @@ section h2 .emoji{font-size:28px}
   <div class="faq-item"><div class="faq-q">VMware에서 한/영 전환이 안 되나요?</div><div class="faq-a"><p>VDI 환경에서는 <strong>F16 → Right Alt</strong> 매핑이 필요합니다.<br>v1.3.0부터 F16 HID remap 아키텍처로 modifier flag 오염이 원천 차단되어 Win+P, Shift+영문 등의 오발이 해결되었습니다.<br>위의 <a href="#vdi" style="color:var(--accent)">VDI 환경 설정</a> 섹션을 참조하세요.</p></div></div>
   <div class="faq-item"><div class="faq-q">로컬 Mac에서 첫 글자가 영어로 들어가요. 예: xㅓ미널</div><div class="faq-a"><p>입력소스 전환이 실제로 확인되기 전에 첫 글자가 먼저 풀리면 생길 수 있습니다.<br><br>최신 버전은 <strong>입력소스 변경 검증 + 최소 홀드</strong> 뒤에 버퍼를 풀도록 보강했습니다.<br>그래도 재현되면 <code>Control+Space</code> 설정, Caps Lock 한영전환, Karabiner/Hammerspoon 중복 핫키를 먼저 확인하세요.</p></div></div>
 
-  <div class="faq-item"><div class="faq-q">Ghostty 또는 Codex에서 전환 직후 첫 글자가 영문으로 들어가요</div><div class="faq-a"><p>v1.8.4는 Ghostty·Codex 같은 터미널 계열 앱에서 입력소스를 직접 전환한 뒤 첫 일반 문자만 짧게 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과하므로 SSH 단축키와 escape sequence를 가리지 않습니다.<br><br><code>[57379u</code> 같은 문자열, <code>Cmd+N</code> 누출 또는 첫 글자 로마자 입력이 계속되면 엔진을 한 번 껐다 켜고, 현재 앱이 최신 목록에 포함되는지 확인하세요. 상세 절차는 <a href="https://github.com/lee-minki/mac-windows-like-key/blob/main/docs/SETUP_GUIDE.md" style="color:var(--accent)">설정 가이드</a>를 따르세요.</p></div></div>
+  <div class="faq-item"><div class="faq-q">Ghostty 또는 Codex에서 전환 직후 첫 글자가 영문으로 들어가요</div><div class="faq-a"><p>v1.8.4부터 Ghostty·Codex 같은 터미널 계열 앱에서 입력소스를 직접 전환한 뒤 첫 일반 문자만 짧게 보류·재생합니다. Command/Control/Option 조합과 Return/Tab/Escape는 즉시 통과합니다.<br><br>조합 누락이나 ‘한’ 표시 중 영문 출력이 재현되면 초안을 보존하고 실패 시각·앱·실제 입력 결과와 Doctor 진단을 먼저 기록하세요. 입력 소스가 선택됐다는 사실만으로 조합 정상 여부를 판단할 수 없습니다. 상세 비교 절차는 <a href="SETUP_GUIDE.md" style="color:var(--accent)">설정 가이드</a>, 개선 후보와 실기 미확인 항목은 <a href="https://github.com/lee-minki/mac-windows-like-key/issues/6" style="color:var(--accent)">이슈 #6</a>을 따르세요.</p></div></div>
 
   <div class="faq-item"><div class="faq-q">Karabiner-Elements와 동시에 쓸 수 있나요?</div><div class="faq-a"><p>권장하지 않습니다. 두 프로그램 모두 CGEventTap을 사용하여 같은 레벨에서 키 입력을 가로채므로 충돌합니다.<br><br>Karabiner에서 fn/Cmd/Ctrl/Right Cmd 관련 매핑을 제거하면 공존할 수 있지만, WinMac Key만 사용하는 것을 권장합니다.</p></div></div>
 
@@ -555,7 +556,7 @@ hidutil property --matching '{"Product":"Apple Internal Keyboard / Trackpad"}' -
 </section>
 
 <footer style="text-align:center;padding:40px 0 20px;color:var(--text2);font-size:12px;border-top:1px solid var(--border)">
-  <p>WinMac Key v1.8.5 · Made with ❤️ for Windows → Mac 전환 사용자</p>
+  <p>WinMac Key v1.8.6 · Made with ❤️ for Windows → Mac 전환 사용자</p>
   <p style="margin-top:4px"><a href="https://github.com/lee-minki/mac-windows-like-key" style="color:var(--accent);text-decoration:none">GitHub</a> · <a href="https://github.com/lee-minki/mac-windows-like-key/blob/main/docs/SETUP_GUIDE.md" style="color:var(--accent);text-decoration:none">설정 가이드</a></p>
 </footer>
 

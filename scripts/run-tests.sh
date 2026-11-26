@@ -169,6 +169,16 @@ swiftc \
 
 build/tests/input_diagnostics_smoke
 
+# Real StateManager with an inert input backend: never posts keys or changes TIS.
+swiftc \
+  WinMacKey/Services/InputSourceManager.swift \
+  WinMacKey/Services/StateManager.swift \
+  tests/input_source_verification_smoke.swift \
+  -o build/tests/input_source_verification_smoke \
+  -framework Carbon -framework AppKit
+
+build/tests/input_source_verification_smoke
+
 swiftc \
   WinMacKey/Services/UpdateInstaller.swift \
   tests/update_installer_smoke.swift \

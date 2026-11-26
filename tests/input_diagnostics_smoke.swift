@@ -40,6 +40,20 @@ struct InputDiagnosticsSmoke {
                "Secure Input is evidence, not a proven root cause")
         expect(InputDiagnostics.secureInput(enabled: false).severity == .ok,
                "Secure Input disabled")
+        for (name, id) in [("두벌식", "com.apple.inputmethod.Korean.2SetKorean"),
+                           ("ABC", "com.apple.keylayout.ABC")] {
+            let selected = InputDiagnostics.selectedInputSource(name: name, id: id)
+            expect(selected.severity == .information && selected.detail.contains(name) && selected.detail.contains(id),
+                   "\(name) selection is recorded without claiming working text composition")
+            expect(selected.detail.contains("실제 출력과 VDI 내부 입력 언어는 확인하지 않았습니다"),
+                   "\(name) selection cannot establish local output or remote IME state")
+        }
+        let unknownSource = InputDiagnostics.selectedInputSource(name: nil, id: nil)
+        expect(unknownSource.severity == .information && unknownSource.detail.contains("이름 확인 불가") && unknownSource.detail.contains("ID 확인 불가"),
+               "unavailable selection remains unknown instead of diagnosing an IME failure")
+        let unnamedSource = InputDiagnostics.selectedInputSource(name: "", id: "com.apple.keylayout.ABC")
+        expect(unnamedSource.detail.contains("이름 확인 불가") && unnamedSource.detail.contains("com.apple.keylayout.ABC"),
+               "missing source name preserves the independently observed ID")
         let idle = InputDiagnostics.observedInput(snapshot(), now: 10_000_000_000)
         expect(idle.severity == .information && idle.detail.contains("고장이 아닙니다"),
                "no observed input is idle or unknown, not failure")

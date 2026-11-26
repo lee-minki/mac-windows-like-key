@@ -99,6 +99,7 @@ class DoctorService: ObservableObject {
         logger.info("🚨 Emergency Recovery: Starting...")
         
         // 1. 엔진 즉시 정지 (CGEventTap 해제)
+        appState.stateManager.cancelPendingInputSourceVerification()
         appState.keyInterceptor.stop()
         appState.isEngineRunning = false
         logger.info("✅ Engine stopped, CGEventTap released")
@@ -284,6 +285,19 @@ class DoctorService: ObservableObject {
     }
     
     private func checkInputSources() {
+        // Read name and ID from one selection snapshot; do not infer text-client composition.
+        let selectedSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+        func selectedProperty(_ key: CFString) -> String? {
+            guard let selectedSource, let value = TISGetInputSourceProperty(selectedSource, key) else {
+                return nil
+            }
+            return Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
+        }
+        appendFinding(InputDiagnostics.selectedInputSource(
+            name: selectedProperty(kTISPropertyLocalizedName),
+            id: selectedProperty(kTISPropertyInputSourceID)
+        ), category: .inputSource, title: "현재 Mac 입력 소스 / 조합 확인 범위")
+
         guard let sourceList = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
             checks.append(DoctorCheck(
                 category: .inputSource,
@@ -505,6 +519,7 @@ class DoctorService: ObservableObject {
             
         case .stopEngine:
             // MEDIUM fix: ownership release + snapshot restore까지 정상 OFF 흐름과 동일.
+            appState.stateManager.cancelPendingInputSourceVerification()
             appState.keyInterceptor.stop(clearHIDMappings: false)
             HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()
             if HIDRemapper.shared.isOwnedByEngine {
@@ -515,6 +530,7 @@ class DoctorService: ObservableObject {
         case .restartEngine:
             // HIGH 3 fix: stop → cleanup → release → 비동기 → take → start → refresh.
             // 정상 toggleEngine OFF→ON 흐름과 ownership lifecycle 일치.
+            appState.stateManager.cancelPendingInputSourceVerification()
             appState.keyInterceptor.stop(clearHIDMappings: false)
             appState.isEngineRunning = false
             HIDRemapper.shared.restorePreExistingMappingsAndClearInternal()

@@ -120,4 +120,6 @@ v1.8.5에서는 Doctor가 손쉬운 사용·입력 모니터링, 실제 이벤�
 
 ### Q. 글자가 밀리거나 씹히는 현상은 없나요?
 
-A. 네! 기존 `TISSelectInputSource` API의 고질적인 버그(조합 중인 한국어 글자 지워짐)를 원천적으로 우회하는 **OS 레벨 단축키 합성**을 사용하기 때문에 매우 매끄럽게 입력됩니다.
+A. 입력 지연이나 한글 조합 누락이 발생하지 않는다고 보장할 수는 없습니다. 로컬 일반 앱은 주로 `Control+Space` 합성을 사용하지만, Ghostty·Codex 등 터미널 계열은 `TISSelectInputSource`로 직접 전환하고 직후 일반 키를 짧게 보류·재생합니다. 입력 소스 선택 성공은 실제 입력창의 조합 성공을 증명하지 않습니다.
+
+Horizon은 별도의 `F16 → Right Alt` 경로입니다. Mac의 ‘한’ 표시, Windows의 `가/A`, 실제 입력 결과를 구분해 확인하세요. 로컬 조합 오류와 VDI 일반 키 지연을 같은 원인으로 단정하지 않습니다. 11/26 로컬 재현과 1.8.6 개발 후보의 지연 재시도 취소는 [이슈 #6](https://github.com/lee-minki/mac-windows-like-key/issues/6), [진단·검증 기록](IME_COMPOSITION_RELIABILITY.md), [설정 가이드](SETUP_GUIDE.md#문제-해결)에서 추적합니다. 실기 해결 여부는 아직 미확인입니다.

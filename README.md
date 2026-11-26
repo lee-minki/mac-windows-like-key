@@ -30,7 +30,7 @@
 > keeps **per-device keyboard profiles active simultaneously** (built-in and external) through IOKit, and enables **Korean/English
 > switching inside Omnissa Horizon VDI — without any virtual keyboard driver or system
 > extension.** Mac-to-Mac / Apple Screen Sharing remains unverified; see the [setup guide](docs/SETUP_GUIDE.md).
-> Official v1.8.5 downloads are signed, Apple-notarized builds for Apple Silicon.
+> Official v1.8.6 downloads are signed, Apple-notarized builds for Apple Silicon.
 
 ---
 
@@ -171,7 +171,7 @@ Horizon 등 VDI 클라이언트가 이를 윈도우의 `Right Alt`로 변환하�
 ### 시스템 요구사항
 
 - macOS 14.0 (Sonoma) 이상
-- v1.8.5 배포 DMG/ZIP: Apple Silicon (arm64)
+- v1.8.6 배포 DMG/ZIP: Apple Silicon (arm64)
 - Intel용 빌드·실행은 이번 릴리스에서 검증하지 않았습니다.
 
 ### 사용 기술
